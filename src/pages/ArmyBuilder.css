@@ -1,0 +1,258 @@
+.army-builder-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.army-builder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+}
+
+.army-builder-header h1 {
+  margin: 0;
+  font-size: 2.5rem;
+}
+
+.budget-info {
+  font-size: 1.3rem;
+  font-weight: bold;
+}
+
+.budget-label {
+  margin-right: 0.5rem;
+}
+
+.budget-current {
+  color: #ffd700;
+}
+
+.budget-separator {
+  margin: 0 0.3rem;
+}
+
+.budget-remaining {
+  margin-left: 0.5rem;
+  font-size: 1rem;
+}
+
+.budget-remaining.low {
+  color: #ff6b6b;
+}
+
+.army-builder-content {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+}
+
+/* Available Units Section */
+.available-units-section h2 {
+  color: #2d3748;
+  margin-bottom: 1.5rem;
+}
+
+.units-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.unit-card {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.unit-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  border-color: #667eea;
+}
+
+.unit-icon {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.unit-card h3 {
+  margin: 0.5rem 0;
+  color: #2d3748;
+  font-size: 1.2rem;
+}
+
+.unit-type {
+  color: #718096;
+  text-transform: capitalize;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.unit-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.stat-label {
+  font-size: 1.2rem;
+  margin-bottom: 0.2rem;
+}
+
+.unit-cost {
+  margin: 1rem 0;
+  font-weight: bold;
+  color: #2d3748;
+}
+
+.add-unit-btn {
+  width: 100%;
+  padding: 0.75rem;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.add-unit-btn:hover:not(:disabled) {
+  background: #5568d3;
+}
+
+.add-unit-btn:disabled {
+  background: #cbd5e0;
+  cursor: not-allowed;
+}
+
+/* Selected Army Section */
+.selected-army-section {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  height: fit-content;
+  position: sticky;
+  top: 2rem;
+}
+
+.selected-army-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.selected-army-header h2 {
+  margin: 0;
+  color: #2d3748;
+}
+
+.clear-army-btn {
+  padding: 0.5rem 1rem;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.clear-army-btn:hover {
+  background: #ee5a52;
+}
+
+.empty-army {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #718096;
+}
+
+.empty-army p {
+  margin: 0.5rem 0;
+}
+
+.selected-units-list {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.selected-unit-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f7fafc;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+}
+
+.selected-unit-icon {
+  font-size: 1.5rem;
+}
+
+.selected-unit-name {
+  flex: 1;
+  font-weight: bold;
+  color: #2d3748;
+}
+
+.selected-unit-cost {
+  color: #718096;
+}
+
+.remove-unit-btn {
+  width: 30px;
+  height: 30px;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-weight: bold;
+  transition: background 0.3s ease;
+}
+
+.remove-unit-btn:hover {
+  background: #ee5a52;
+}
+
+@media (max-width: 1024px) {
+  .army-builder-content {
+    grid-template-columns: 1fr;
+  }
+
+  .selected-army-section {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .army-builder-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .units-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}

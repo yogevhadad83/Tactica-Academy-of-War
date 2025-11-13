@@ -1,0 +1,271 @@
+.board-view-container {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.board-view-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+}
+
+.board-view-header h1 {
+  margin: 0 0 0.5rem 0;
+  font-size: 2.5rem;
+}
+
+.header-subtitle {
+  margin: 0;
+  font-size: 1.1rem;
+  opacity: 0.9;
+}
+
+.board-view-content {
+  display: grid;
+  grid-template-columns: 1fr 350px;
+  gap: 2rem;
+}
+
+.board-wrapper {
+  background: white;
+  border: 3px solid #2d3748;
+  border-radius: 12px;
+  padding: 1rem;
+  overflow: auto;
+}
+
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 2px;
+  background: #cbd5e0;
+  border: 2px solid #718096;
+  min-width: 600px;
+}
+
+.board-cell {
+  aspect-ratio: 1;
+  background: #f7fafc;
+  border: 1px solid #cbd5e0;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.board-cell:hover {
+  background: #e2e8f0;
+  border-color: #667eea;
+  z-index: 1;
+}
+
+.board-cell.selected {
+  background: #fef3c7;
+  border: 2px solid #fbbf24;
+  z-index: 2;
+}
+
+.cell-coords {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  font-size: 0.6rem;
+  color: #cbd5e0;
+  pointer-events: none;
+}
+
+.board-cell.has-unit {
+  border-width: 2px;
+}
+
+.board-cell.has-unit.player {
+  background: #dbeafe;
+  border-color: #3b82f6;
+}
+
+.board-cell.has-unit.enemy {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+.unit-on-board {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+}
+
+.unit-icon-board {
+  font-size: 2rem;
+}
+
+.unit-health-bar {
+  width: 80%;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.health-fill {
+  height: 100%;
+  background: #10b981;
+  transition: width 0.3s ease;
+}
+
+/* Sidebar */
+.board-sidebar {
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  height: fit-content;
+}
+
+.board-sidebar h2 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+}
+
+.cell-info {
+  margin-top: 1rem;
+}
+
+.cell-info p {
+  margin: 0.5rem 0;
+  color: #4a5568;
+}
+
+.unit-details {
+  text-align: center;
+  margin-top: 1.5rem;
+}
+
+.unit-icon-large {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+}
+
+.unit-details h3 {
+  margin: 0.5rem 0;
+  color: #2d3748;
+}
+
+.team-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-weight: bold;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+}
+
+.team-badge.player {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.team-badge.enemy {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.unit-stats-board {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background: #f7fafc;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.stat-row span:first-child {
+  color: #718096;
+  font-weight: 500;
+}
+
+.stat-row span:last-child {
+  color: #2d3748;
+  font-weight: bold;
+}
+
+.empty-cell-message {
+  color: #718096;
+  font-style: italic;
+  margin-top: 1rem;
+}
+
+.no-selection {
+  color: #718096;
+  font-style: italic;
+  text-align: center;
+  margin-top: 2rem;
+}
+
+.legend {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid #e2e8f0;
+}
+
+.legend h3 {
+  margin: 0 0 1rem 0;
+  color: #2d3748;
+  font-size: 1.1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.legend-color {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid;
+}
+
+.legend-color.player {
+  background: #dbeafe;
+  border-color: #3b82f6;
+}
+
+.legend-color.enemy {
+  background: #fee2e2;
+  border-color: #ef4444;
+}
+
+@media (max-width: 1200px) {
+  .board-view-content {
+    grid-template-columns: 1fr;
+  }
+
+  .board-wrapper {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .unit-icon-board {
+    font-size: 1.5rem;
+  }
+
+  .board-grid {
+    min-width: 400px;
+  }
+}
