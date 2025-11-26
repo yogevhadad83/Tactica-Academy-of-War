@@ -12,3 +12,12 @@ body {
   min-height: 100vh;
 }
 
+.route-loading {
+  min-height: 200px;
+  display: grid;
+  place-items: center;
+  color: #cbd5f5;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+

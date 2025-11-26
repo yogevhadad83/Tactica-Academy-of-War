@@ -1,16 +1,17 @@
 .home-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2.5rem 2rem;
 }
 
 .hero-section {
   text-align: center;
   margin-bottom: 3rem;
   padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, var(--armoria-purple) 0%, #764ba2 100%);
+  border-radius: 16px;
   color: white;
+  box-shadow: 0 20px 40px rgba(102, 126, 234, 0.25);
 }
 
 .game-title {
@@ -26,6 +27,96 @@
   line-height: 1.6;
 }
 
+.hero-cta {
+  margin-top: 2rem;
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.hero-btn {
+  padding: 0.9rem 2rem;
+  border-radius: 999px;
+  font-weight: 600;
+  border: none;
+  text-decoration: none;
+  color: white;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.hero-btn.primary {
+  background: white;
+  color: #4c1d95;
+}
+
+.hero-btn.ghost {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.commander-summary,
+.guest-cta {
+  background: var(--armoria-card);
+  border: 1px solid var(--armoria-border);
+  border-radius: 16px;
+  padding: 2rem;
+  margin-bottom: 3rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+
+.summary-card {
+  background: #f8f7ff;
+  border: 1px solid var(--armoria-border);
+  border-radius: 12px;
+  padding: 1rem;
+  text-align: center;
+  color: var(--armoria-muted);
+}
+
+.summary-card strong {
+  display: block;
+  font-size: 1.5rem;
+  color: var(--armoria-text);
+}
+
+.quick-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.quick-link-card {
+  border: 1px dashed var(--armoria-border);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  text-decoration: none;
+  color: inherit;
+  background: #fdfbff;
+}
+
+.quick-link-card span {
+  font-weight: 600;
+}
+
+.quick-link-card p {
+  margin: 0.35rem 0 0;
+  color: var(--armoria-muted);
+}
+
+.guest-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .menu-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -34,9 +125,9 @@
 }
 
 .menu-card {
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
+  background: var(--armoria-card);
+  border: 1px solid var(--armoria-border);
+  border-radius: 16px;
   padding: 2rem;
   text-align: center;
   text-decoration: none;
@@ -68,10 +159,11 @@
 }
 
 .info-section {
-  background: #f7fafc;
-  border-radius: 12px;
+  background: #f8f7ff;
+  border-radius: 16px;
   padding: 2rem;
   margin-top: 3rem;
+  border: 1px solid var(--armoria-border);
 }
 
 .info-section h3 {

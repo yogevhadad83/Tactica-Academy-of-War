@@ -1,16 +1,17 @@
 .strategy-editor-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2.5rem 2rem;
 }
 
 .strategy-editor-header {
   text-align: center;
   margin-bottom: 3rem;
   padding: 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 12px;
+  background: linear-gradient(135deg, var(--armoria-purple) 0%, #764ba2 100%);
+  border-radius: 16px;
   color: white;
+  box-shadow: 0 20px 40px rgba(102, 126, 234, 0.25);
 }
 
 .strategy-editor-header h1 {
@@ -25,132 +26,226 @@
 }
 
 .strategy-content {
-  background: white;
-  border-radius: 12px;
-  padding: 3rem;
-  border: 2px solid #e2e8f0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
 }
 
-.placeholder-section {
-  text-align: center;
+.coming-soon-panel,
+.rule-builder-panel {
+  background: var(--armoria-card);
+  border-radius: 16px;
+  border: 1px solid var(--armoria-border);
+  padding: 2rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05);
 }
 
 .placeholder-icon {
-  font-size: 5rem;
+  font-size: 4rem;
   margin-bottom: 1rem;
 }
 
-.placeholder-section h2 {
-  color: #2d3748;
-  margin: 0 0 1rem 0;
+.coming-soon-panel h2 {
+  margin: 0 0 0.75rem 0;
   font-size: 2rem;
+  color: var(--armoria-text);
 }
 
-.placeholder-section > p {
-  color: #718096;
-  font-size: 1.1rem;
-  max-width: 600px;
-  margin: 0 auto 3rem;
+.coming-soon-panel p {
+  margin: 0 0 1.5rem 0;
+  color: var(--armoria-muted);
   line-height: 1.6;
+}
+
+.unit-showcase {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.unit-chip {
+  padding: 0.35rem 0.9rem;
+  border-radius: 999px;
+  background: var(--armoria-purple-soft);
+  color: var(--armoria-purple-dark);
+  font-weight: 600;
+  font-size: 0.85rem;
 }
 
 .feature-preview {
-  text-align: left;
-  max-width: 700px;
-  margin: 0 auto 3rem;
-  background: #f7fafc;
-  padding: 2rem;
+  background: #f8f7ff;
   border-radius: 12px;
+  padding: 1.5rem;
 }
 
 .feature-preview h3 {
-  color: #2d3748;
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  font-size: 1.5rem;
+  margin: 0 0 1rem 0;
 }
 
 .feature-preview ul {
-  list-style: none;
-  padding: 0;
-}
-
-.feature-preview li {
-  margin: 1.5rem 0;
-  padding-left: 2rem;
-  position: relative;
-  color: #4a5568;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--armoria-muted);
   line-height: 1.6;
 }
 
-.feature-preview li::before {
-  content: '✓';
-  position: absolute;
-  left: 0;
-  color: #667eea;
-  font-weight: bold;
-  font-size: 1.2rem;
+.rule-builder-header h3 {
+  margin: 0;
 }
 
-.feature-preview strong {
-  color: #2d3748;
+.rule-builder-header p {
+  margin: 0.25rem 0 1.5rem 0;
+  color: var(--armoria-muted);
 }
 
-.example-rules {
-  max-width: 700px;
-  margin: 0 auto;
+.rule-form {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.rule-form label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--armoria-muted);
+}
+
+.rule-form select {
+  margin-top: 0.35rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--armoria-border);
+  font-size: 1rem;
+}
+
+.rule-message {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--armoria-muted);
+}
+
+.save-rule-btn {
+  border: none;
+  border-radius: 10px;
+  padding: 0.85rem 1.5rem;
+  background: var(--armoria-purple);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.save-rule-btn:hover {
+  background: #5568d3;
 }
 
 .example-rules h3 {
-  color: #2d3748;
-  margin-bottom: 1.5rem;
-  font-size: 1.5rem;
-  text-align: left;
+  margin: 0 0 1rem 0;
 }
 
 .rule-card {
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1.5rem;
+  background: var(--armoria-card);
+  border: 1px solid var(--armoria-border);
+  border-radius: 12px;
+  padding: 1.25rem;
   margin-bottom: 1rem;
-  text-align: left;
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease;
 }
 
 .rule-card:hover {
-  border-color: #667eea;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-color: var(--armoria-purple);
 }
 
 .rule-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .rule-name {
-  font-weight: bold;
-  color: #2d3748;
-  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 .rule-tag {
-  display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: #667eea;
+  border-radius: 999px;
+  background: var(--armoria-purple);
   color: white;
-  border-radius: 12px;
-  font-size: 0.85rem;
-  font-weight: bold;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .rule-description {
-  color: #4a5568;
-  font-family: 'Courier New', monospace;
-  background: #f7fafc;
-  padding: 0.75rem;
-  border-radius: 6px;
+  margin: 0;
+  color: var(--armoria-muted);
+  line-height: 1.5;
+}
+
+.saved-rules-panel {
+  margin-top: 2rem;
+  background: var(--armoria-card);
+  border-radius: 16px;
+  border: 1px solid var(--armoria-border);
+  padding: 2rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+}
+
+.saved-rules-group {
+  border-top: 1px solid var(--armoria-border);
+  padding: 1rem 0;
+}
+
+.saved-rules-group:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.group-title {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+  color: var(--armoria-text);
+}
+
+.saved-rules-group ul {
+  list-style: none;
+  padding: 0.75rem 0 0 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.saved-rules-group li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--armoria-border);
+  border-radius: 10px;
+  background: #f8f7ff;
   font-size: 0.95rem;
+}
+
+.saved-rules-group button {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .strategy-editor-container {
+    padding: 2rem 1.25rem;
+  }
+
+  .rule-block {
+    padding: 1rem;
+  }
 }

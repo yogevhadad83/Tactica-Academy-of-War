@@ -1,20 +1,38 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
-import Home from './pages/Home';
-import ArmyBuilder from './pages/ArmyBuilder';
-import StrategyEditor from './pages/StrategyEditor';
-import BoardView from './pages/BoardView';
 import './App.css';
+
+const Home = lazy(() => import('./pages/Home'));
+const ArmyBuilder = lazy(() => import('./pages/ArmyBuilder'));
+const StrategyEditor = lazy(() => import('./pages/StrategyEditor'));
+const BoardView = lazy(() => import('./pages/BoardView'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+
+const RouteLoader = ({ children }: { children: React.ReactNode }) => (
+  <Suspense
+    fallback={
+      <div className="route-loading" aria-live="polite">
+        Loading…
+      </div>
+    }
+  >
+    {children}
+  </Suspense>
+);
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="army-builder" element={<ArmyBuilder />} />
-          <Route path="strategy" element={<StrategyEditor />} />
-          <Route path="board" element={<BoardView />} />
+          <Route index element={<RouteLoader><Home /></RouteLoader>} />
+          <Route path="army-builder" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
+          <Route path="strategy" element={<RouteLoader><StrategyEditor /></RouteLoader>} />
+          <Route path="board" element={<RouteLoader><BoardView /></RouteLoader>} />
+          <Route path="login" element={<RouteLoader><Login /></RouteLoader>} />
+          <Route path="register" element={<RouteLoader><Register /></RouteLoader>} />
         </Route>
       </Routes>
     </BrowserRouter>

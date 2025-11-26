@@ -43,6 +43,15 @@
   background: rgba(255, 255, 255, 0.1);
 }
 
+.nav-link.ghost {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.nav-link.solid {
+  background: white;
+  color: #4c1d95;
+}
+
 .nav-link:hover {
   background: rgba(255, 255, 255, 0.2);
   transform: translateY(-2px);
@@ -51,6 +60,60 @@
 .nav-link.active {
   background: rgba(255, 255, 255, 0.3);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.nav-user-area {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-pill {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.user-name {
+  font-weight: 700;
+}
+
+.user-stats {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.user-stats span {
+  opacity: 0.85;
+}
+
+.user-pill select {
+  border: none;
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.9rem;
+  background: white;
+  color: #2d3748;
+}
+
+.logout-btn {
+  border: none;
+  background: transparent;
+  color: white;
+  text-decoration: underline;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-links {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .main-content {
@@ -76,6 +139,26 @@
   opacity: 0.8;
 }
 
+body.flight-mode-active {
+  background: #020617;
+}
+
+body.flight-mode-active .layout {
+  background: #020617;
+  min-height: 100vh;
+}
+
+body.flight-mode-active .navbar,
+body.flight-mode-active .footer {
+  display: none;
+}
+
+body.flight-mode-active .main-content {
+  background: #020617;
+  padding: 0;
+  min-height: 100vh;
+}
+
 @media (max-width: 768px) {
   .navbar {
     flex-direction: column;
@@ -84,6 +167,15 @@
   }
 
   .nav-links {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .nav-user-area {
+    flex-direction: column;
+  }
+
+  .user-pill {
     flex-wrap: wrap;
     justify-content: center;
   }

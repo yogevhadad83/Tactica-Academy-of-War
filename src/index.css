@@ -1,12 +1,20 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --armoria-bg: #f7fafc;
+  --armoria-card: #ffffff;
+  --armoria-border: #e2e8f0;
+  --armoria-border-strong: #cbd5f5;
+  --armoria-purple: #667eea;
+  --armoria-purple-dark: #4c2c92;
+  --armoria-purple-soft: #e0d8ff;
+  --armoria-text: #2d3748;
+  --armoria-muted: #718096;
 }
 
 * {
@@ -18,8 +26,14 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #f7fafc;
-  color: #2d3748;
+  background-color: var(--armoria-bg);
+  color: var(--armoria-text);
+}
+
+body.flight-mode-active {
+  background-color: #020617;
+  color: #e2e8f0;
+  overflow: hidden;
 }
 
 a {

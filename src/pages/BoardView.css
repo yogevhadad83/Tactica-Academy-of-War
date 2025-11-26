@@ -4,6 +4,68 @@
   padding: 2.5rem 2rem;
 }
 
+.board-view-container.flight-mode {
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  background: #020617;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.flight-mode .board-view-header,
+.flight-mode .board-view-content,
+.flight-mode .demo-controls,
+.flight-mode .demo-battle-stage {
+  display: none;
+}
+
+.flight-mode .immersive-stage-panel {
+  flex: 1;
+  margin: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.flight-mode .immersive-stage-card {
+  border-radius: 0;
+  height: 100%;
+  flex: 1 1 auto;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #010512;
+}
+
+.flight-mode .three-stage-canvas {
+  width: min(1400px, 100vw);
+  height: min(900px, 100vh);
+  min-height: min(900px, 100vh);
+  margin: 0 auto;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flight-mode .three-stage-canvas canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.flight-mode .stage-overlay {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  bottom: 1rem;
+  width: min(520px, 90vw);
+}
+
 .board-view-header {
   text-align: center;
   margin-bottom: 2rem;
@@ -23,6 +85,164 @@
   margin: 0;
   font-size: 1.1rem;
   opacity: 0.9;
+}
+
+.immersive-stage-panel {
+  margin: 2rem 0 2.5rem 0;
+}
+
+.immersive-stage-card {
+  position: relative;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 35px 70px rgba(15, 23, 42, 0.35);
+  background: radial-gradient(circle at top, rgba(14, 116, 144, 0.25), rgba(15, 23, 42, 0.92));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.three-stage-canvas {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  min-height: 520px;
+  height: clamp(520px, 70vh, 880px);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stage-loading {
+  width: 100%;
+  min-height: 520px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.85);
+  letter-spacing: 0.04em;
+}
+
+.three-stage-canvas canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.countdown-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.countdown-overlay span {
+  font-size: clamp(3rem, 12vw, 10rem);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #f8fafc;
+  text-shadow: 0 0 30px rgba(94, 234, 212, 0.55);
+  animation: countdownPop 0.9s ease forwards;
+}
+
+.countdown-overlay.start span {
+  color: #34d399;
+  text-shadow: 0 0 32px rgba(52, 211, 153, 0.75);
+}
+
+.stage-overlay {
+  position: absolute;
+  left: 1.75rem;
+  right: 1.75rem;
+  bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.5);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(94, 234, 212, 0.2);
+  color: #e2e8f0;
+  z-index: 2;
+}
+
+.stage-kicker {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  margin: 0 0 0.35rem 0;
+  color: #38bdf8;
+}
+
+.stage-caption {
+  margin: 0;
+  font-size: 1rem;
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.stage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 999px;
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.stage-pill.idle {
+  background: rgba(59, 130, 246, 0.15);
+  color: #bfdbfe;
+}
+
+.stage-pill.running {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fcd34d;
+}
+
+.stage-pill.countdown {
+  background: rgba(248, 250, 252, 0.12);
+  color: #fef3c7;
+}
+
+.stage-pill.finished {
+  background: rgba(34, 197, 94, 0.2);
+  color: #bbf7d0;
+}
+
+.pulse-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+  animation: pulseDot 1.6s ease-in-out infinite;
+}
+
+.flight-exit-btn {
+  border: 1px solid rgba(248, 250, 252, 0.35);
+  background: rgba(2, 6, 23, 0.85);
+  color: #f8fafc;
+  border-radius: 999px;
+  padding: 0.6rem 1.5rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.flight-exit-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
 }
 
 .board-view-content {
@@ -491,6 +711,21 @@
   }
 }
 
+@keyframes countdownPop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+
 @keyframes hitPulse {
   0% {
     box-shadow: 0 0 0 rgba(239, 68, 68, 0.4);
@@ -523,6 +758,36 @@
   to {
     transform: scale(1.1);
     opacity: 0;
+  }
+}
+
+@keyframes pulseDot {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.9);
+    box-shadow: 0 0 3px currentColor;
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+    box-shadow: 0 0 12px currentColor;
+  }
+  100% {
+    opacity: 0.7;
+    transform: scale(0.9);
+    box-shadow: 0 0 3px currentColor;
+  }
+}
+
+@media (max-width: 900px) {
+  .stage-overlay {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .stage-pill {
+    width: 100%;
+    justify-content: center;
   }
 }
 

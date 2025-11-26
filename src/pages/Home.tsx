@@ -1,44 +1,99 @@
 import { Link } from 'react-router-dom';
+import { useUser } from '../context/UserContext';
 import './Home.css';
 
 const Home = () => {
+  const { currentUser } = useUser();
+
+  const quickLinks = (
+    <div className="quick-links">
+      <Link to="/army-builder" className="quick-link-card">
+        <span>⚔️ Build Army</span>
+        <p>Spend supply to assemble elite squads.</p>
+      </Link>
+      <Link to="/strategy" className="quick-link-card">
+        <span>🧠 Strategy</span>
+        <p>Author IF → THEN behaviors per unit.</p>
+      </Link>
+      <Link to="/board" className="quick-link-card">
+        <span>🎯 Board</span>
+        <p>Place units on the 12×12 battlefield.</p>
+      </Link>
+    </div>
+  );
+
   return (
     <div className="home-container">
       <div className="hero-section">
         <h1 className="game-title">⚔️ ARMORIA ⚔️</h1>
         <p className="game-subtitle">
-          A browser-based PvP strategy game where players assemble an army,
-          set behavior rules, and send their forces into automatic battles
-          on a 12×12 board.
+          Draft Knights, Horsemen, Archers, Beasts, and Dragons, assign battlefield instincts,
+          and watch them clash autonomously on Armoria&apos;s tactical grid.
         </p>
+        {!currentUser && (
+          <div className="hero-cta">
+            <Link to="/register" className="hero-btn primary">Register</Link>
+            <Link to="/login" className="hero-btn ghost">Login</Link>
+          </div>
+        )}
       </div>
+
+      {currentUser ? (
+        <section className="commander-summary">
+          <h2>Welcome back, {currentUser.username}</h2>
+          <div className="summary-grid">
+            <div className="summary-card">
+              <span>Gold</span>
+              <strong>{currentUser.gold}</strong>
+            </div>
+            <div className="summary-card">
+              <span>Level</span>
+              <strong>{currentUser.level}</strong>
+            </div>
+            <div className="summary-card">
+              <span>Army Size</span>
+              <strong>{currentUser.army.length} / 20</strong>
+            </div>
+          </div>
+          {quickLinks}
+        </section>
+      ) : (
+        <section className="guest-cta">
+          <h2>Ready to command?</h2>
+          <p>Create an Armoria profile to unlock army building and strategic tools.</p>
+          <div className="guest-actions">
+            <Link to="/register" className="hero-btn primary">Create Account</Link>
+            <Link to="/login" className="hero-btn ghost">Login</Link>
+          </div>
+        </section>
+      )}
 
       <div className="menu-grid">
         <Link to="/army-builder" className="menu-card">
           <div className="menu-icon">🏰</div>
           <h2>Army Builder</h2>
-          <p>Assemble your army from various unit types</p>
+          <p>Assemble your front line of Knights, Horsemen, Archers, Beasts, and Dragons.</p>
         </Link>
 
         <Link to="/strategy" className="menu-card">
           <div className="menu-icon">📋</div>
           <h2>Strategy Editor</h2>
-          <p>Set behavior rules for your units</p>
+          <p>Define battle instincts and contingency plans.</p>
         </Link>
 
         <Link to="/board" className="menu-card">
           <div className="menu-icon">🎮</div>
           <h2>Battle Board</h2>
-          <p>View the 12×12 battlefield</p>
+          <p>Preview placements on the 12×12 battlefield.</p>
         </Link>
       </div>
 
       <div className="info-section">
         <h3>How to Play</h3>
         <ol>
-          <li><strong>Build Your Army:</strong> Choose from Warriors, Archers, Mages, and Tanks</li>
-          <li><strong>Set Strategies:</strong> Define behavior rules for your units (coming soon)</li>
-          <li><strong>Enter Battle:</strong> Watch your army fight automatically on the board</li>
+          <li><strong>Build your army:</strong> Spend your supply budget across Knights, Horsemen, Archers, Beasts, and Dragons.</li>
+          <li><strong>Set behaviors:</strong> Craft IF/THEN rules that tell units how to react mid-fight.</li>
+          <li><strong>Watch auto-battles:</strong> Drop your formation on the board and let Armoria resolve the clash.</li>
         </ol>
       </div>
     </div>
