@@ -93,12 +93,12 @@ const MiniBoard = ({ unit }: { unit: Unit | null }) => {
       const canMove = moveKeys.has(key);
       const canAttack = attackKeys.has(key);
       const cellClass = [
-        'board-cell',
-        (row + col) % 2 === 0 ? 'light' : 'dark',
-        isOrigin ? 'origin' : '',
-        canMove ? 'move' : '',
-        canAttack ? 'attack' : '',
-        canMove && canAttack ? 'focus' : ''
+        'mini-board__cell',
+        (row + col) % 2 === 0 ? 'mini-board__cell--light' : 'mini-board__cell--dark',
+        isOrigin ? 'mini-board__cell--origin' : '',
+        canMove ? 'mini-board__cell--move' : '',
+        canAttack ? 'mini-board__cell--attack' : '',
+        canMove && canAttack ? 'mini-board__cell--focus' : ''
       ]
         .filter(Boolean)
         .join(' ');
@@ -116,18 +116,18 @@ const MiniBoard = ({ unit }: { unit: Unit | null }) => {
       <div className="mini-board" aria-label="Unit movement and attack preview">
         {cells}
       </div>
-      <div className="board-legend">
-        <span className="legend-item">
-          <span className="legend-dot move" /> Move arc
+      <div className="mini-board__legend">
+        <span className="mini-board__legend-item">
+          <span className="mini-board__legend-dot mini-board__legend-dot--move" /> Move arc
         </span>
-        <span className="legend-item">
-          <span className="legend-dot attack" /> Attack reach
+        <span className="mini-board__legend-item">
+          <span className="mini-board__legend-dot mini-board__legend-dot--attack" /> Attack reach
         </span>
-        <span className="legend-item">
-          <span className="legend-dot origin" /> Current unit
+        <span className="mini-board__legend-item">
+          <span className="mini-board__legend-dot mini-board__legend-dot--origin" /> Current unit
         </span>
       </div>
-      <div className="board-note">
+      <div className="mini-board__note">
         <p>{blueprint.description.movement}</p>
         <p>{blueprint.description.attack}</p>
       </div>

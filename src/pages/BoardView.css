@@ -258,6 +258,157 @@
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
 }
+
+.multiplayer-panel {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  border-radius: 16px;
+  border: 1px solid var(--armoria-border);
+  background: var(--armoria-card);
+  box-shadow: 0 20px 35px rgba(15, 23, 42, 0.18);
+}
+
+.multiplayer-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.25rem;
+}
+
+.multiplayer-panel h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.panel-subtitle {
+  margin: 0.35rem 0 0;
+  color: var(--armoria-muted, #94a3b8);
+  font-size: 0.9rem;
+}
+
+.multiplayer-status {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  border-radius: 999px;
+  padding: 0.4rem 0.9rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+}
+
+.multiplayer-status.connected {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(15, 118, 110, 0.18);
+}
+
+.multiplayer-status.connecting {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+  background: rgba(120, 53, 15, 0.25);
+}
+
+.multiplayer-status.disconnected {
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(88, 28, 28, 0.25);
+}
+
+.challenge-banner {
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  background: rgba(251, 191, 36, 0.08);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.challenge-banner-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.accept-btn,
+.decline-btn,
+.challenge-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.5rem 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.accept-btn {
+  background: linear-gradient(120deg, #22c55e, #10b981);
+  color: #f8fafc;
+  box-shadow: 0 10px 18px rgba(16, 185, 129, 0.3);
+}
+
+.decline-btn {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+}
+
+.challenge-btn {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 0.45rem 1.1rem;
+}
+
+.accept-btn:hover,
+.decline-btn:hover,
+.challenge-btn:hover {
+  transform: translateY(-1px);
+}
+
+.accept-btn:disabled,
+.decline-btn:disabled,
+.challenge-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.multiplayer-user-list {
+  margin-top: 1.25rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.25);
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.user-list-title {
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #94a3b8;
+}
+
+.user-list-empty {
+  margin: 0;
+  color: #94a3b8;
+}
+
+.multiplayer-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.multiplayer-user-row:last-of-type {
+  border-bottom: none;
+}
 .enemy-preset-btn {
   background: #e0f2fe;
   color: #0369a1;

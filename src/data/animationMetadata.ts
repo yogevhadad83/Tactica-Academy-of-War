@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
  * 
  * Animation metadata extracted from GLB model files.
- * Generated: 2025-11-30T05:20:18.190Z
+ * Generated: 2025-12-01T22:00:54.581Z
  * 
  * To regenerate, run: npx tsx scripts/extract-animation-metadata.ts
  */
@@ -33,8 +33,7 @@ export const RAW_ANIMATION_DATA: Record<string, Record<string, AnimationMetadata
     'idle_1': { name: 'idle_1', durationMs: 3800 },
     'Impact_0': { name: 'Impact_0', durationMs: 1000 },
     'Impact_1': { name: 'Impact_1', durationMs: 733 },
-    'Walk1': { name: 'Walk1', durationMs: 1233 },
-    'Walk_0': { name: 'Walk_0', durationMs: 900 },
+    'Walk_0': { name: 'Walk_0', durationMs: 933 },
   },
   'beast': {
     'Armature|mixamo.com|Layer0': { name: 'Armature|mixamo.com|Layer0', durationMs: 67 },
@@ -128,7 +127,7 @@ export const COMPUTED_ANIMATION_DURATIONS: Partial<Record<ModelKey, Partial<Reco
     fight: 733,
     idle: 5033,
     impact: 1000,
-    walk: 900,
+    walk: 933,
   },
   'beast': {
     death: 2600,

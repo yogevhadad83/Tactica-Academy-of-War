@@ -1,16 +1,11 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { units } from '../data/units';
-import {
-  advanceBattleTick,
-  initializeBattle,
-  BOARD_SIZE,
-  PLAYER_ZONE_START,
-  buildEnemyArmy
-} from '../engine/battleEngine';
-import type { BattleState, Team } from '../engine/battleEngine';
+import { BOARD_SIZE, PLAYER_ZONE_START } from '../engine/battleEngine';
+import type { Team, BattleTickResult } from '../engine/battleEngine';
 import type { BoardPlacements, PlacedUnit, Position } from '../types';
 import { useUser } from '../context/UserContext';
+import { useMultiplayer } from '../context/MultiplayerContext';
+import { placementToArmyConfig } from '../utils/placementToArmyConfig';
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
 import { calculateTickDuration } from '../components/units/useUnitLayer';
 import type { DemoState, HitEvent } from '../types/battle';
@@ -21,114 +16,75 @@ import './BoardView.css';
 const DEFAULT_TICK_MS = 2000;  // Fallback when no animations are playing
 const MIN_TICK_MS = 800;       // Minimum tick duration for visual clarity
 
-// Default enemy unit count (can be adjusted via UI slider)
-const DEFAULT_ENEMY_COUNT = 10;
-const MIN_ENEMY_COUNT = 1;
-const MAX_ENEMY_COUNT = 20;
+type OutcomeState = 'win' | 'lose' | 'draw' | 'pending';
 
-const generateRandomEnemyFormation = (count: number = DEFAULT_ENEMY_COUNT): Position[] => {
-  const taken = new Set<string>();
-  const formation: Position[] = [];
-  while (formation.length < count) {
-    const row = Math.floor(Math.random() * PLAYER_ZONE_START);
-    const col = Math.floor(Math.random() * BOARD_SIZE);
-    const key = `${row}-${col}`;
-    if (taken.has(key)) {
-      continue;
-    }
-    formation.push({ row, col });
-    taken.add(key);
+const mapServerWinnerToTeam = (
+  winner: 'A' | 'B' | 'draw',
+  role: 'A' | 'B' | null
+): 'player' | 'enemy' | 'draw' => {
+  if (winner === 'draw') return 'draw';
+  const seesCanonicalAsPlayer = !role || role === 'A';
+  if (seesCanonicalAsPlayer) {
+    return winner === 'A' ? 'player' : 'enemy';
   }
-  return formation;
+  return winner === 'B' ? 'player' : 'enemy';
+};
+
+function getLocalOutcome(
+  winner: 'A' | 'B' | 'draw' | null,
+  role: 'A' | 'B' | null
+): OutcomeState {
+  if (!winner) return 'pending';
+  if (winner === 'draw') return 'draw';
+  if (!role) return 'pending';
+  return winner === role ? 'win' : 'lose';
+}
+
+const deriveStartingTeam = (firstTick?: BattleTickResult): Team | null => {
+  if (!firstTick) return null;
+  return firstTick.currentTeam === 'player' ? 'enemy' : 'player';
 };
 
 const BoardView = () => {
   const { currentUser, updateBoardPlacements } = useUser();
+  const {
+    status: multiplayerStatus,
+    users: onlineUsers,
+    incomingChallenge,
+    lastResult: multiplayerResult,
+    setArmy: setMultiplayerArmy,
+    challenge: sendChallenge,
+    respondToChallenge,
+    currentRole,
+  } = useMultiplayer();
   const currentUserId = currentUser?.id ?? null;
+  const currentUsername = currentUser?.username ?? null;
+  const isServerConnected = multiplayerStatus === 'connected';
   const [placements, setPlacements] = useState<BoardPlacements>(currentUser?.boardPlacements ?? {});
   const [selectedCell, setSelectedCell] = useState<Position | null>(null);
-  const [demoState, setDemoState] = useState<DemoState>('idle');
+  const [battleState, setBattleState] = useState<DemoState>('idle');
   const [simulationUnits, setSimulationUnits] = useState<PlacedUnit[]>([]);
   const [hitCells, setHitCells] = useState<string[]>([]);
   const [hitEvents, setHitEvents] = useState<HitEvent[]>([]);
   const [moveCells, setMoveCells] = useState<string[]>([]);
   const [marchCells, setMarchCells] = useState<string[]>([]);
-  const [winner, setWinner] = useState<'player' | 'enemy' | null>(null);
+  const [winner, setWinner] = useState<'player' | 'enemy' | 'draw' | null>(null);
   const [currentTeam, setCurrentTeam] = useState<Team>('player');
   const [turnNumber, setTurnNumber] = useState(1);
   const [startingTeam, setStartingTeam] = useState<Team | null>(null);
-  const battleStateRef = useRef<BattleState | null>(null);
   const [countdownValue, setCountdownValue] = useState<string | number | null>(null);
-  const knightTemplate = units.find((unit) => unit.id === 'knight');
-  const [enemyCount, setEnemyCount] = useState(DEFAULT_ENEMY_COUNT);
-  const [enemyUnits, setEnemyUnits] = useState<PlacedUnit[]>(() =>
-    knightTemplate ? buildEnemyArmy(knightTemplate, generateRandomEnemyFormation(DEFAULT_ENEMY_COUNT)) : []
-  );
-  const enemySeededRef = useRef(false);
-  const [enemyPresets, setEnemyPresets] = useState<Position[][]>([]);
-  const presetsLoadedRef = useRef(false);
   const countdownTimeoutRef = useRef<number | null>(null);
-  const previousDemoStateRef = useRef<DemoState>('idle');
-
-  const restoreUnitsToFullHp = useCallback((units: PlacedUnit[]): PlacedUnit[] => {
-    let mutated = false;
-    const restored = units.map((unit) => {
-      const currentHp = unit.currentHp ?? unit.hp;
-      if (currentHp >= unit.hp) {
-        return unit;
-      }
-      mutated = true;
-      return { ...unit, currentHp: unit.hp };
-    });
-    return mutated ? restored : units;
-  }, []);
-
-  useEffect(() => {
-    if (previousDemoStateRef.current !== 'finished' && demoState === 'finished') {
-      setSimulationUnits((prev) => {
-        const restored = restoreUnitsToFullHp(prev);
-        return restored === prev ? prev : restored;
-      });
-      if (battleStateRef.current) {
-        battleStateRef.current = {
-          ...battleStateRef.current,
-          units: restoreUnitsToFullHp(battleStateRef.current.units)
-        };
-      }
+  const previousBattleStateRef = useRef<DemoState>('idle');
+  const timelineTimeoutRef = useRef<number | null>(null);
+  const timelineIndexRef = useRef(0);
+  const lastProcessedMultiplayerResult = useRef<{ matchId: string | null; role: 'A' | 'B' | null }>(
+    {
+      matchId: null,
+      role: null,
     }
-    previousDemoStateRef.current = demoState;
-  }, [demoState, restoreUnitsToFullHp]);
-
-  useEffect(() => {
-    setPlacements(currentUser?.boardPlacements ?? {});
-  }, [currentUserId]);
-
-  useEffect(() => {
-    if (!currentUserId) return;
-    updateBoardPlacements(placements);
-  }, [placements, currentUserId, updateBoardPlacements]);
-
-  useEffect(() => {
-    if (!knightTemplate || enemySeededRef.current) return;
-    if (enemyUnits.length === 0) {
-      setEnemyUnits(buildEnemyArmy(knightTemplate, generateRandomEnemyFormation()));
-    }
-    enemySeededRef.current = true;
-  }, [knightTemplate, enemyUnits.length]);
-
-  useEffect(() => {
-    if (!knightTemplate || presetsLoadedRef.current || typeof window === 'undefined') return;
-    const raw = window.localStorage.getItem('armoria_enemy_presets');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw) as Position[][];
-        setEnemyPresets(Array.isArray(parsed) ? parsed.slice(-5) : []);
-      } catch {
-        // ignore malformed presets
-      }
-    }
-    presetsLoadedRef.current = true;
-  }, [knightTemplate]);
+  );
+  const [battleTimeline, setBattleTimeline] = useState<BattleTickResult[]>([]);
+  const [pendingWinner, setPendingWinner] = useState<'player' | 'enemy' | 'draw' | null>(null);
 
   const placedUnits: PlacedUnit[] = useMemo(() => {
     if (!currentUser) return [];
@@ -151,26 +107,94 @@ const BoardView = () => {
     return currentUser.army.filter((unit) => !placements[unit.instanceId]);
   }, [currentUser, placements]);
 
-  const idleUnits = useMemo(() => [...placedUnits, ...enemyUnits], [placedUnits, enemyUnits]);
-  const activeUnits = demoState === 'idle' ? idleUnits : simulationUnits;
+  const activeUnits = battleState === 'idle' ? placedUnits : simulationUnits;
 
-  const scatterEnemyUnits = useCallback(() => {
-    if (!knightTemplate) return;
-    const formation = generateRandomEnemyFormation(enemyCount);
-    setEnemyUnits(buildEnemyArmy(knightTemplate, formation));
-  }, [knightTemplate, enemyCount]);
+  const otherOnlineUsers = useMemo(
+    () => onlineUsers.filter((user) => user !== currentUsername),
+    [currentUsername, onlineUsers]
+  );
 
-  const moveEnemyUnit = useCallback((instanceId: string, position: Position) => {
-    setEnemyUnits((prev) => {
-      const target = prev.find((unit) => unit.instanceId === instanceId);
-      if (!target) return prev;
-      const filtered = prev.filter(
-        (unit) =>
-          !(unit.instanceId !== instanceId && unit.position.row === position.row && unit.position.col === position.col)
-      );
-      return filtered.map((unit) => (unit.instanceId === instanceId ? { ...unit, position } : unit));
+  const restoreUnitsToFullHp = useCallback((units: PlacedUnit[]): PlacedUnit[] => {
+    let mutated = false;
+    const restored = units.map((unit) => {
+      const currentHp = unit.currentHp ?? unit.hp;
+      if (currentHp >= unit.hp) {
+        return unit;
+      }
+      mutated = true;
+      return { ...unit, currentHp: unit.hp };
     });
+    return mutated ? restored : units;
   }, []);
+
+  useEffect(() => {
+    if (previousBattleStateRef.current !== 'finished' && battleState === 'finished') {
+      setSimulationUnits((prev) => {
+        const restored = restoreUnitsToFullHp(prev);
+        return restored === prev ? prev : restored;
+      });
+    }
+    previousBattleStateRef.current = battleState;
+  }, [battleState, restoreUnitsToFullHp]);
+
+  useEffect(() => {
+    setPlacements(currentUser?.boardPlacements ?? {});
+  }, [currentUserId]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    updateBoardPlacements(placements);
+  }, [placements, currentUserId, updateBoardPlacements]);
+
+  const syncArmyToServer = useCallback(() => {
+    if (!isServerConnected || placedUnits.length === 0) {
+      return;
+    }
+    setMultiplayerArmy(placementToArmyConfig(placedUnits));
+  }, [isServerConnected, placedUnits, setMultiplayerArmy]);
+
+  useEffect(() => {
+    syncArmyToServer();
+  }, [syncArmyToServer]);
+
+  const handleChallengeUser = useCallback(
+    (opponentName: string) => {
+      if (!isServerConnected) {
+        alert('Connect to the multiplayer server before sending a challenge.');
+        return;
+      }
+      if (placedUnits.length === 0) {
+        alert('Place at least one unit before challenging another commander.');
+        return;
+      }
+      syncArmyToServer();
+      sendChallenge(opponentName);
+    },
+    [isServerConnected, placedUnits.length, sendChallenge, syncArmyToServer]
+  );
+
+  const handleAcceptChallenge = useCallback(() => {
+    if (!incomingChallenge) {
+      return;
+    }
+    if (!isServerConnected) {
+      alert('Reconnect to the multiplayer server before accepting a live battle.');
+      return;
+    }
+    if (placedUnits.length === 0) {
+      alert('Place at least one unit before accepting a battle.');
+      return;
+    }
+    syncArmyToServer();
+    respondToChallenge(incomingChallenge, true);
+  }, [incomingChallenge, isServerConnected, placedUnits.length, respondToChallenge, syncArmyToServer]);
+
+  const handleDeclineChallenge = useCallback(() => {
+    if (!incomingChallenge) {
+      return;
+    }
+    respondToChallenge(incomingChallenge, false);
+  }, [incomingChallenge, respondToChallenge]);
 
   const getUnitAt = useCallback(
     (row: number, col: number): PlacedUnit | undefined => {
@@ -191,19 +215,19 @@ const BoardView = () => {
     });
   };
 
-  const handleDragStart = (event: DragEvent<HTMLDivElement>, instanceId: string, team: 'player' | 'enemy') => {
-    event.dataTransfer.setData('text/plain', `${team}:${instanceId}`);
+  const handleDragStart = (event: DragEvent<HTMLDivElement>, instanceId: string) => {
+    event.dataTransfer.setData('text/plain', `player:${instanceId}`);
     event.dataTransfer.effectAllowed = 'move';
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
-    if (!currentUser || demoState !== 'idle') return;
+    if (!currentUser || battleState !== 'idle') return;
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>, row: number, col: number) => {
-    if (demoState !== 'idle') return;
+    if (battleState !== 'idle') return;
     event.preventDefault();
     const payload = event.dataTransfer.getData('text/plain');
     if (!payload) return;
@@ -221,10 +245,6 @@ const BoardView = () => {
         return next;
       });
     }
-    if (team === 'enemy') {
-      if (row >= PLAYER_ZONE_START) return;
-      moveEnemyUnit(instanceId, { row, col });
-    }
   };
 
   const renderCell = (row: number, col: number) => {
@@ -236,8 +256,9 @@ const BoardView = () => {
     const wasHit = hitCells.includes(cellKey);
     const wasMoved = moveCells.includes(cellKey);
     const wasMarch = marchCells.includes(cellKey);
-    const allowPlacement = demoState === 'idle';
-    const canDragUnit = allowPlacement && Boolean(unit);
+    const allowPlacement = battleState === 'idle';
+    const isPlayerUnit = unit?.team === 'player';
+    const canDragUnit = allowPlacement && isPlayerUnit;
 
     return (
       <div
@@ -252,7 +273,7 @@ const BoardView = () => {
           <div
             className="unit-on-board"
             draggable={canDragUnit}
-            onDragStart={canDragUnit ? (event) => handleDragStart(event, unit.instanceId, unit.team) : undefined}
+            onDragStart={canDragUnit ? (event) => handleDragStart(event, unit.instanceId) : undefined}
           >
             <div className="unit-icon-board">{unit.icon}</div>
             <div className="unit-health-bar">
@@ -269,12 +290,12 @@ const BoardView = () => {
 
   const selectedUnit = selectedCell ? getUnitAt(selectedCell.row, selectedCell.col) : null;
 
-  const clearDemoHighlights = () => {
+  const clearBattleHighlights = useCallback(() => {
     setHitCells([]);
     setHitEvents([]);
     setMoveCells([]);
     setMarchCells([]);
-  };
+  }, []);
 
   const clearCountdownTimers = useCallback(() => {
     if (countdownTimeoutRef.current !== null) {
@@ -297,7 +318,7 @@ const BoardView = () => {
         if (isLast) {
           setCountdownValue(null);
           countdownTimeoutRef.current = null;
-          setDemoState('running');
+          setBattleState('running');
         } else {
           step();
         }
@@ -310,12 +331,54 @@ const BoardView = () => {
   useEffect(() => () => clearCountdownTimers(), [clearCountdownTimers]);
 
   useEffect(() => {
+    if (!multiplayerResult) {
+      return;
+    }
+    const roleKey = currentRole ?? null;
+    const alreadyProcessed =
+      lastProcessedMultiplayerResult.current.matchId === multiplayerResult.matchId &&
+      lastProcessedMultiplayerResult.current.role === roleKey;
+
+    if (alreadyProcessed) {
+      return;
+    }
+
+    lastProcessedMultiplayerResult.current = {
+      matchId: multiplayerResult.matchId,
+      role: roleKey,
+    };
+
+    const timeline = multiplayerResult.timeline ?? [];
+    const winnerFromServer = mapServerWinnerToTeam(multiplayerResult.winner, roleKey);
+
+    setPendingWinner(winnerFromServer);
+    setBattleTimeline(timeline);
+    setStartingTeam(deriveStartingTeam(timeline[0]));
+    setWinner(null);
+    timelineIndexRef.current = 0;
+    clearBattleHighlights();
+    clearCountdownTimers();
+    if (timeline[0]) {
+      setSimulationUnits(timeline[0].units);
+    }
+
+    if (timeline.length === 0) {
+      setWinner(winnerFromServer);
+      setBattleState('finished');
+      return;
+    }
+
+    setBattleState('countdown');
+    beginFlightCountdown();
+  }, [beginFlightCountdown, clearCountdownTimers, clearBattleHighlights, currentRole, multiplayerResult]);
+
+  useEffect(() => {
     if (hitCells.length === 0 && moveCells.length === 0) return;
     const timeout = window.setTimeout(() => {
-      clearDemoHighlights();
+      clearBattleHighlights();
     }, 420);
     return () => window.clearTimeout(timeout);
-  }, [hitCells, moveCells]);
+  }, [hitCells, moveCells, clearBattleHighlights]);
 
   useEffect(() => {
     if (marchCells.length === 0) return;
@@ -324,192 +387,177 @@ const BoardView = () => {
   }, [marchCells]);
 
   // Track timeout for dynamic tick scheduling
-  const tickTimeoutRef = useRef<number | null>(null);
-
   useEffect(() => {
-    if (demoState !== 'running') {
-      if (tickTimeoutRef.current !== null) {
-        window.clearTimeout(tickTimeoutRef.current);
-        tickTimeoutRef.current = null;
+    if (battleState !== 'running' || battleTimeline.length === 0) {
+      if (timelineTimeoutRef.current !== null) {
+        window.clearTimeout(timelineTimeoutRef.current);
+        timelineTimeoutRef.current = null;
       }
       return;
     }
 
-    const scheduleTick = () => {
-      const state = battleStateRef.current;
-      if (!state) {
+    const playTick = () => {
+      const tick = battleTimeline[timelineIndexRef.current];
+      if (!tick) {
+        setBattleState('finished');
+        setWinner(pendingWinner);
         return;
       }
 
-      // Advance the battle tick
-      const {
-        units: nextUnits,
-        winner: matchWinner,
-        hits,
-        hitEvents: tickHitEvents,
-        moves,
-        currentTeam: nextTeam,
-        turnNumber: nextTurn
-      } = advanceBattleTick(state.units, state.currentTeam, state.turnNumber);
+      setSimulationUnits(tick.units);
+      setHitCells(tick.hits);
+      setHitEvents(tick.hitEvents);
+      setMoveCells(tick.moves);
+      setMarchCells(tick.moves.filter((_, index) => index % 2 === 0));
+      setCurrentTeam(tick.currentTeam);
+      setTurnNumber(tick.turnNumber);
 
-      battleStateRef.current = {
-        units: nextUnits,
-        currentTeam: nextTeam,
-        turnNumber: nextTurn
-      };
-
-      setSimulationUnits(nextUnits);
-      setHitCells(hits);
-      setHitEvents(tickHitEvents);
-      setMoveCells(moves);
-      setMarchCells(moves.filter((_, index) => index % 2 === 0));
-      setCurrentTeam(nextTeam);
-      setTurnNumber(nextTurn);
-
-      if (matchWinner) {
-        setWinner(matchWinner);
-        setDemoState('finished');
+      if (tick.winner) {
+        setWinner(tick.winner);
+        setBattleState('finished');
         return;
       }
 
-      // Calculate dynamic tick duration based on animations that will play this tick
-      const tickDuration = tickHitEvents.length > 0
-        ? calculateTickDuration(tickHitEvents, nextUnits)
+      if (timelineIndexRef.current >= battleTimeline.length - 1) {
+        setWinner(pendingWinner);
+        setBattleState('finished');
+        return;
+      }
+
+      timelineIndexRef.current += 1;
+      const upcomingTick = battleTimeline[timelineIndexRef.current];
+      const tickDuration = upcomingTick && upcomingTick.hitEvents.length > 0
+        ? calculateTickDuration(upcomingTick.hitEvents, upcomingTick.units)
         : DEFAULT_TICK_MS;
 
-      // Schedule the next tick with the calculated duration
-      tickTimeoutRef.current = window.setTimeout(scheduleTick, Math.max(tickDuration, MIN_TICK_MS));
+      timelineTimeoutRef.current = window.setTimeout(playTick, Math.max(tickDuration, MIN_TICK_MS));
     };
 
-    // Start the first tick
-    tickTimeoutRef.current = window.setTimeout(scheduleTick, DEFAULT_TICK_MS);
+    // Kick off playback with a short delay to let countdown dissolve
+    timelineTimeoutRef.current = window.setTimeout(playTick, DEFAULT_TICK_MS);
 
     return () => {
-      if (tickTimeoutRef.current !== null) {
-        window.clearTimeout(tickTimeoutRef.current);
-        tickTimeoutRef.current = null;
+      if (timelineTimeoutRef.current !== null) {
+        window.clearTimeout(timelineTimeoutRef.current);
+        timelineTimeoutRef.current = null;
       }
     };
-  }, [demoState]);
+  }, [battleTimeline, battleState, pendingWinner]);
 
-  const startDemoFight = () => {
-    if (!currentUser || placedUnits.length === 0 || enemyUnits.length === 0) return;
-
-    const playerArmy = placedUnits.map((unit) => ({
-      ...unit,
-      position: { ...unit.position },
-      currentHp: unit.hp
-    }));
-
-    const enemyArmy = enemyUnits.map((unit) => ({
-      ...unit,
-      position: { ...unit.position },
-      currentHp: unit.hp
-    }));
-
-    // Initialize battle with lucky draw
-    const initialState = initializeBattle([...playerArmy, ...enemyArmy]);
-    battleStateRef.current = initialState;
-    setSimulationUnits(initialState.units);
-    setCurrentTeam(initialState.currentTeam);
-    setTurnNumber(initialState.turnNumber);
-    setStartingTeam(initialState.currentTeam);
-    setWinner(null);
-    clearDemoHighlights();
-    clearCountdownTimers();
-    setDemoState('countdown');
-    beginFlightCountdown();
-  };
-
-  const exitDemoFight = () => {
-    setDemoState('idle');
+  const exitBattle = () => {
+    setBattleState('idle');
     setSimulationUnits([]);
-    battleStateRef.current = null;
     setWinner(null);
     setCurrentTeam('player');
     setTurnNumber(1);
     setStartingTeam(null);
-    clearDemoHighlights();
+    setBattleTimeline([]);
+    setPendingWinner(null);
+    timelineIndexRef.current = 0;
+    if (timelineTimeoutRef.current !== null) {
+      window.clearTimeout(timelineTimeoutRef.current);
+      timelineTimeoutRef.current = null;
+    }
+    clearBattleHighlights();
     clearCountdownTimers();
   };
 
-  const canLaunchDemo = demoState === 'idle' && placedUnits.length > 0 && enemyUnits.length > 0;
+  const canSyncMultiplayerArmy = isServerConnected && placedUnits.length > 0;
 
-  const demoControls = (
-    <div className="demo-controls">
-      <button
-        type="button"
-        className="launch-demo-btn"
-        disabled={!canLaunchDemo}
-        onClick={startDemoFight}
-      >
-        Launch Demo Fight
-      </button>
-      <div className="enemy-count-control">
-        <label htmlFor="enemy-count-slider">
-          Enemy Units: <strong>{enemyCount}</strong>
-        </label>
-        <input
-          id="enemy-count-slider"
-          type="range"
-          min={MIN_ENEMY_COUNT}
-          max={MAX_ENEMY_COUNT}
-          value={enemyCount}
-          onChange={(e) => setEnemyCount(Number(e.target.value))}
-          disabled={demoState !== 'idle'}
-          className="enemy-count-slider"
-        />
-      </div>
-      <button
-        type="button"
-        className="scatter-enemy-btn"
-        onClick={scatterEnemyUnits}
-        disabled={demoState !== 'idle'}
-      >
-        Scatter {enemyCount} Enemy Knights
-      </button>
-      <button
-        type="button"
-        className="enemy-preset-btn"
-        onClick={() => {
-          if (!knightTemplate || enemyUnits.length === 0) return;
-          const formation = enemyUnits.map((unit) => unit.position);
-          const nextPresets = [...enemyPresets, formation].slice(-5);
-          setEnemyPresets(nextPresets);
-          if (typeof window !== 'undefined') {
-            window.localStorage.setItem('armoria_enemy_presets', JSON.stringify(nextPresets));
-          }
-        }}
-        disabled={demoState !== 'idle' || enemyUnits.length === 0}
-      >
-        Save Enemy Layout
-      </button>
-      {enemyPresets.length > 0 && (
-        <select
-          className="enemy-preset-select"
-          onChange={(event) => {
-            const index = Number(event.target.value);
-            if (Number.isNaN(index)) return;
-            const formation = enemyPresets[index];
-            if (!formation || !knightTemplate) return;
-            setEnemyUnits(buildEnemyArmy(knightTemplate, formation));
-          }}
-          disabled={demoState !== 'idle'}
-          defaultValue=""
-        >
-          <option value="" disabled>
-            Load enemy preset
-          </option>
-          {enemyPresets.map((_, index) => (
-            <option key={`preset-${index}`} value={index}>
-              Preset #{enemyPresets.length - index}
-            </option>
-          ))}
-        </select>
+  const armyControls = (
+    <div className="army-controls">
+      {!isServerConnected && (
+        <p className="army-note warning">
+          Login (or reconnect) to the multiplayer server to sync your army.
+        </p>
       )}
-      <p className="demo-note">Arrange blue units in rows 6-11 and drag red knights in rows 0-5. The demo uses exactly what you see.</p>
+      <button
+        type="button"
+        className="save-placement-btn"
+        disabled={!canSyncMultiplayerArmy}
+        onClick={syncArmyToServer}
+      >
+        Save Multiplayer Army
+      </button>
+      <p className="army-note">Position your units on rows 6-11, save your army, then challenge another player.</p>
     </div>
   );
+
+  const multiplayerPanel = (
+    <section className="multiplayer-panel" aria-label="Multiplayer controls">
+      <div className="multiplayer-panel-header">
+        <div>
+          <h3>Multiplayer</h3>
+          <p className="panel-subtitle">
+            {isServerConnected
+              ? `Synced as ${currentUsername ?? 'Commander'}.`
+              : 'Login to sync placements and launch live battles.'}
+          </p>
+        </div>
+        <span className={`multiplayer-status ${multiplayerStatus}`}>
+          {multiplayerStatus.toUpperCase()}
+        </span>
+      </div>
+
+      {incomingChallenge && (
+        <div className="challenge-banner" role="alert">
+          <div>
+            <strong>{incomingChallenge}</strong> challenged you to a battle.
+          </div>
+          <div className="challenge-banner-actions">
+            <button
+              type="button"
+              className="accept-btn"
+              onClick={handleAcceptChallenge}
+              disabled={!isServerConnected || placedUnits.length === 0}
+            >
+              Accept
+            </button>
+            <button type="button" className="decline-btn" onClick={handleDeclineChallenge}>
+              Decline
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="multiplayer-user-list">
+        <div className="user-list-title">Online Commanders</div>
+        {placedUnits.length === 0 && (
+          <p className="user-list-empty">Place at least one unit to enable live battles.</p>
+        )}
+        {otherOnlineUsers.length === 0 ? (
+          <p className="user-list-empty">No other players online right now.</p>
+        ) : (
+          otherOnlineUsers.map((user) => (
+            <div key={user} className="multiplayer-user-row">
+              <span>{user}</span>
+              <button
+                type="button"
+                className="challenge-btn"
+                onClick={() => handleChallengeUser(user)}
+                disabled={!isServerConnected || placedUnits.length === 0}
+              >
+                Challenge
+              </button>
+            </div>
+          ))
+        )}
+      </div>
+    </section>
+  );
+
+  const isFlightMode = battleState === 'countdown' || battleState === 'running';
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const body = document.body;
+    if (isFlightMode) {
+      body.classList.add('flight-mode-active');
+    } else {
+      body.classList.remove('flight-mode-active');
+    }
+    return () => body.classList.remove('flight-mode-active');
+  }, [isFlightMode]);
 
   if (!currentUser) {
     return (
@@ -527,69 +575,101 @@ const BoardView = () => {
       <div className="board-view-container">
         <div className="board-view-header">
           <h1>🎮 Battle Board</h1>
-          <p className="header-subtitle">You need units before launching a demo fight. Visit the Army Builder.</p>
+          <p className="header-subtitle">You need units before launching a battle. Visit the Army Builder.</p>
         </div>
       </div>
     );
   }
 
+  const activeBattleLabel = 'Multiplayer battle';
+
+  const multiplayerOutcome: OutcomeState = getLocalOutcome(
+    multiplayerResult?.winner ?? null,
+    currentRole ?? null
+  );
+
+  const overallOutcome: OutcomeState = multiplayerOutcome;
+
   const subtitle = (() => {
-    if (demoState === 'idle') {
-      return 'Position your units on rows 6-11 and arrange the enemy squad above before launching a practice battle.';
+    if (battleState === 'idle') {
+      return 'Position your units on rows 6-11, save your army, then challenge another player.';
     }
-    if (demoState === 'countdown') {
-      const firstMoveText = startingTeam ? ` ${startingTeam === 'player' ? 'Your team' : 'Enemy team'} won the lucky draw and moves first!` : '';
+    if (battleState === 'countdown') {
+      const firstMoveText = startingTeam ? ` ${startingTeam === 'player' ? 'Your team' : 'Enemy team'} moves first!` : '';
       return `Flight countdown engaged.${firstMoveText} Cameras are swinging into place behind your formation.`;
     }
-    if (demoState === 'finished') {
-      return winner === 'player'
-        ? 'Demo battle complete. Your squad claimed the field—review the outcome below.'
-        : 'Demo battle complete. Review the outcome below and adjust placements.';
+    if (battleState === 'running') {
+      return `${activeBattleLabel} in progress. ${currentTeam === 'player' ? 'Your' : 'Enemy'} team is taking their turn.`;
     }
-    return `Demo battle in progress. ${currentTeam === 'player' ? 'Your' : 'Enemy'} team is taking their turn.`;
+    if (battleState === 'finished') {
+      if (winner === 'player') {
+        return `${activeBattleLabel} complete. Your squad claimed the field—review the outcome below.`;
+      }
+      if (winner === 'enemy') {
+        return `${activeBattleLabel} complete. Review the outcome below and adjust placements.`;
+      }
+      return `${activeBattleLabel} ended in a stalemate. Study the replay and tweak your approach.`;
+    }
+    return `${activeBattleLabel} in progress. ${currentTeam === 'player' ? 'Your' : 'Enemy'} team is taking their turn.`;
   })();
 
   const stageStatusLabel = (() => {
-    if (demoState === 'countdown') {
+    if (battleState === 'countdown') {
       return 'Flight countdown';
     }
-    if (demoState === 'running') {
+    if (battleState === 'running') {
       return 'Simulating battle';
     }
-    if (demoState === 'finished') {
-      return winner === 'player' ? 'Victory secured' : 'Regroup and retry';
+    if (battleState === 'finished') {
+      if (winner === 'player') return 'Victory secured';
+      if (winner === 'enemy') return 'Regroup and retry';
+      return 'Stalemate reached';
     }
-    return canLaunchDemo ? 'Ready for launch' : 'Awaiting placements';
+    if (!isServerConnected) {
+      return 'Connect to server';
+    }
+    return placedUnits.length > 0 ? 'Ready for launch' : 'Awaiting placements';
   })();
 
   const stageHelperText = (() => {
-    if (demoState === 'running') {
-      return 'Camera locks onto the fight and tracks each glowing formation.';
-    }
-    if (demoState === 'countdown') {
+    if (battleState === 'countdown') {
       return 'Engines spool up while the camera swings behind your squad.';
     }
-    if (demoState === 'finished') {
-      return 'Replay the results below, then tweak placements for the next sortie.';
+    if (battleState === 'running') {
+      return 'Camera locks onto the fight and tracks each glowing formation.';
+    }
+    if (battleState === 'finished') {
+      return winner === 'draw'
+        ? 'A stalemate is still intel—review the replay and refine your tactics.'
+        : 'Replay the results below, then tweak placements for the next sortie.';
     }
     return 'Drag units on the left, then preview their posture in full 3D.';
   })();
 
-  const isFlightMode = demoState === 'countdown' || demoState === 'running';
+  const battleResultHeading = (() => {
+    if (!winner) return '';
+    if (overallOutcome === 'win') return 'You Won';
+    if (overallOutcome === 'lose') return 'You Lost';
+    if (overallOutcome === 'draw') return 'Draw';
+    return 'Battle Complete';
+  })();
 
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    const body = document.body;
-    if (isFlightMode) {
-      body.classList.add('flight-mode-active');
-    } else {
-      body.classList.remove('flight-mode-active');
+  const battleResultDescription = (() => {
+    if (!winner) return '';
+    if (overallOutcome === 'win') {
+      return 'You outmaneuvered your opponent. Placements synced for the next duel.';
     }
-    return () => body.classList.remove('flight-mode-active');
-  }, [isFlightMode]);
+    if (overallOutcome === 'lose') {
+      return 'Your opponent held the field. Refine your placements and strike back.';
+    }
+    if (overallOutcome === 'draw') {
+      return 'Neither side broke through—replay the battle and adjust your army.';
+    }
+    return '';
+  })();
 
   return (
-    <div className={`board-view-container ${demoState !== 'idle' ? 'demo-mode' : ''} ${isFlightMode ? 'flight-mode' : ''}`}>
+    <div className={`board-view-container ${battleState !== 'idle' ? 'battle-mode' : ''} ${isFlightMode ? 'flight-mode' : ''}`}>
       <div className="board-view-header">
         <h1>🎮 Battle Board</h1>
         <p className="header-subtitle">{subtitle}</p>
@@ -611,7 +691,7 @@ const BoardView = () => {
               hitEvents={hitEvents}
               moveCells={moveCells}
               marchCells={marchCells}
-              demoState={demoState}
+              demoState={battleState}
             />
           </Suspense>
           {countdownValue !== null && (
@@ -624,22 +704,22 @@ const BoardView = () => {
               <p className="stage-kicker">Immersive Tactical Visualizer</p>
               <p className="stage-caption">{stageHelperText}</p>
             </div>
-            <div className={`stage-pill ${demoState}`}>
+            <div className={`stage-pill ${battleState}`}>
               <span className="pulse-dot" />
               {stageStatusLabel}
             </div>
             {isFlightMode && (
-              <button type="button" className="flight-exit-btn" onClick={exitDemoFight}>
+              <button type="button" className="flight-exit-btn" onClick={exitBattle}>
                 Abort Flight
               </button>
             )}
           </div>
         </div>
       </div>
+      {battleState === 'idle' && armyControls}
+      {multiplayerPanel}
 
-      {demoState === 'idle' && demoControls}
-
-      {demoState === 'idle' ? (
+      {battleState === 'idle' ? (
         <div className="board-view-content">
           <div className="board-wrapper planning">
             <div className="board-grid">
@@ -711,7 +791,7 @@ const BoardView = () => {
                     key={unit.instanceId}
                     className="placement-token"
                     draggable
-                    onDragStart={(event) => handleDragStart(event, unit.instanceId, 'player')}
+                    onDragStart={(event) => handleDragStart(event, unit.instanceId)}
                   >
                     <span className="token-icon">{unit.icon}</span>
                     <div>
@@ -724,36 +804,34 @@ const BoardView = () => {
             </div>
           </div>
         </div>
-      ) : demoState === 'finished' ? (
-        <div className="demo-battle-stage">
+      ) : battleState === 'finished' ? (
+        <div className="battle-stage">
           <div className="board-wrapper battle">
             <div className="board-grid battle">
               {Array.from({ length: BOARD_SIZE }, (_, row) =>
                 Array.from({ length: BOARD_SIZE }, (_, col) => renderCell(row, col))
               )}
             </div>
-            <div className="demo-overlay">
-              <div className="demo-status">
+            <div className="battle-overlay">
+              <div className="battle-status">
                 <span>Turn {turnNumber} - {currentTeam === 'player' ? '🔵 Player' : '🔴 Enemy'}</span>
-                <span>{winner ? `${winner === 'player' ? 'Victory' : 'Defeat'}` : 'Simulating...'}</span>
+                <span>
+                  {winner ? (overallOutcome === 'win' ? 'You Won' : overallOutcome === 'lose' ? 'You Lost' : 'Draw') : 'Simulating...'}
+                </span>
                 {startingTeam && <span className="first-move-badge">First move: {startingTeam === 'player' ? '🔵 Player' : '🔴 Enemy'}</span>}
               </div>
               <button
                 type="button"
-                className="exit-demo-btn"
-                onClick={exitDemoFight}
+                className="exit-battle-btn"
+                onClick={exitBattle}
               >
-                {winner ? 'Return to Planning' : 'Abort Demo'}
+                {winner ? 'Return to Planning' : 'Abort Replay'}
               </button>
             </div>
             {winner && (
               <div className="battle-announcement">
-                <h2>{winner === 'player' ? 'Commander Victory!' : 'Training Loss'}</h2>
-                <p>
-                  {winner === 'player'
-                    ? 'Your tactics overwhelmed the training squad. Tweaks saved; army fully restored.'
-                    : 'The training squad held the line. Adjust placements and try again.'}
-                </p>
+                <h2>{battleResultHeading}</h2>
+                <p>{battleResultDescription}</p>
               </div>
             )}
           </div>

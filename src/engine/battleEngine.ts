@@ -1,6 +1,8 @@
 import type { PlacedUnit, Position, Unit } from '../types';
 import type { HitEvent } from '../types/battle';
 
+export type { PlacedUnit } from '../types';
+
 export const BOARD_SIZE = 12;
 export const PLAYER_ROWS = 6;
 export const PLAYER_ZONE_START = BOARD_SIZE - PLAYER_ROWS;
@@ -276,6 +278,10 @@ const applyActions = (
 
   // Apply all moves simultaneously
   const moveActions = actions.filter((action) => action.type === 'move' && action.newPosition);
+  const moveActionsByActorId = new Map<string, PendingAction>();
+  for (const action of moveActions) {
+    moveActionsByActorId.set(action.actor.instanceId, action);
+  }
   
   // Check for move collisions (two units moving to the same cell)
   const targetCells = new Map<string, PendingAction[]>();
@@ -295,10 +301,11 @@ const applyActions = (
       const movesToCell = targetCells.get(key) ?? [];
       
       // Only move if this is the only unit trying to move there
-      // and no unit currently occupies that cell (after accounting for deaths)
+      // and the cell is either empty or will be vacated by an ally also moving this turn
       const currentOccupant = getOccupant(snapshot, action.newPosition.row, action.newPosition.col);
-      
-      if (movesToCell.length === 1 && !currentOccupant) {
+      const occupantWillVacate = !!currentOccupant && moveActionsByActorId.has(currentOccupant.instanceId);
+
+      if (movesToCell.length === 1 && (!currentOccupant || occupantWillVacate)) {
         recordMove(`${action.actor.position.row}-${action.actor.position.col}`);
         action.actor.position = { ...action.newPosition };
         recordMove(`${action.actor.position.row}-${action.actor.position.col}`);

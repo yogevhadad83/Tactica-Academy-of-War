@@ -43,6 +43,31 @@ export default defineConfig([
 ])
 ```
 
+## PVP Orientation & Mirroring
+
+This project uses a deterministic, server-driven perspective for multiplayer battles.
+
+- Coordinate system: `row 0` is top, `row BOARD_SIZE-1` is bottom; `col 0` is left.
+- Canonical orientation in the engine: Team `player` is always south (bottom), Team `enemy` is always north (top).
+
+Server responsibilities (authoritative):
+- Pre-battle normalization: in `server/src/runBattle.ts`, Player A (challenger) stays as-is and is assigned team `player`. Player B (responder) is vertically mirrored using `BOARD_SIZE` and assigned team `enemy`.
+- Post-battle per-player timelines: in `server/src/index.ts`, Player A receives the canonical timeline. Player B receives a vertically mirrored copy with team labels swapped. Implemented via `mirrorTimelineForPlayerB` in `server/src/runBattle.ts`.
+
+Client responsibilities:
+- No mirroring is applied on the client. `src/utils/transformTimelineForPerspective.ts` is a no-op now, and `src/pages/BoardView.tsx` consumes the timeline from the server as-is.
+
+Concrete validation case (BOARD_SIZE=12 → MAX_ROW=11):
+- Input: A places a knight at `(11,0)`; B places a beast at `(11,0)`.
+- Engine sees: knight at `(11,0)` team `player`; beast at `(0,0)` team `enemy`.
+- Player A sees: knight `(11,0)`, beast `(0,0)`.
+- Player B sees: beast `(11,0)`, knight `(0,0)`.
+
+Files of interest:
+- `server/src/runBattle.ts`: pre-battle normalization and `mirrorTimelineForPlayerB`.
+- `server/src/index.ts`: sends canonical timeline to A and mirrored to B.
+- `src/pages/BoardView.tsx`: uses server timeline as-is, no transforms.
+
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js
