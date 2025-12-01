@@ -52,8 +52,9 @@ const UnitPreviewCanvas = ({ unit }: UnitPreviewCanvasProps) => {
     updateUnitMovement,
     updateDeathFades,
     updateMixers,
+    updateRandomIdles,
     disposeAll
-  } = useUnitLayer(unitRootRef, hpRootRef, { showHpOverlay: true, hpWorldSpace: true });
+  } = useUnitLayer(unitRootRef, hpRootRef, { showHpOverlay: true, hpWorldSpace: true, showHpDetails: true });
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -142,6 +143,7 @@ const UnitPreviewCanvas = ({ unit }: UnitPreviewCanvasProps) => {
       updateUnitMovement();
       updateDeathFades();
       updateMixers(delta);
+      updateRandomIdles();
       updateHpFacing(camera);
       renderer.render(scene, camera);
     };
@@ -168,7 +170,7 @@ const UnitPreviewCanvas = ({ unit }: UnitPreviewCanvasProps) => {
       pmrem.dispose();
       mount.removeChild(renderer.domElement);
     };
-  }, [disposeAll, updateDeathFades, updateHpFacing, updateMixers, updateUnitMovement]);
+  }, [disposeAll, updateDeathFades, updateHpFacing, updateMixers, updateRandomIdles, updateUnitMovement]);
 
   useEffect(() => {
     if (!sceneReady) return;

@@ -12,20 +12,21 @@ import type { BattleState, Team } from '../engine/battleEngine';
 import type { BoardPlacements, PlacedUnit, Position } from '../types';
 import { useUser } from '../context/UserContext';
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
+import { calculateTickDuration } from '../components/units/useUnitLayer';
 import type { DemoState, HitEvent } from '../types/battle';
 import './BoardView.css';
 
-// Turn duration must be longer than all animation durations to stay in sync:
-// - Fight animation: 1550ms
-// - Kill animation: 1800ms
-// - Move animation: 780ms
-// Using 2000ms ensures all animations complete before the next turn.
-const DEMO_TICK_MS = 2000;
+// Dynamic tick duration is now calculated per-tick based on animations that will play.
+// These constants provide fallbacks and minimum values.
+const DEFAULT_TICK_MS = 2000;  // Fallback when no animations are playing
+const MIN_TICK_MS = 800;       // Minimum tick duration for visual clarity
 
-// QA: temporarily reduce enemy unit count to 1 for easier testing
-const ENEMY_UNIT_COUNT = 1;
+// Default enemy unit count (can be adjusted via UI slider)
+const DEFAULT_ENEMY_COUNT = 10;
+const MIN_ENEMY_COUNT = 1;
+const MAX_ENEMY_COUNT = 20;
 
-const generateRandomEnemyFormation = (count: number = ENEMY_UNIT_COUNT): Position[] => {
+const generateRandomEnemyFormation = (count: number = DEFAULT_ENEMY_COUNT): Position[] => {
   const taken = new Set<string>();
   const formation: Position[] = [];
   while (formation.length < count) {
@@ -59,13 +60,44 @@ const BoardView = () => {
   const battleStateRef = useRef<BattleState | null>(null);
   const [countdownValue, setCountdownValue] = useState<string | number | null>(null);
   const knightTemplate = units.find((unit) => unit.id === 'knight');
+  const [enemyCount, setEnemyCount] = useState(DEFAULT_ENEMY_COUNT);
   const [enemyUnits, setEnemyUnits] = useState<PlacedUnit[]>(() =>
-    knightTemplate ? buildEnemyArmy(knightTemplate, generateRandomEnemyFormation()) : []
+    knightTemplate ? buildEnemyArmy(knightTemplate, generateRandomEnemyFormation(DEFAULT_ENEMY_COUNT)) : []
   );
   const enemySeededRef = useRef(false);
   const [enemyPresets, setEnemyPresets] = useState<Position[][]>([]);
   const presetsLoadedRef = useRef(false);
   const countdownTimeoutRef = useRef<number | null>(null);
+  const previousDemoStateRef = useRef<DemoState>('idle');
+
+  const restoreUnitsToFullHp = useCallback((units: PlacedUnit[]): PlacedUnit[] => {
+    let mutated = false;
+    const restored = units.map((unit) => {
+      const currentHp = unit.currentHp ?? unit.hp;
+      if (currentHp >= unit.hp) {
+        return unit;
+      }
+      mutated = true;
+      return { ...unit, currentHp: unit.hp };
+    });
+    return mutated ? restored : units;
+  }, []);
+
+  useEffect(() => {
+    if (previousDemoStateRef.current !== 'finished' && demoState === 'finished') {
+      setSimulationUnits((prev) => {
+        const restored = restoreUnitsToFullHp(prev);
+        return restored === prev ? prev : restored;
+      });
+      if (battleStateRef.current) {
+        battleStateRef.current = {
+          ...battleStateRef.current,
+          units: restoreUnitsToFullHp(battleStateRef.current.units)
+        };
+      }
+    }
+    previousDemoStateRef.current = demoState;
+  }, [demoState, restoreUnitsToFullHp]);
 
   useEffect(() => {
     setPlacements(currentUser?.boardPlacements ?? {});
@@ -124,9 +156,9 @@ const BoardView = () => {
 
   const scatterEnemyUnits = useCallback(() => {
     if (!knightTemplate) return;
-    const formation = generateRandomEnemyFormation(enemyUnits.length || ENEMY_UNIT_COUNT);
+    const formation = generateRandomEnemyFormation(enemyCount);
     setEnemyUnits(buildEnemyArmy(knightTemplate, formation));
-  }, [knightTemplate, enemyUnits.length]);
+  }, [knightTemplate, enemyCount]);
 
   const moveEnemyUnit = useCallback((instanceId: string, position: Position) => {
     setEnemyUnits((prev) => {
@@ -291,13 +323,25 @@ const BoardView = () => {
     return () => window.clearTimeout(timeout);
   }, [marchCells]);
 
+  // Track timeout for dynamic tick scheduling
+  const tickTimeoutRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (demoState !== 'running') return;
-    const interval = window.setInterval(() => {
+    if (demoState !== 'running') {
+      if (tickTimeoutRef.current !== null) {
+        window.clearTimeout(tickTimeoutRef.current);
+        tickTimeoutRef.current = null;
+      }
+      return;
+    }
+
+    const scheduleTick = () => {
       const state = battleStateRef.current;
       if (!state) {
         return;
       }
+
+      // Advance the battle tick
       const {
         units: nextUnits,
         winner: matchWinner,
@@ -325,9 +369,27 @@ const BoardView = () => {
       if (matchWinner) {
         setWinner(matchWinner);
         setDemoState('finished');
+        return;
       }
-    }, DEMO_TICK_MS);
-    return () => window.clearInterval(interval);
+
+      // Calculate dynamic tick duration based on animations that will play this tick
+      const tickDuration = tickHitEvents.length > 0
+        ? calculateTickDuration(tickHitEvents, nextUnits)
+        : DEFAULT_TICK_MS;
+
+      // Schedule the next tick with the calculated duration
+      tickTimeoutRef.current = window.setTimeout(scheduleTick, Math.max(tickDuration, MIN_TICK_MS));
+    };
+
+    // Start the first tick
+    tickTimeoutRef.current = window.setTimeout(scheduleTick, DEFAULT_TICK_MS);
+
+    return () => {
+      if (tickTimeoutRef.current !== null) {
+        window.clearTimeout(tickTimeoutRef.current);
+        tickTimeoutRef.current = null;
+      }
+    };
   }, [demoState]);
 
   const startDemoFight = () => {
@@ -383,13 +445,28 @@ const BoardView = () => {
       >
         Launch Demo Fight
       </button>
+      <div className="enemy-count-control">
+        <label htmlFor="enemy-count-slider">
+          Enemy Units: <strong>{enemyCount}</strong>
+        </label>
+        <input
+          id="enemy-count-slider"
+          type="range"
+          min={MIN_ENEMY_COUNT}
+          max={MAX_ENEMY_COUNT}
+          value={enemyCount}
+          onChange={(e) => setEnemyCount(Number(e.target.value))}
+          disabled={demoState !== 'idle'}
+          className="enemy-count-slider"
+        />
+      </div>
       <button
         type="button"
         className="scatter-enemy-btn"
         onClick={scatterEnemyUnits}
         disabled={demoState !== 'idle'}
       >
-        Scatter Enemy Knights
+        Scatter {enemyCount} Enemy Knights
       </button>
       <button
         type="button"

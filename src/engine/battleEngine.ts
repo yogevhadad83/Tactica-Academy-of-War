@@ -100,6 +100,50 @@ interface PendingAction {
   newPosition?: Position;
 }
 
+/** Check if an ally unit at a given position will move forward this turn */
+const willAllyMoveForward = (
+  allyAtPosition: PlacedUnit,
+  snapshot: PlacedUnit[],
+  checkedUnits: Set<string>
+): boolean => {
+  // Prevent infinite recursion
+  if (checkedUnits.has(allyAtPosition.instanceId)) {
+    return false;
+  }
+  checkedUnits.add(allyAtPosition.instanceId);
+
+  const direction = directionForTeam(allyAtPosition.team);
+  const nextRow = allyAtPosition.position.row + direction;
+
+  // Can't move if at board edge
+  if (nextRow < 0 || nextRow >= BOARD_SIZE) {
+    return false;
+  }
+
+  // Check for archer forward attack - if archer has a target, it won't move
+  if (allyAtPosition.id === ARCHER_ID) {
+    const forwardTarget = findArcherForwardTarget(allyAtPosition, snapshot);
+    if (forwardTarget) {
+      return false; // Archer will attack instead of move
+    }
+  }
+
+  const occupant = getOccupant(snapshot, nextRow, allyAtPosition.position.col);
+
+  if (!occupant) {
+    // No one in front, ally will move
+    return true;
+  }
+
+  if (occupant.team !== allyAtPosition.team) {
+    // Enemy in front, ally will attack instead of move
+    return false;
+  }
+
+  // Ally in front - check if that ally will also move forward (recursively)
+  return willAllyMoveForward(occupant, snapshot, checkedUnits);
+};
+
 const collectTeamActions = (
   team: Team,
   snapshot: PlacedUnit[]
@@ -151,6 +195,16 @@ const collectTeamActions = (
         });
         continue;
       }
+
+      // Ally in front - check if ally will move forward, allowing this unit to follow
+      if (willAllyMoveForward(occupant, snapshot, new Set([actor.instanceId]))) {
+        actions.push({
+          actor,
+          type: 'move',
+          newPosition: { row: nextRow, col: actor.position.col }
+        });
+        continue;
+      }
     }
 
     // If blocked by ally or edge, try to attack nearest enemy
@@ -159,6 +213,16 @@ const collectTeamActions = (
       const distance = manhattan(actor.position, target.position);
       const range = Math.max(1, actor.range);
       if (distance <= range) {
+        // For melee attacks (range 1), only allow attacking enemies directly in front
+        // (same column), not to the sides
+        const isMeleeRange = range === 1;
+        const isDirectlyInFront = target.position.col === actor.position.col;
+        
+        if (isMeleeRange && !isDirectlyInFront) {
+          // Melee unit cannot attack sideways - skip this action
+          continue;
+        }
+        
         actions.push({
           actor,
           type: 'attack',
@@ -204,7 +268,8 @@ const applyActions = (
     if (action.type === 'attack' && action.targetUnit && action.attackType) {
       const target = snapshot.find((unit) => unit.instanceId === action.targetUnit!.instanceId);
       if (target) {
-        recordHit(action.actor, target, action.attackType, !isAlive(target));
+        const didKill = !isAlive(target);
+        recordHit(action.actor, target, action.attackType, didKill);
       }
     }
   }
