@@ -4,10 +4,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import type { PlacedUnit, Position } from '../../types';
-import type { DemoState, HitEvent } from '../../types/battle';
+import type { AttackType, DemoState, HitEvent } from '../../types/battle';
 import { boardKey, cellToWorld } from '../../constants/board';
+import { COMPUTED_ANIMATION_DURATIONS } from '../../data/animationMetadata';
 
-export type AnimationState = 'idle' | 'walk' | 'fight' | 'death' | 'impact' | 'kill';
+export type AnimationState = 'idle' | 'walk' | 'fight' | 'death' | 'impact';
 export type ModelKey = string;
 
 interface ModelDefinition {
@@ -36,10 +37,16 @@ export interface UnitVisual {
   hpOffset: number;
   mixer?: THREE.AnimationMixer;
   actions?: Partial<Record<AnimationState, THREE.AnimationAction>>;
+  impactActions?: THREE.AnimationAction[]; // Array of impact animation variants
+  idleActions?: THREE.AnimationAction[]; // Array of idle animation variants (Idle_0, Idle_1, etc.)
+  fightActions?: THREE.AnimationAction[]; // Array of fight animation variants (Fight_0, Fight_1, etc.)
   currentAnimation?: AnimationState;
+  currentImpactIndex?: number; // Track which impact variant is currently playing
+  currentIdleIndex?: number; // Track which idle variant is currently playing
+  currentFightIndex?: number; // Track which fight variant is currently playing
   fightAnimationStartTime?: number;
   impactAnimationStartTime?: number;
-  killAnimationLockUntil?: number;
+  nextIdleVariantTime?: number; // When to trigger the next random idle variant
   isCustomMesh?: boolean;
   modelKey?: ModelKey;
   targetPosition: THREE.Vector3;
@@ -50,6 +57,14 @@ export interface UnitVisual {
   fadeStartTime?: number;
   deathTimestamp?: number;
   isDead: boolean;
+  // HP animation state
+  displayHp: number; // Currently displayed HP (animates towards targetHp)
+  targetHp: number; // Target HP to animate towards
+  maxHp: number; // Maximum HP for this unit
+  team: 'player' | 'enemy'; // Team for HP bar color
+  hpAnimationStartTime?: number; // When HP animation started
+  hpAnimationStartValue?: number; // HP value when animation started
+  showHpDetails: boolean; // Whether to show heart icon and HP number
 }
 
 const playerColor = new THREE.Color(0x5ea3ff);
@@ -63,14 +78,16 @@ const HP_PLANE_HEIGHT = 0.22;
 const HP_PLANE_BASE_HEIGHT = 2.05;
 const HP_PLANE_BOB_AMPLITUDE = 0.05;
 const HP_PLANE_BOB_SPEED = 0.0015;
+const HP_ANIMATION_DURATION_MS = 400; // Duration for HP bar to animate down
 
 const MOVE_DURATION_MS = 780;
 const DEATH_FADE_DURATION_MS = 1400;
 const DEATH_FADE_DELAY_MS = 3000;
 const FIGHT_ANIMATION_MIN_DURATION_MS = 1550; // 46 frames at 30fps ≈ 1.53s
 const IMPACT_ANIMATION_DURATION_MS = 800; // Duration for impact animation to play
+const IDLE_VARIANT_MIN_DELAY_MS = 4000; // Minimum time between random idle triggers
+const IDLE_VARIANT_MAX_DELAY_MS = 12000; // Maximum time between random idle triggers
 const MELEE_IMPACT_DELAY_MS = 650; // Delay before melee impact plays (when sword connects)
-const KILL_ANIMATION_MIN_DURATION_MS = 1800;
 const ARROW_TRAVEL_DURATION_MS = 520;
 const RANGED_IMPACT_DELAY_MS = 50; // Small delay so impact plays right as arrow arrives (not after)
 const ARROW_LAUNCH_HEIGHT = 1.65;
@@ -123,8 +140,7 @@ const DEFAULT_ANIMATIONS: Record<AnimationState, string> = {
   walk: 'Walk_0',
   fight: 'Fight_0',
   death: 'Death_0',
-  impact: 'Impact_0',
-  kill: 'Kill_0'
+  impact: 'Impact_0'
 };
 
 // Impact timing metadata: when the weapon/attack connects during each fight animation
@@ -169,8 +185,76 @@ const getModelDefinition = (modelKey: ModelKey): ModelDefinition => {
 };
 
 const DEFAULT_MODEL_KEY: ModelKey = 'knight';
-const getModelKeyForUnit = (unitId: string): ModelKey => unitId || DEFAULT_MODEL_KEY;
+export const getModelKeyForUnit = (unitId: string): ModelKey => unitId || DEFAULT_MODEL_KEY;
 const isUnitDead = (unit: PlacedUnit) => (unit.currentHp ?? unit.hp) <= 0;
+
+// Animation durations in milliseconds - imported from auto-generated metadata
+// To update, run: npx tsx scripts/extract-animation-metadata.ts
+const ANIMATION_DURATIONS = COMPUTED_ANIMATION_DURATIONS;
+
+// Default durations for animations not specified per-model (in ms)
+const DEFAULT_ANIMATION_DURATIONS: Record<AnimationState, number> = {
+  idle: 3000,
+  walk: 1000,
+  fight: 1500,
+  death: 3000,
+  impact: 1000
+};
+
+// Get the duration of an animation for a specific model
+export const getAnimationDuration = (modelKey: ModelKey, state: AnimationState): number => {
+  return ANIMATION_DURATIONS[modelKey]?.[state] ?? DEFAULT_ANIMATION_DURATIONS[state] ?? 1000;
+};
+
+// Calculate the duration a tick should take based on animations that will play
+// Returns duration in milliseconds
+export const calculateTickDuration = (
+  hitEvents: HitEvent[],
+  units: PlacedUnit[]
+): number => {
+  if (hitEvents.length === 0) {
+    // No attacks this tick - just movement or idle
+    return MOVE_DURATION_MS;
+  }
+
+  const unitById = new Map(units.map((u) => [u.instanceId, u]));
+  let maxDuration = 0;
+
+  for (const event of hitEvents) {
+    const attacker = unitById.get(event.attackerId);
+    const attackerModelKey = attacker ? getModelKeyForUnit(attacker.id) : DEFAULT_MODEL_KEY;
+
+    // Attacker plays fight animation
+    const attackerDuration = getAnimationDuration(attackerModelKey, 'fight');
+    maxDuration = Math.max(maxDuration, attackerDuration);
+
+    // Target's impact animation timing
+    // Impact is delayed (melee: when weapon connects, ranged: arrow travel time)
+    // Total time = delay + impact duration
+    if (event.targetId) {
+      const target = unitById.get(event.targetId);
+      const targetModelKey = target ? getModelKeyForUnit(target.id) : DEFAULT_MODEL_KEY;
+      
+      let impactDelay: number;
+      if (event.attackType === 'melee') {
+        const attackerModelDef = getModelDefinition(attackerModelKey);
+        const fightAnimName = attackerModelDef.animations.fight;
+        impactDelay = getImpactDelay(attackerModelKey, fightAnimName);
+      } else {
+        // Ranged: arrow travel time + small buffer
+        impactDelay = ARROW_TRAVEL_DURATION_MS + RANGED_IMPACT_DELAY_MS;
+      }
+      
+      const impactDuration = getAnimationDuration(targetModelKey, 'impact');
+      const totalImpactTime = impactDelay + impactDuration;
+      maxDuration = Math.max(maxDuration, totalImpactTime);
+    }
+  }
+
+  // Ensure a minimum tick duration for visual clarity
+  const MIN_TICK_DURATION_MS = 800;
+  return Math.max(maxDuration, MIN_TICK_DURATION_MS);
+};
 
 const drawRoundedRect = (
   ctx: CanvasRenderingContext2D,
@@ -213,7 +297,7 @@ const createArrowMesh = () => {
   return group;
 };
 
-const createHpCanvas = (unit: PlacedUnit) => {
+const createHpCanvas = (unit: PlacedUnit, showHpDetails: boolean = false) => {
   const canvas = document.createElement('canvas');
   // render at device pixel ratio for a crisp, non-blurry HUD
   const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
@@ -234,17 +318,25 @@ const createHpCanvas = (unit: PlacedUnit) => {
   // ensure texture mapping won't interpolate on low-res devices
   texture.magFilter = THREE.LinearFilter;
   texture.minFilter = THREE.LinearFilter;
-  updateHpCanvas(canvas, texture, unit);
+  const currentHp = unit.currentHp ?? unit.hp;
+  updateHpCanvas(canvas, texture, currentHp, unit.hp, unit.team, showHpDetails);
   return { canvas, texture, plane };
 };
 
-const updateHpCanvas = (canvas: HTMLCanvasElement, texture: THREE.CanvasTexture, unit: PlacedUnit) => {
+const updateHpCanvas = (
+  canvas: HTMLCanvasElement,
+  texture: THREE.CanvasTexture,
+  displayHp: number,
+  maxHp: number,
+  team: 'player' | 'enemy',
+  showHpDetails: boolean = false
+) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const ratio = clamp((unit.currentHp ?? unit.hp) / unit.hp, 0, 1);
-  const hpValue = unit.currentHp ?? unit.hp;
+  const ratio = clamp(displayHp / maxHp, 0, 1);
+  const hpValue = displayHp;
   // adapt coordinates for DPR scaled canvas
   const dpr = canvas.width / ((canvas as any).__logicalWidth || HP_CANVAS_WIDTH);
 
@@ -269,8 +361,11 @@ const updateHpCanvas = (canvas: HTMLCanvasElement, texture: THREE.CanvasTexture,
   ctx.stroke();
 
   // Inner track (inset area for HP bar)
-  const trackX = Math.round(HP_BAR_MARGIN * dpr);
-  const trackWidth = Math.round(canvas.width - HP_BAR_MARGIN * dpr - 58 * dpr); // leave room for HP number
+  // When showing details, leave room for heart icon on left and HP number on right
+  const trackX = showHpDetails ? Math.round(HP_BAR_MARGIN * dpr) : Math.round(20 * dpr);
+  const trackWidth = showHpDetails 
+    ? Math.round(canvas.width - HP_BAR_MARGIN * dpr - 58 * dpr) // leave room for HP number
+    : Math.round(canvas.width - 40 * dpr); // use more width when no details
   const trackY = Math.round((canvas.height - HP_BAR_HEIGHT * dpr) / 2);
   const cornerRadius = Math.round((HP_BAR_HEIGHT * dpr) / 2);
 
@@ -285,8 +380,8 @@ const updateHpCanvas = (canvas: HTMLCanvasElement, texture: THREE.CanvasTexture,
   // HP fill with gradient
   if (ratio > 0) {
     const gradient = ctx.createLinearGradient(trackX, trackY, trackX + trackWidth, trackY + Math.round(HP_BAR_HEIGHT * dpr));
-    gradient.addColorStop(0, unit.team === 'player' ? '#38bdf8' : '#fb7185');
-    gradient.addColorStop(1, unit.team === 'player' ? '#22c55e' : '#fb923c');
+    gradient.addColorStop(0, team === 'player' ? '#38bdf8' : '#fb7185');
+    gradient.addColorStop(1, team === 'player' ? '#22c55e' : '#fb923c');
     ctx.fillStyle = gradient;
     drawRoundedRect(ctx, trackX, trackY, Math.round(trackWidth * ratio), Math.round(HP_BAR_HEIGHT * dpr), cornerRadius);
     ctx.fill();
@@ -301,72 +396,154 @@ const updateHpCanvas = (canvas: HTMLCanvasElement, texture: THREE.CanvasTexture,
     ctx.fill();
   }
 
-  // Heart icon (crisp vector, not skewed)
-  const heartSize = Math.round(12 * dpr);
-  const heartX = containerX + Math.round(14 * dpr);
-  const heartY = Math.round(canvas.height / 2);
-  ctx.save();
-  ctx.translate(heartX, heartY);
-  ctx.fillStyle = '#ff2d55'; // more vibrant heart color
-  ctx.beginPath();
-  // draw heart relative to translation origin (0,0)
-  ctx.moveTo(0, -heartSize * 0.3);
-  ctx.bezierCurveTo(0, -heartSize * 0.7, -heartSize * 0.6, -heartSize * 0.7, -heartSize * 0.6, -heartSize * 0.3);
-  ctx.bezierCurveTo(-heartSize * 0.6, heartSize * 0.1, 0, heartSize * 0.5, 0, heartSize * 0.7);
-  ctx.bezierCurveTo(0, heartSize * 0.5, heartSize * 0.6, heartSize * 0.1, heartSize * 0.6, -heartSize * 0.3);
-  ctx.bezierCurveTo(heartSize * 0.6, -heartSize * 0.7, 0, -heartSize * 0.7, 0, -heartSize * 0.3);
-  ctx.closePath();
-  ctx.fill();
-  ctx.restore();
+  // Heart icon and HP number (only shown when showHpDetails is true)
+  if (showHpDetails) {
+    // Heart icon (crisp vector, not skewed)
+    const heartSize = Math.round(12 * dpr);
+    const heartX = containerX + Math.round(14 * dpr);
+    const heartY = Math.round(canvas.height / 2);
+    ctx.save();
+    ctx.translate(heartX, heartY);
+    ctx.fillStyle = '#ff2d55'; // more vibrant heart color
+    ctx.beginPath();
+    // draw heart relative to translation origin (0,0)
+    ctx.moveTo(0, -heartSize * 0.3);
+    ctx.bezierCurveTo(0, -heartSize * 0.7, -heartSize * 0.6, -heartSize * 0.7, -heartSize * 0.6, -heartSize * 0.3);
+    ctx.bezierCurveTo(-heartSize * 0.6, heartSize * 0.1, 0, heartSize * 0.5, 0, heartSize * 0.7);
+    ctx.bezierCurveTo(0, heartSize * 0.5, heartSize * 0.6, heartSize * 0.1, heartSize * 0.6, -heartSize * 0.3);
+    ctx.bezierCurveTo(heartSize * 0.6, -heartSize * 0.7, 0, -heartSize * 0.7, 0, -heartSize * 0.3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
 
-  // HP number
-  // HP number (small, crisp, subtle stroke to avoid blurriness)
-  const fontSize = Math.round(11 * dpr);
-  ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
-  ctx.textAlign = 'right';
-  ctx.textBaseline = 'middle';
-  const numberX = canvas.width - containerX - Math.round(8 * dpr);
-  const numberY = Math.round(canvas.height / 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.96)';
-  // subtle thin stroke for contrast
-  ctx.lineWidth = Math.max(0.6, 0.6 * dpr);
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-  ctx.strokeText(String(Math.round(hpValue)), numberX, numberY + 0.5);
-  ctx.fillText(String(Math.round(hpValue)), numberX, numberY + 0.5);
+    // HP number (small, crisp, subtle stroke to avoid blurriness)
+    const fontSize = Math.round(11 * dpr);
+    ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    const numberX = canvas.width - containerX - Math.round(8 * dpr);
+    const numberY = Math.round(canvas.height / 2);
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    // subtle thin stroke for contrast
+    ctx.lineWidth = Math.max(0.6, 0.6 * dpr);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+    ctx.strokeText(String(Math.round(hpValue)), numberX, numberY + 0.5);
+    ctx.fillText(String(Math.round(hpValue)), numberX, numberY + 0.5);
+  }
 
   texture.needsUpdate = true;
 };
 
-const setVisualAnimation = (visual: UnitVisual, state: AnimationState) => {
+const setVisualAnimation = (visual: UnitVisual, state: AnimationState, attackType?: AttackType) => {
   if (!visual.actions || !visual.mixer) return;
-  if (visual.currentAnimation === state) return;
+  if (visual.currentAnimation === state && state !== 'impact') return;
   
   // If currently playing fight animation, check if minimum duration has elapsed
   if (visual.currentAnimation === 'fight' && visual.fightAnimationStartTime !== undefined) {
     const elapsed = performance.now() - visual.fightAnimationStartTime;
     // Only allow interruption by death, or if fight animation has completed
-    if (state !== 'death' && state !== 'kill' && elapsed < FIGHT_ANIMATION_MIN_DURATION_MS) {
+    if (state !== 'death' && elapsed < FIGHT_ANIMATION_MIN_DURATION_MS) {
       return; // Don't interrupt the fight animation yet
     }
   }
   
   // If currently playing impact animation, check if it has completed
+  // BUT allow impact to restart with a different variant if another hit comes in
   if (visual.currentAnimation === 'impact' && visual.impactAnimationStartTime !== undefined) {
     const elapsed = performance.now() - visual.impactAnimationStartTime;
-    // Only allow interruption by death or fight, or if impact animation has completed
-    if (state !== 'death' && state !== 'fight' && state !== 'kill' && elapsed < IMPACT_ANIMATION_DURATION_MS) {
-      return; // Don't interrupt the impact animation yet
+    if (state === 'impact') {
+      // Another hit came in! Restart impact with a different variant
+      const impactActions = visual.impactActions;
+      if (impactActions && impactActions.length > 0) {
+        // Stop the current impact animation
+        const currentImpactAction = impactActions[visual.currentImpactIndex ?? 0];
+        if (currentImpactAction) {
+          currentImpactAction.fadeOut(0.1);
+        }
+        
+        // Choose a different impact variant if available
+        let nextIndex = (visual.currentImpactIndex ?? 0) + 1;
+        if (nextIndex >= impactActions.length) {
+          nextIndex = 0;
+        }
+        // If only one variant, use the same one
+        if (impactActions.length === 1) {
+          nextIndex = 0;
+        }
+        
+        const nextImpactAction = impactActions[nextIndex];
+        if (nextImpactAction) {
+          nextImpactAction.reset().fadeIn(0.1).play();
+          visual.currentImpactIndex = nextIndex;
+          visual.impactAnimationStartTime = performance.now();
+        }
+        return;
+      }
+    } else {
+      // Only allow interruption by death or fight, or if impact animation has completed
+      if (state !== 'death' && state !== 'fight' && elapsed < IMPACT_ANIMATION_DURATION_MS) {
+        return; // Don't interrupt the impact animation yet
+      }
     }
   }
-
-  // Prevent other animations from interrupting a kill animation unless it has finished or the unit dies
-  if (
-    visual.currentAnimation === 'kill' &&
-    visual.killAnimationLockUntil !== undefined &&
-    performance.now() < visual.killAnimationLockUntil &&
-    state !== 'death'
-  ) {
-    return;
+  
+  // Handle impact animation specially - use the impact actions array
+  if (state === 'impact') {
+    const impactActions = visual.impactActions;
+    if (impactActions && impactActions.length > 0) {
+      if (visual.currentAnimation) {
+        const current = visual.actions[visual.currentAnimation];
+        current?.fadeOut(0.2);
+      }
+      // Start with first impact variant (or cycle if already playing)
+      const impactIndex = 0;
+      const impactAction = impactActions[impactIndex];
+      if (impactAction) {
+        impactAction.reset().fadeIn(0.2).play();
+        visual.currentImpactIndex = impactIndex;
+        visual.currentAnimation = state;
+        visual.impactAnimationStartTime = performance.now();
+        visual.fightAnimationStartTime = undefined;
+      }
+      return;
+    }
+  }
+  
+  // Handle fight animation specially - use the fight actions array with random variant
+  if (state === 'fight') {
+    const fightActions = visual.fightActions;
+    if (fightActions && fightActions.length > 0) {
+      if (visual.currentAnimation) {
+        const current = visual.actions[visual.currentAnimation];
+        current?.fadeOut(0.2);
+        // Also fade out any impact/fight actions that might be playing
+        if (visual.currentAnimation === 'impact' && visual.impactActions) {
+          visual.impactActions.forEach(action => action?.fadeOut(0.2));
+        }
+        if (visual.currentAnimation === 'fight' && visual.fightActions) {
+          visual.fightActions.forEach(action => action?.fadeOut(0.2));
+        }
+      }
+      // For archers: Fight_0 for ranged (distant), Fight_1 for melee (adjacent)
+      // For other units: pick a random fight variant
+      let fightIndex: number;
+      if (visual.modelKey === ARCHER_UNIT_ID && attackType) {
+        fightIndex = attackType === 'ranged' ? 0 : 1;
+        // Ensure index is valid
+        if (fightIndex >= fightActions.length) fightIndex = 0;
+      } else {
+        fightIndex = Math.floor(Math.random() * fightActions.length);
+      }
+      const fightAction = fightActions[fightIndex];
+      if (fightAction) {
+        fightAction.reset().fadeIn(0.2).play();
+        visual.currentFightIndex = fightIndex;
+        visual.currentAnimation = state;
+        visual.fightAnimationStartTime = performance.now();
+        visual.impactAnimationStartTime = undefined;
+      }
+      return;
+    }
   }
   
   const nextAction = visual.actions[state];
@@ -374,6 +551,13 @@ const setVisualAnimation = (visual: UnitVisual, state: AnimationState) => {
   if (visual.currentAnimation) {
     const current = visual.actions[visual.currentAnimation];
     current?.fadeOut(0.2);
+    // Also fade out any impact/fight actions that might be playing
+    if (visual.currentAnimation === 'impact' && visual.impactActions) {
+      visual.impactActions.forEach(action => action?.fadeOut(0.2));
+    }
+    if (visual.currentAnimation === 'fight' && visual.fightActions) {
+      visual.fightActions.forEach(action => action?.fadeOut(0.2));
+    }
   }
   nextAction.reset().fadeIn(0.2).play();
   visual.currentAnimation = state;
@@ -385,7 +569,7 @@ const setVisualAnimation = (visual: UnitVisual, state: AnimationState) => {
     visual.fightAnimationStartTime = undefined;
   }
   
-  // Track when impact animation starts
+  // Track when impact animation starts (for fallback single action)
   if (state === 'impact') {
     visual.impactAnimationStartTime = performance.now();
   } else {
@@ -453,13 +637,17 @@ const createVisual = (
   modelDefinition: ModelDefinition,
   showHpOverlay: boolean,
   hpParent: THREE.Group | null,
-  hpWorldSpace: boolean
+  hpWorldSpace: boolean,
+  showHpDetails: boolean = false
 ): UnitVisual => {
   const group = new THREE.Group();
-  const { canvas, texture, plane } = createHpCanvas(unit);
+  const { canvas, texture, plane } = createHpCanvas(unit, showHpDetails);
   let glowColor = (unit.team === 'player' ? playerColor : enemyColor).clone();
   let mixer: THREE.AnimationMixer | undefined;
   let actions: Partial<Record<AnimationState, THREE.AnimationAction>> | undefined;
+  let impactActions: THREE.AnimationAction[] | undefined;
+  let idleActions: THREE.AnimationAction[] | undefined;
+  let fightActions: THREE.AnimationAction[] | undefined;
   const fadeMaterials = new Set<THREE.Material>();
   const registerFadableMaterial = (material?: THREE.Material | THREE.Material[]) => {
     if (!material) return;
@@ -495,13 +683,14 @@ const createVisual = (
     group.add(modelClone);
     mixer = new THREE.AnimationMixer(modelClone);
     actions = {};
+    impactActions = [];
     const animationNames = modelDefinition.animations;
     (Object.entries(animationNames) as [AnimationState, string][]).forEach(([state, clipName]) => {
       const clip = THREE.AnimationClip.findByName(modelAsset.animations, clipName);
       if (!clip) return;
       const action = mixer!.clipAction(clip);
       // These animations should play once and hold on the last frame
-      if (state === 'death' || state === 'kill' || state === 'fight' || state === 'impact') {
+      if (state === 'death' || state === 'fight' || state === 'impact') {
         action.reset();
         action.clampWhenFinished = true;
         action.setLoop(THREE.LoopOnce, 1);
@@ -511,6 +700,40 @@ const createVisual = (
         action.timeScale = override;
       }
       actions![state] = action;
+    });
+    
+    // Collect all impact animation variants (Impact_0, Impact_1, etc.)
+    modelAsset.animations.forEach((clip) => {
+      if (clip.name.startsWith('Impact_')) {
+        const action = mixer!.clipAction(clip);
+        action.reset();
+        action.clampWhenFinished = true;
+        action.setLoop(THREE.LoopOnce, 1);
+        impactActions!.push(action);
+      }
+    });
+    
+    // Collect all idle animation variants (Idle_0, Idle_1, etc.)
+    idleActions = [];
+    modelAsset.animations.forEach((clip) => {
+      if (clip.name.startsWith('Idle_')) {
+        const action = mixer!.clipAction(clip);
+        // Idle animations should loop
+        action.setLoop(THREE.LoopRepeat, Infinity);
+        idleActions!.push(action);
+      }
+    });
+    
+    // Collect all fight animation variants (Fight_0, Fight_1, etc.)
+    fightActions = [];
+    modelAsset.animations.forEach((clip) => {
+      if (clip.name.startsWith('Fight_')) {
+        const action = mixer!.clipAction(clip);
+        action.reset();
+        action.clampWhenFinished = true;
+        action.setLoop(THREE.LoopOnce, 1);
+        fightActions!.push(action);
+      }
     });
   } else {
     const columnGeometry = new THREE.CapsuleGeometry(0.35, 0.6, 8, 16);
@@ -573,6 +796,10 @@ const createVisual = (
   // place the plane initially at the computed offset
   plane.position.y = computedHpOffset;
 
+  // Helper to generate random delay for next idle variant
+  const getRandomIdleDelay = () => 
+    IDLE_VARIANT_MIN_DELAY_MS + Math.random() * (IDLE_VARIANT_MAX_DELAY_MS - IDLE_VARIANT_MIN_DELAY_MS);
+
   return {
     group,
     glowMaterial: glow.material as THREE.MeshBasicMaterial,
@@ -581,6 +808,11 @@ const createVisual = (
     hpPlane: plane,
     mixer,
     actions,
+    impactActions,
+    idleActions,
+    fightActions,
+    currentIdleIndex: 0,
+    nextIdleVariantTime: performance.now() + getRandomIdleDelay() + Math.random() * 3000, // Stagger initial timing
     isCustomMesh: Boolean(modelAsset),
     modelKey: modelAsset?.key,
     targetPosition: new THREE.Vector3(),
@@ -591,7 +823,14 @@ const createVisual = (
     isDead: false,
     hpWorldSpace,
     hpOffset: computedHpOffset,
-    killAnimationLockUntil: undefined
+    // Initialize HP animation state
+    displayHp: unit.currentHp ?? unit.hp,
+    targetHp: unit.currentHp ?? unit.hp,
+    maxHp: unit.hp,
+    team: unit.team,
+    hpAnimationStartTime: undefined,
+    hpAnimationStartValue: undefined,
+    showHpDetails
   };
 };
 
@@ -612,6 +851,7 @@ const updateHpFacingForVisual = (visual: UnitVisual, camera: THREE.PerspectiveCa
 interface UseUnitLayerOptions {
   showHpOverlay?: boolean;
   hpWorldSpace?: boolean;
+  showHpDetails?: boolean;
 }
 
 export const useUnitLayer = (
@@ -621,6 +861,7 @@ export const useUnitLayer = (
 ) => {
   const showHpOverlay = options.showHpOverlay !== false;
   const hpWorldSpace = options.hpWorldSpace === true;
+  const showHpDetails = options.showHpDetails === true;
   const unitVisualsRef = useRef<Map<string, UnitVisual>>(new Map());
   const modelAssetsRef = useRef<Record<ModelKey, LoadedModelAsset | undefined>>(
     {} as Record<ModelKey, LoadedModelAsset | undefined>
@@ -769,7 +1010,8 @@ export const useUnitLayer = (
             modelDefinition,
             showHpOverlay,
             hpWorldSpace ? hpRoot : null,
-            hpWorldSpace
+            hpWorldSpace,
+            showHpDetails
           );
           unitVisualsRef.current.set(unit.instanceId, visual);
           unitRoot.add(visual.group);
@@ -785,6 +1027,7 @@ export const useUnitLayer = (
           visual.positionInitialized = true;
           visual.moveStartTime = undefined;
         } else {
+          // Normal position update logic
           const dx = visual.targetPosition.x - x;
           const dz = visual.targetPosition.z - z;
           const targetChanged = Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001;
@@ -803,8 +1046,17 @@ export const useUnitLayer = (
           });
         }
 
-        updateHpCanvas(visual.hpCanvas, visual.hpTexture, unit);
+        // Update maxHp in case it changed, but don't update displayHp or targetHp here
+        // HP changes are triggered by impact animations or death events
+        visual.maxHp = unit.hp;
+        
         if (isUnitDead(unit)) {
+          // When unit dies, immediately set target HP to 0 to trigger HP bar animation
+          if (visual.targetHp > 0) {
+            visual.targetHp = 0;
+            visual.hpAnimationStartTime = performance.now();
+            visual.hpAnimationStartValue = visual.displayHp;
+          }
           enterDeathState(visual);
         } else {
           exitDeathState(visual);
@@ -880,6 +1132,81 @@ export const useUnitLayer = (
     });
   }, []);
 
+  // Update random idle animations - occasionally trigger different idle variants
+  const updateRandomIdles = useCallback(() => {
+    const now = performance.now();
+    unitVisualsRef.current.forEach((visual) => {
+      // Skip if not a custom mesh model, or if dead, or no idle actions available
+      if (!visual.isCustomMesh || visual.isDead || !visual.idleActions || visual.idleActions.length === 0) {
+        return;
+      }
+      
+      // Skip if currently playing a non-idle animation (fight, impact, death, walk)
+      if (visual.currentAnimation && visual.currentAnimation !== 'idle') {
+        // Reset the timer so we don't immediately trigger when returning to idle
+        visual.nextIdleVariantTime = now + IDLE_VARIANT_MIN_DELAY_MS + Math.random() * (IDLE_VARIANT_MAX_DELAY_MS - IDLE_VARIANT_MIN_DELAY_MS);
+        return;
+      }
+      
+      // Check if it's time to trigger a random idle variant
+      if (visual.nextIdleVariantTime && now >= visual.nextIdleVariantTime) {
+        const idleActions = visual.idleActions;
+        const currentIndex = visual.currentIdleIndex ?? 0;
+        
+        // Pick a random different idle variant
+        let nextIndex = Math.floor(Math.random() * idleActions.length);
+        // If we picked the same one, pick a different one
+        if (nextIndex === currentIndex) {
+          nextIndex = (currentIndex + 1) % idleActions.length;
+        }
+        
+        // Crossfade to the new idle animation
+        const currentAction = idleActions[currentIndex];
+        const nextAction = idleActions[nextIndex];
+        
+        if (currentAction && nextAction) {
+          currentAction.fadeOut(0.4);
+          nextAction.reset().fadeIn(0.4).play();
+          visual.currentIdleIndex = nextIndex;
+        }
+        
+        // Schedule next random idle trigger
+        visual.nextIdleVariantTime = now + IDLE_VARIANT_MIN_DELAY_MS + Math.random() * (IDLE_VARIANT_MAX_DELAY_MS - IDLE_VARIANT_MIN_DELAY_MS);
+      }
+    });
+  }, []);
+
+  const updateHpAnimations = useCallback(() => {
+    const now = performance.now();
+    unitVisualsRef.current.forEach((visual) => {
+      // Skip if no animation is in progress
+      if (visual.hpAnimationStartTime === undefined) {
+        return;
+      }
+      
+      const elapsed = now - visual.hpAnimationStartTime;
+      const progress = clamp(elapsed / HP_ANIMATION_DURATION_MS, 0, 1);
+      const eased = easeOutCubic(progress);
+      
+      const startValue = visual.hpAnimationStartValue ?? visual.displayHp;
+      const newDisplayHp = startValue + (visual.targetHp - startValue) * eased;
+      
+      // Only update canvas if value changed significantly (optimization)
+      if (Math.abs(newDisplayHp - visual.displayHp) > 0.1) {
+        visual.displayHp = newDisplayHp;
+        updateHpCanvas(visual.hpCanvas, visual.hpTexture, visual.displayHp, visual.maxHp, visual.team, visual.showHpDetails);
+      }
+      
+      // Animation complete
+      if (progress >= 1) {
+        visual.displayHp = visual.targetHp;
+        visual.hpAnimationStartTime = undefined;
+        visual.hpAnimationStartValue = undefined;
+        updateHpCanvas(visual.hpCanvas, visual.hpTexture, visual.displayHp, visual.maxHp, visual.team, visual.showHpDetails);
+      }
+    });
+  }, []);
+
   const applyBattleState = useCallback(
     ({
       hitCells,
@@ -902,7 +1229,6 @@ export const useUnitLayer = (
       const moveSet = new Set(moveCells);
       const marchSet = new Set(marchCells);
       const unitById = new Map(units.map((unit) => [unit.instanceId, unit]));
-      const now = performance.now();
 
       unitVisualsRef.current.forEach((visual, id) => {
         const unit = unitById.get(id);
@@ -916,15 +1242,6 @@ export const useUnitLayer = (
         }
         let targetOpacity = 0.6;
         let targetAnimation: AnimationState = 'idle';
-        let animationOverride: AnimationState | null = null;
-
-        if (visual.killAnimationLockUntil !== undefined && visual.actions?.kill) {
-          if (now < visual.killAnimationLockUntil) {
-            animationOverride = 'kill';
-          } else {
-            visual.killAnimationLockUntil = undefined;
-          }
-        }
 
         if (hitSet.has(cell)) {
           targetOpacity = 1;
@@ -935,17 +1252,35 @@ export const useUnitLayer = (
 
         visual.glowMaterial.opacity = targetOpacity;
         if (visual.isCustomMesh) {
-          const resolvedAnimation: AnimationState = animationOverride
-            ? animationOverride
-            : demoState === 'idle'
-              ? 'idle'
-              : targetAnimation;
+          const resolvedAnimation: AnimationState = demoState === 'idle' ? 'idle' : targetAnimation;
           setVisualAnimation(visual, resolvedAnimation);
         }
       });
 
+      if (demoState !== 'running') {
+        unitVisualsRef.current.forEach((visual, id) => {
+          const unit = unitById.get(id);
+          if (!unit) {
+            return;
+          }
+          const desiredHp = unit.currentHp ?? unit.hp;
+          if (desiredHp > 0) {
+            exitDeathState(visual);
+          }
+          const needsHpSync =
+            Math.abs(desiredHp - visual.displayHp) > 0.1 || Math.abs(desiredHp - visual.targetHp) > 0.1;
+          if (needsHpSync) {
+            visual.targetHp = desiredHp;
+            visual.displayHp = desiredHp;
+            visual.hpAnimationStartTime = undefined;
+            visual.hpAnimationStartValue = undefined;
+            updateHpCanvas(visual.hpCanvas, visual.hpTexture, desiredHp, visual.maxHp, visual.team, visual.showHpDetails);
+          }
+        });
+      }
+
       const unitRoot = unitRootRef.current;
-      if (hitEvents.length === 0 || !unitRoot) {
+      if (!unitRoot || hitEvents.length === 0) {
         return;
       }
 
@@ -955,29 +1290,9 @@ export const useUnitLayer = (
         }
         rememberHitId(event.id);
         const attackerVisual = unitVisualsRef.current.get(event.attackerId);
-        const eventTimestamp = performance.now();
 
         if (attackerVisual && attackerVisual.isCustomMesh && !attackerVisual.isDead) {
-          const killLocked =
-            attackerVisual.killAnimationLockUntil !== undefined &&
-            eventTimestamp < attackerVisual.killAnimationLockUntil;
-          if (!killLocked) {
-            setVisualAnimation(attackerVisual, 'fight');
-          }
-        }
-
-        if (
-          event.didKill &&
-          attackerVisual &&
-          attackerVisual.isCustomMesh &&
-          attackerVisual.actions?.kill
-        ) {
-          const killLockExpiration = eventTimestamp + KILL_ANIMATION_MIN_DURATION_MS;
-          attackerVisual.killAnimationLockUntil = Math.max(
-            attackerVisual.killAnimationLockUntil ?? 0,
-            killLockExpiration
-          );
-          setVisualAnimation(attackerVisual, 'kill');
+          setVisualAnimation(attackerVisual, 'fight', event.attackType);
         }
         
         // Trigger impact animation on the target unit that received the hit
@@ -985,11 +1300,22 @@ export const useUnitLayer = (
         // For ranged attacks, the arrow travel time handles the delay
         if (event.targetId) {
           const targetVisual = unitVisualsRef.current.get(event.targetId);
+          const targetUnit = unitById.get(event.targetId);
           if (targetVisual && targetVisual.isCustomMesh && !targetVisual.isDead) {
             const triggerImpact = () => {
               // Re-check conditions at trigger time since state may have changed
               if (!targetVisual.isDead && targetVisual.currentAnimation !== 'fight') {
                 setVisualAnimation(targetVisual, 'impact');
+              }
+              // Trigger HP bar animation when impact happens
+              // The targetUnit has the new HP value (after damage was applied)
+              if (targetUnit) {
+                const newHp = targetUnit.currentHp ?? targetUnit.hp;
+                if (newHp !== targetVisual.targetHp) {
+                  targetVisual.hpAnimationStartValue = targetVisual.displayHp;
+                  targetVisual.targetHp = newHp;
+                  targetVisual.hpAnimationStartTime = performance.now();
+                }
               }
             };
             
@@ -1001,8 +1327,8 @@ export const useUnitLayer = (
               const impactDelay = getImpactDelay(attackerModelKey, fightAnimationName);
               setTimeout(triggerImpact, impactDelay);
             } else {
-              // Ranged: small delay so impact plays right as arrow arrives
-              setTimeout(triggerImpact, RANGED_IMPACT_DELAY_MS);
+              // Ranged: delay until arrow arrives
+              setTimeout(triggerImpact, ARROW_TRAVEL_DURATION_MS + RANGED_IMPACT_DELAY_MS);
             }
           }
         }
@@ -1057,8 +1383,11 @@ export const useUnitLayer = (
     updateUnitMovement,
     updateDeathFades,
     updateMixers,
+    updateHpAnimations,
+    updateRandomIdles,
     updateProjectiles,
     clearProjectiles,
-    disposeAll
+    disposeAll,
+    calculateTickDuration
   };
 };

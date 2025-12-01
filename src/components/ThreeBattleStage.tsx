@@ -84,6 +84,8 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     updateUnitMovement: advanceUnitMovement,
     updateDeathFades: fadeOutFallenUnits,
     updateMixers,
+    updateHpAnimations,
+    updateRandomIdles,
     updateProjectiles,
     clearProjectiles,
     disposeAll
@@ -105,6 +107,17 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     start: 0,
     duration: 3200
   });
+  const zoomPressedRef = useRef(false);
+  const zoomFactorRef = useRef(0);
+  const ZOOM_LERP_SPEED = 0.12;
+  const zoomCameraPositionRef = useRef(
+    new THREE.Vector3(0, LOCKED_CAMERA_HEIGHT * 0.5, LOCKED_CAMERA_DISTANCE * 0.35)
+  );
+  const zoomTargetRef = useRef(new THREE.Vector3(0, 1.5, 0));
+  const zoomLookAtRef = useRef(new THREE.Vector3());
+  const raycasterRef = useRef(new THREE.Raycaster());
+  const pointerRef = useRef(new THREE.Vector2());
+  const groundPlaneRef = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
 
   useEffect(() => {
     const boardExtent = boardSize * CELL_SIZE;
@@ -115,6 +128,11 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     const closeHeight = Math.max(7, lockedHeight * CAMERA_CLOSE_HEIGHT_FACTOR);
     lockedCameraClosePositionRef.current.set(LOCKED_CAMERA_X_OFFSET, closeHeight, closeDistance);
     lockedCameraPositionRef.current.copy(lockedCameraBasePositionRef.current);
+    // Set zoom position for dramatic close-up from the side, looking slightly down at units
+    const zoomDistance = Math.max(3, lockedDistance * 0.15);
+    const zoomHeight = Math.max(2.5, lockedHeight * 0.18);
+    const zoomSideOffset = boardExtent * 0.4; // Offset to the side for dramatic angle
+    zoomCameraPositionRef.current.set(zoomSideOffset, zoomHeight, zoomDistance);
     const planningDistance = Math.max(14, lockedDistance * PLANNING_CAMERA_DISTANCE_FACTOR);
     const planningHeight = Math.max(12, lockedHeight * PLANNING_CAMERA_HEIGHT_FACTOR);
     planningCameraPositionRef.current.set(0, planningHeight, planningDistance);
@@ -236,6 +254,8 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
       updateMixers(delta);
       advanceUnitMovement();
       fadeOutFallenUnits();
+      updateHpAnimations();
+      updateRandomIdles();
       updateProjectiles();
       renderer.render(scene, camera);
     };
@@ -285,8 +305,27 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
           lockedCameraClosePositionRef.current,
           approachAmount
         );
-        camera.position.lerp(lockedCameraPositionRef.current, CAMERA_LERP_FACTOR);
-        camera.lookAt(lockedCameraTargetRef.current);
+
+        // Handle zoom on pointer press
+        const targetZoom = zoomPressedRef.current ? 1 : 0;
+        zoomFactorRef.current += (targetZoom - zoomFactorRef.current) * ZOOM_LERP_SPEED;
+        
+        // Interpolate between current locked position and zoom position
+        const zoomedPosition = new THREE.Vector3().lerpVectors(
+          lockedCameraPositionRef.current,
+          zoomCameraPositionRef.current,
+          zoomFactorRef.current
+        );
+        
+        // Interpolate look-at target between normal view and zoom target
+        zoomLookAtRef.current.lerpVectors(
+          lockedCameraTargetRef.current,
+          zoomTargetRef.current,
+          zoomFactorRef.current
+        );
+        
+        camera.position.lerp(zoomedPosition, CAMERA_LERP_FACTOR);
+        camera.lookAt(zoomLookAtRef.current);
         return;
       }
 
@@ -309,10 +348,58 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
       renderer.setSize(mount.clientWidth, mount.clientHeight);
     };
 
+    const handlePointerDown = (event: PointerEvent) => {
+      const camera = cameraRef.current;
+      const mount = mountRef.current;
+      if (!camera || !mount) return;
+      
+      // Only zoom during battle
+      if (cameraModeRef.current !== 'locked') return;
+      
+      // Calculate normalized device coordinates
+      const rect = mount.getBoundingClientRect();
+      pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      
+      // Raycast to find where on the ground plane the user clicked
+      raycasterRef.current.setFromCamera(pointerRef.current, camera);
+      const intersectPoint = new THREE.Vector3();
+      raycasterRef.current.ray.intersectPlane(groundPlaneRef.current, intersectPoint);
+      
+      if (intersectPoint) {
+        // Set the zoom target to the clicked point, slightly elevated to focus on unit height
+        zoomTargetRef.current.set(intersectPoint.x, 1.5, intersectPoint.z);
+        
+        // Calculate camera position for dramatic side angle close-up
+        const ZOOM_DISTANCE = 4; // How far from the target
+        const ZOOM_HEIGHT = 2.5;  // Camera height
+        const ZOOM_SIDE_OFFSET = 3.5; // Side offset for dramatic angle
+        
+        // Position camera to the side and slightly behind the click point
+        zoomCameraPositionRef.current.set(
+          intersectPoint.x + ZOOM_SIDE_OFFSET,
+          ZOOM_HEIGHT,
+          intersectPoint.z + ZOOM_DISTANCE
+        );
+      }
+      
+      zoomPressedRef.current = true;
+    };
+
+    const handlePointerUp = () => {
+      zoomPressedRef.current = false;
+    };
+
     window.addEventListener('resize', handleResize);
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+    renderer.domElement.addEventListener('pointerup', handlePointerUp);
+    renderer.domElement.addEventListener('pointerleave', handlePointerUp);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
+      renderer.domElement.removeEventListener('pointerleave', handlePointerUp);
       if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
       boardTilesRef.current.clear();
       disposeAll();

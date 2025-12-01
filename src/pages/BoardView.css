@@ -331,6 +331,74 @@
   box-shadow: 0 14px 24px rgba(250, 204, 21, 0.4);
 }
 
+/* Enemy count slider control */
+.enemy-count-control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--armoria-card);
+  border: 1px solid var(--armoria-border);
+  border-radius: 12px;
+  padding: 0.5rem 1rem;
+}
+
+.enemy-count-control label {
+  color: var(--armoria-fg);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.enemy-count-control strong {
+  color: #f97316;
+  min-width: 1.5ch;
+  display: inline-block;
+  text-align: center;
+}
+
+.enemy-count-slider {
+  width: 120px;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #fcd34d, #f97316);
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.enemy-count-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border: 2px solid #f97316;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.enemy-count-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: 0 3px 10px rgba(249, 115, 22, 0.4);
+}
+
+.enemy-count-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: #fff;
+  border: 2px solid #f97316;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(249, 115, 22, 0.3);
+}
+
+.enemy-count-slider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .demo-note {
   margin: 0;
   color: var(--armoria-muted);

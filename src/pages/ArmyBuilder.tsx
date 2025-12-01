@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { units } from '../data/units';
 import type { ArmyUnitInstance, Unit } from '../types';
 import { useUser } from '../context/UserContext';
 import './ArmyBuilder.css';
 import UnitPreviewCanvas from '../components/UnitPreviewCanvas';
 
-const FEATURED_UNIT_IDS = ['knight', 'beast', 'archer'];
 const maxBudget = 650;
 const maxUnits = 20;
 
@@ -135,18 +135,40 @@ const MiniBoard = ({ unit }: { unit: Unit | null }) => {
   );
 };
 
+type CollapsibleSectionProps = {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  defaultOpen?: boolean;
+};
+
+const CollapsibleSection = ({ title, description, children, defaultOpen = false }: CollapsibleSectionProps) => {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <section className={`collapsible-section ${isOpen ? 'open' : ''}`}>
+      <button
+        className="collapsible-toggle"
+        onClick={() => setIsOpen((prev) => !prev)}
+        aria-expanded={isOpen}
+        type="button"
+      >
+        <span>{title}</span>
+        <span className="chevron" aria-hidden="true" />
+      </button>
+      {description && <p className="collapsible-description">{description}</p>}
+      {isOpen && <div className="collapsible-body">{children}</div>}
+    </section>
+  );
+};
+
 const ArmyBuilder = () => {
   const { currentUser, updateArmy } = useUser();
   const [selectedUnits, setSelectedUnits] = useState<ArmyUnitInstance[]>(currentUser?.army ?? []);
-  const [isTacticsCollapsed, setIsTacticsCollapsed] = useState(false);
-  const featuredUnits = useMemo(
-    () => units.filter((unit) => FEATURED_UNIT_IDS.includes(unit.id)),
-    []
-  );
-  const [activeUnitId, setActiveUnitId] = useState<string | null>(() => featuredUnits[0]?.id ?? null);
+  const [activeUnitId, setActiveUnitId] = useState<string>(() => units[0]?.id ?? '');
   const activeUnit = useMemo(
-    () => featuredUnits.find((unit) => unit.id === activeUnitId) ?? featuredUnits[0] ?? null,
-    [featuredUnits, activeUnitId]
+    () => units.find((unit) => unit.id === activeUnitId) ?? units[0] ?? null,
+    [activeUnitId]
   );
   const statCards = useMemo(
     () => [
@@ -198,16 +220,25 @@ const ArmyBuilder = () => {
   const unitLimitReached = selectedUnits.length >= maxUnits;
   const canModify = Boolean(currentUser);
 
+  const addUnitToArmy = (unit: Unit) => {
+    if (!canModify) return;
+    setSelectedUnits((prev) => {
+      if (prev.length >= maxUnits) return prev;
+      const costSoFar = prev.reduce((sum, entry) => sum + entry.cost, 0);
+      if (costSoFar + unit.cost > maxBudget) return prev;
+
+      const instance: ArmyUnitInstance = {
+        ...unit,
+        instanceId: crypto.randomUUID()
+      };
+
+      return [...prev, instance];
+    });
+  };
+
   const addActiveUnit = () => {
-    if (!canModify || !activeUnit) return;
-    if (unitLimitReached || totalCost + activeUnit.cost > maxBudget) return;
-
-    const instance: ArmyUnitInstance = {
-      ...activeUnit,
-      instanceId: crypto.randomUUID()
-    };
-
-    setSelectedUnits((prev) => [...prev, instance]);
+    if (!activeUnit) return;
+    addUnitToArmy(activeUnit);
   };
 
   const removeUnit = (instanceId: string) => {
@@ -226,174 +257,329 @@ const ArmyBuilder = () => {
     unitLimitReached ||
     totalCost + (activeUnit?.cost ?? 0) > maxBudget;
 
+  const attackScore = selectedUnits.reduce((sum, unit) => sum + unit.damage, 0);
+
+  const rosterSummary = useMemo(() => {
+    const summaryMap = new Map<
+      string,
+      {
+        unit: ArmyUnitInstance;
+        count: number;
+        instanceIds: string[];
+      }
+    >();
+
+    selectedUnits.forEach((unit) => {
+      const current = summaryMap.get(unit.id);
+      if (current) {
+        current.count += 1;
+        current.instanceIds.push(unit.instanceId);
+      } else {
+        summaryMap.set(unit.id, {
+          unit,
+          count: 1,
+          instanceIds: [unit.instanceId]
+        });
+      }
+    });
+
+    return Array.from(summaryMap.values()).map((entry) => ({
+      id: entry.unit.id,
+      unit: entry.unit,
+      count: entry.count,
+      instanceIds: entry.instanceIds,
+      supplyPerUnit: entry.unit.cost,
+      totalSupply: entry.count * entry.unit.cost
+    }));
+  }, [selectedUnits]);
+
+  const resourceSummary = [
+    {
+      id: 'coins',
+      label: 'Coins',
+      value: `${currentUser?.gold ?? 0}`,
+      hint: 'Spend wisely',
+      icon: '🪙'
+    },
+    {
+      id: 'supply',
+      label: 'Supply',
+      value: `${totalCost} / ${maxBudget}`,
+      hint: `${remainingBudget} remaining`,
+      icon: '📦'
+    },
+    {
+      id: 'attack',
+      label: 'Attack score',
+      value: attackScore,
+      hint: `${selectedUnits.length} units`,
+      icon: '⚔️'
+    },
+    {
+      id: 'level',
+      label: 'Commander level',
+      value: currentUser?.level ?? 1,
+      hint: 'Progress to next tier',
+      icon: '⭐'
+    }
+  ];
+
+  const handleCardKey = (event: KeyboardEvent<HTMLElement>, unitId: string) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setActiveUnitId(unitId);
+    }
+  };
+
+  const getRecruitState = (unit: Unit) => {
+    if (!canModify) {
+      return { disabled: true, reason: 'Login to recruit' };
+    }
+    if (selectedUnits.length >= maxUnits) {
+      return { disabled: true, reason: 'Unit cap reached' };
+    }
+    if (totalCost + unit.cost > maxBudget) {
+      return { disabled: true, reason: 'Not enough supply' };
+    }
+    return { disabled: false, reason: '' };
+  };
+
   return (
-    <div className="army-builder-v2">
-      <header className="army-builder-v2__header">
-        <div>
-          <p className="eyebrow">Armoria Battle Lab</p>
+    <div className="army-builder-dashboard">
+      <header className="builder-header">
+        <div className="builder-header__intro">
+          <p className="eyebrow">Command console</p>
           <h1>Army Builder</h1>
+          <p>Create a focused strike force before deployment.</p>
         </div>
-        <div className="header-stats">
-          <div className="stat-pill">
-            <span>Supply</span>
-            <strong>
-              {totalCost} / {maxBudget}
-            </strong>
-            <em className={remainingBudget < 50 ? 'danger' : ''}>{remainingBudget} remaining</em>
-          </div>
-          <div className="stat-pill">
-            <span>Units</span>
-            <strong>
-              {selectedUnits.length} / {maxUnits}
-            </strong>
-          </div>
-          {selectedUnits.length > 0 && canModify && (
-            <button className="ghost-btn" onClick={clearArmy}>
-              Reset army
-            </button>
-          )}
+        <div className="resource-bar" role="list">
+          {resourceSummary.map((resource) => (
+            <div key={resource.id} className="resource-pill" role="listitem">
+              <span className="resource-icon" aria-hidden="true">
+                {resource.icon}
+              </span>
+              <div>
+                <p>{resource.label}</p>
+                <strong>{resource.value}</strong>
+                <small>{resource.hint}</small>
+              </div>
+            </div>
+          ))}
         </div>
       </header>
 
-      <div className="builder-stage">
-        <aside className="unit-gallery" aria-label="Unit gallery">
-          <p className="gallery-label">Unit catalog</p>
-          <div className="gallery-list">
-            {featuredUnits.map((unit) => (
-              <button
-                key={unit.id}
-                className={`gallery-tile ${activeUnit?.id === unit.id ? 'active' : ''}`}
-                onClick={() => setActiveUnitId(unit.id)}
-                aria-pressed={activeUnit?.id === unit.id}
-              >
-                <div className="unit-thumb" aria-hidden="true">
-                  <div className="unit-thumb__img">{unit.name.charAt(0)}</div>
-                </div>
-                <div>
-                  <p className="tile-title">{unit.name}</p>
-                  <span className="tile-sub">{unit.cost} supply</span>
-                </div>
+      <div className="dashboard-layout">
+        <aside className="roster-panel panel" aria-label="Current army">
+          <div className="panel-header">
+            <div>
+              <p className="eyebrow">Current army</p>
+              <h2>{selectedUnits.length ? `${selectedUnits.length} / ${maxUnits} units` : 'No units selected'}</h2>
+            </div>
+            {selectedUnits.length > 0 && canModify && (
+              <button className="btn btn-secondary" type="button" onClick={clearArmy}>
+                Clear army
               </button>
+            )}
+          </div>
+          <p className="panel-subtitle">{remainingBudget} supply available · {maxBudget} cap</p>
+
+          <div className="roster-list">
+            {rosterSummary.length === 0 && (
+              <div className="empty-state">
+                <p>Recruit units from the right to see them here.</p>
+              </div>
+            )}
+
+            {rosterSummary.map((entry) => (
+              <div key={entry.id} className="roster-item">
+                <div className="roster-item__meta">
+                  <span className="unit-icon" aria-hidden="true">
+                    {entry.unit.icon || entry.unit.name.charAt(0)}
+                  </span>
+                  <div>
+                    <p>{entry.unit.name}</p>
+                    <small>
+                      {entry.count} unit{entry.count > 1 ? 's' : ''} · {entry.supplyPerUnit} supply each
+                    </small>
+                  </div>
+                </div>
+                <div className="roster-item__actions">
+                  <span className="supply-chip">{entry.totalSupply} 🪙</span>
+                  {canModify && (
+                    <button
+                      className="btn btn-ghost"
+                      type="button"
+                      onClick={() => removeUnit(entry.instanceIds[0])}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
             ))}
           </div>
         </aside>
 
-        <section className="unit-showcase">
-          <div className="unit-visual" role="presentation">
-            {activeUnit ? (
-              <UnitPreviewCanvas unit={activeUnit} />
-            ) : (
-              <div className="unit-visual__placeholder">
-                <span>🎯</span>
-                <p>Select a unit</p>
+        <div className="main-column">
+          <section className="catalog-panel panel" aria-label="Unit catalog">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">Unit catalog</p>
+                <h2>Recruit reinforcements</h2>
               </div>
-            )}
-            <div className="unit-visual-overlay">
-              <div className="recruit-row">
-                <div className="recruit-cost">
-                  <span aria-hidden="true">🪙</span>
-                  <span>{activeUnit ? `${activeUnit.cost} supply` : '—'}</span>
-                </div>
-                <button
-                  className="primary-btn recruit-btn"
-                  onClick={addActiveUnit}
-                  disabled={addDisabled}
-                >
-                  {canModify ? 'Recruit' : 'Login to recruit'}
-                </button>
-              </div>
-              <div className="unit-inline-stats" role="list">
-                {statCards.map((stat) => (
-                  <div key={stat.id} className="inline-stat" role="listitem">
-                    <span aria-hidden="true">{stat.icon}</span>
-                    <div>
-                      <p>{stat.label}</p>
-                      <strong>
-                        {stat.value}
-                        <small>{stat.suffix}</small>
-                      </strong>
+              <p className="panel-subtitle">Tap a card for intel, then recruit with available supply.</p>
+            </div>
+
+            <div className="catalog-grid">
+              {units.map((unit) => {
+                const { disabled, reason } = getRecruitState(unit);
+                return (
+                  <article
+                    key={unit.id}
+                    className={`unit-card ${activeUnit?.id === unit.id ? 'unit-card--active' : ''}`}
+                  >
+                    <div
+                      className="unit-card__body"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setActiveUnitId(unit.id)}
+                      onKeyDown={(event) => handleCardKey(event, unit.id)}
+                      aria-pressed={activeUnit?.id === unit.id}
+                    >
+                      <div className="unit-card__media" aria-hidden="true">
+                        <span>{unit.icon || unit.name.charAt(0)}</span>
+                      </div>
+                      <div className="unit-card__info">
+                        <div>
+                          <h3>{unit.name}</h3>
+                          <p>{unit.cost} supply</p>
+                        </div>
+                        <div className="unit-card__stats">
+                          <span>
+                            ⚔️ {unit.damage}
+                          </span>
+                          <span>
+                            🛡️ {unit.defense}
+                          </span>
+                          <span>
+                            ⚡ {unit.speed}
+                          </span>
+                          <span>
+                            🎯 {unit.range}
+                          </span>
+                        </div>
+                      </div>
                     </div>
+                    <div className="unit-card__actions">
+                      <button
+                        className="btn btn-primary"
+                        type="button"
+                        disabled={disabled}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActiveUnitId(unit.id);
+                          addUnitToArmy(unit);
+                        }}
+                      >
+                        Recruit – {unit.cost} 🪙
+                      </button>
+                      {disabled && reason && <small className="unit-card__hint">{reason}</small>}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="intel-panel panel" aria-label="Unit intel">
+            <div className="spotlight">
+              <div className="spotlight__media">
+                {activeUnit ? (
+                  <UnitPreviewCanvas unit={activeUnit} />
+                ) : (
+                  <div className="unit-visual__placeholder">
+                    <span role="img" aria-label="Target">🎯</span>
+                    <p>Select a unit</p>
                   </div>
-                ))}
+                )}
+                <div className="spotlight__actions">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={addActiveUnit}
+                    disabled={addDisabled}
+                  >
+                    {canModify ? `Recruit – ${activeUnit?.cost ?? 0} 🪙` : 'Login to recruit'}
+                  </button>
+                  <span className="available-supply">{remainingBudget} supply remaining</span>
+                </div>
               </div>
-            </div>
-          </div>
-
-          <div className="unit-details-panel">
-            <div className="unit-summary">
-              <div>
-                <p className="eyebrow">Currently viewing</p>
-                <h2>{activeUnit?.name ?? '—'}</h2>
-              </div>
-              <div className="unit-summary__placeholder" />
-            </div>
-
-            {remainingBudget < 0 && (
-              <p className="warning">Supply exceeded – remove a unit to proceed.</p>
-            )}
-
-            <div className="unit-extra">
-              <div>
-                <p className="eyebrow">Strengths</p>
-                <ul>
-                  {(activeUnit?.behaviorOptions ?? []).map((behavior) => (
-                    <li key={behavior}>{behavior}</li>
+              <div className="spotlight__stats">
+                <div className="spotlight__header">
+                  <p className="eyebrow">Currently viewing</p>
+                  <h2>{activeUnit?.name ?? 'Select a unit'}</h2>
+                  {activeUnit && <p className="spotlight__cost">{activeUnit.cost} supply</p>}
+                </div>
+                <div className="stat-grid" role="list">
+                  {statCards.map((stat) => (
+                    <div key={stat.id} className="stat-card" role="listitem">
+                      <span aria-hidden="true">{stat.icon}</span>
+                      <div>
+                        <p>{stat.label}</p>
+                        <strong>
+                          {stat.value}
+                          {stat.suffix && <small>{stat.suffix}</small>}
+                        </strong>
+                      </div>
+                    </div>
                   ))}
-                </ul>
-              </div>
-              <div>
-                <p className="eyebrow">Upgrades</p>
-                <ul>
-                  {(activeUnit?.upgradeOptions ?? []).map((upgrade) => (
-                    <li key={upgrade}>{upgrade}</li>
-                  ))}
-                </ul>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="selected-army-bar">
-            <div>
-              <p className="eyebrow">Your formation</p>
-              <strong>{selectedUnits.length ? `${selectedUnits.length} units ready` : 'No units selected'}</strong>
-            </div>
-            <div className="army-chip-row">
-              {selectedUnits.length === 0 && <span className="placeholder">Add units to populate your army.</span>}
-              {selectedUnits.map((unit) => (
-                <button
-                  key={unit.instanceId}
-                  className="army-chip"
-                  onClick={() => removeUnit(unit.instanceId)}
-                  disabled={!canModify}
-                >
-                  <span>{unit.icon}</span>
-                  {unit.name}
-                  <small>{unit.cost}</small>
-                </button>
-              ))}
-            </div>
-          </div>
-        </section>
+            <div className="collapsible-stack">
+              <CollapsibleSection
+                key={`strengths-${activeUnit?.id ?? 'none'}`}
+                title="Strengths"
+                description="Deployment notes and battlefield role"
+              >
+                {(activeUnit?.behaviorOptions ?? []).length > 0 ? (
+                  <ul>
+                    {activeUnit?.behaviorOptions.map((behavior) => (
+                      <li key={behavior}>{behavior}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">No strengths documented.</p>
+                )}
+              </CollapsibleSection>
 
-        <aside className={`tactics-panel ${isTacticsCollapsed ? 'collapsed' : ''}`}>
-          <div className="tactics-panel__header">
-            <div>
-              <p className="eyebrow">Movement & threat</p>
-              <h3>{activeUnit?.name ?? 'Select a unit'}</h3>
+              <CollapsibleSection
+                key={`upgrades-${activeUnit?.id ?? 'none'}`}
+                title="Upgrades"
+                description="Unlockable modifiers"
+              >
+                {(activeUnit?.upgradeOptions ?? []).length > 0 ? (
+                  <ul>
+                    {activeUnit?.upgradeOptions.map((upgrade) => (
+                      <li key={upgrade}>{upgrade}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="muted">No upgrades available.</p>
+                )}
+              </CollapsibleSection>
+
+              <CollapsibleSection
+                key={`movement-${activeUnit?.id ?? 'none'}`}
+                title="Movement & threat"
+                description="Preview movement arcs and attack reach"
+              >
+                <MiniBoard unit={activeUnit} />
+              </CollapsibleSection>
             </div>
-            <button
-              className="ghost-btn"
-              onClick={() => setIsTacticsCollapsed((prev) => !prev)}
-            >
-              {isTacticsCollapsed ? 'Expand' : 'Collapse'}
-            </button>
-          </div>
-          {!isTacticsCollapsed && (
-            <div className="tactics-panel__body">
-              <MiniBoard unit={activeUnit} />
-            </div>
-          )}
-        </aside>
+          </section>
+        </div>
       </div>
     </div>
   );
