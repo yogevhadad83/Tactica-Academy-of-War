@@ -40,9 +40,10 @@ function getLocalOutcome(
   return winner === role ? 'win' : 'lose';
 }
 
-const deriveStartingTeam = (firstTick?: BattleTickResult): Team | null => {
-  if (!firstTick) return null;
-  return firstTick.currentTeam === 'player' ? 'enemy' : 'player';
+const deriveStartingTeam = (initialFrame?: BattleTickResult): Team | null => {
+  if (!initialFrame) return null;
+  // The initial frame (turn 0) has currentTeam set to who moves first
+  return initialFrame.currentTeam;
 };
 
 const BoardView = () => {
@@ -369,14 +370,17 @@ const BoardView = () => {
     setBattleTimeline(timeline);
     setStartingTeam(deriveStartingTeam(timeline[0]));
     setWinner(null);
-    timelineIndexRef.current = 0;
+    // Start playback from frame 1 (first action frame)
+    // Frame 0 is the initial positioning frame
+    timelineIndexRef.current = 1;
     clearBattleHighlights();
     clearCountdownTimers();
     if (timeline[0]) {
       setSimulationUnits(timeline[0].units);
     }
 
-    if (timeline.length === 0) {
+    // If timeline has only the initial frame (no actions), finish immediately
+    if (timeline.length <= 1) {
       setWinner(winnerFromServer);
       setBattleState('finished');
       return;
