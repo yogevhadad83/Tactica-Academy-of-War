@@ -31,7 +31,6 @@ const LOCKED_LOOK_DOWN_OFFSET = -0.2;
 const LOCKED_CAMERA_X_OFFSET = 3.5;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 interface ThreeBattleStageProps {

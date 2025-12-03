@@ -69,6 +69,18 @@ export function runServerBattle(armyA: ArmyConfig, armyB: ArmyConfig): RunBattle
   const initialState = initializeBattle([...normalizedArmyA, ...normalizedArmyB]);
   const timeline: BattleTickResult[] = [];
 
+  // Push initial state as frame 0 (before any actions)
+  // This allows the client to initialize unit positions correctly
+  timeline.push({
+    units: initialState.units.map(u => ({ ...u, position: { ...u.position } })),
+    hits: [],
+    hitEvents: [],
+    moves: [],
+    winner: null,
+    currentTeam: initialState.currentTeam,
+    turnNumber: 0, // Turn 0 = initial positioning, no actions yet
+  });
+
   let currentState = initialState;
   let safetyCounter = 0;
 
