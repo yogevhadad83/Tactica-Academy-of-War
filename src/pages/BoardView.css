@@ -19,7 +19,8 @@
 .flight-mode .board-view-header,
 .flight-mode .board-view-content,
 .flight-mode .demo-controls,
-.flight-mode .demo-battle-stage {
+.flight-mode .demo-battle-stage,
+.flight-mode .multiplayer-panel {
   display: none;
 }
 

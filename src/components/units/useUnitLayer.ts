@@ -762,19 +762,14 @@ const createVisual = (
     glowColor = columnMaterial.color;
   }
 
-  const glow = new THREE.Mesh(
-    new THREE.RingGeometry(0.4, 0.62, 32),
-    new THREE.MeshBasicMaterial({
-      color: glowColor,
-      transparent: true,
-      opacity: 0.65,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide
-    })
-  );
-  glow.rotation.x = -Math.PI / 2;
-  glow.position.y = 0.05;
-  group.add(glow);
+  // Change 2: Removed glowing circles under units
+  // Create a dummy material for glowMaterial reference (required by interface)
+  const glowMaterial = new THREE.MeshBasicMaterial({
+    color: glowColor,
+    transparent: true,
+    opacity: 0,
+    visible: false
+  });
 
   if (showHpOverlay) {
     if (hpWorldSpace && hpParent) {
@@ -787,7 +782,7 @@ const createVisual = (
     plane.visible = false;
   }
   registerFadableMaterial(plane.material as THREE.Material);
-  registerFadableMaterial(glow.material as THREE.Material);
+  // Change 2: glowMaterial is now a dummy (no visible ring)
 
   // compute per-model hp offset so the bar sits above the head, using model raw height when available
   const computedHpOffset = modelAsset && typeof modelAsset.rawHeight === 'number'
@@ -802,7 +797,7 @@ const createVisual = (
 
   return {
     group,
-    glowMaterial: glow.material as THREE.MeshBasicMaterial,
+    glowMaterial, // Change 2: Now a dummy invisible material
     hpCanvas: canvas,
     hpTexture: texture,
     hpPlane: plane,
@@ -1021,9 +1016,15 @@ export const useUnitLayer = (
         }
 
         if (!visual.positionInitialized) {
-          visual.group.position.set(x, 0, z);
-          visual.targetPosition.set(x, 0, z);
-          visual.moveStartPosition.set(x, 0, z);
+          // Raise units so they stand on top of the tiles instead of intersecting them
+          // Tiles are at tileThickness/2, with glow plane at tileThickness*0.55 above that
+          const tileThickness = 0.16; // Must match tileThickness in createTacticalBoard
+          const tileGroupY = tileThickness / 2;
+          const glowPlaneOffset = tileThickness * 0.55;
+          const unitBaseY = tileGroupY + glowPlaneOffset;
+          visual.group.position.set(x, unitBaseY, z);
+          visual.targetPosition.set(x, unitBaseY, z);
+          visual.moveStartPosition.set(x, unitBaseY, z);
           visual.positionInitialized = true;
           visual.moveStartTime = undefined;
         } else {
@@ -1033,7 +1034,12 @@ export const useUnitLayer = (
           const targetChanged = Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001;
           if (targetChanged) {
             visual.moveStartPosition.copy(visual.group.position);
-            visual.targetPosition.set(x, 0, z);
+            // Maintain the same Y height when moving
+            const tileThickness = 0.16;
+            const tileGroupY = tileThickness / 2;
+            const glowPlaneOffset = tileThickness * 0.55;
+            const unitBaseY = tileGroupY + glowPlaneOffset;
+            visual.targetPosition.set(x, unitBaseY, z);
             visual.moveStartTime = performance.now();
           }
         }

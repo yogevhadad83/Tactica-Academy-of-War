@@ -177,7 +177,8 @@ export function useGameServer(username: string | null) {
               console.log('Battle starting:', message);
               setCurrentMatchId(message.matchId);
               setCurrentRole(message.youAre);
-              alert(
+              // Battle starts silently - no alert
+              console.log(
                 `Battle starting! You are player ${message.youAre} vs ${message.opponentName}`
               );
               break;

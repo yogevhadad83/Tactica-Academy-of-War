@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { CELL_SIZE, boardKey, cellToWorld } from '../constants/board';
+import { CELL_SIZE } from '../constants/board';
 import type { DemoState, HitEvent } from '../types/battle';
 import type { PlacedUnit } from '../types';
 import { useUnitLayer } from './units/useUnitLayer';
+import { createTacticalBoard } from './createTacticalBoard';
+import type { TileEffect, TileOwner, TacticalBoard } from './createTacticalBoard';
 
 const ORBIT_RADIUS = 32;
 const BASE_CAMERA_HEIGHT = 24;
@@ -15,7 +17,7 @@ const CAMERA_CLOSE_HEIGHT_FACTOR = 0.74;
 const PLANNING_CAMERA_DISTANCE_FACTOR = 0.96;
 const PLANNING_CAMERA_HEIGHT_FACTOR = 1.05;
 const CAMERA_LERP_FACTOR = 0.12;
-const CAMERA_APPROACH_DURATION = 1600;
+const CAMERA_APPROACH_DURATION = 900;
 
 const LOCKED_DISTANCE_FACTOR = 1.55;
 const LOCKED_HEIGHT_FACTOR = 1.15;
@@ -27,8 +29,6 @@ const LOCKED_LOOK_HEIGHT_FACTOR = 0.065;
 const LOCKED_LOOK_MIN = 2.6;
 const LOCKED_LOOK_DOWN_OFFSET = -0.2;
 const LOCKED_CAMERA_X_OFFSET = 3.5;
-
-const boardBaseColor = new THREE.Color(0x0b1220);
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -50,12 +50,12 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const unitRootRef = useRef<THREE.Group | null>(null);
-  const boardTilesRef = useRef<Map<string, THREE.Mesh>>(new Map());
+  const tacticalBoardRef = useRef<TacticalBoard | null>(null);
   const animationRef = useRef<number | null>(null);
   const pmremRef = useRef<THREE.PMREMGenerator | null>(null);
   const envTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const flightModeRef = useRef(false);
-  const cameraModeRef = useRef<'idle' | 'spin' | 'locked'>('idle');
+  const cameraModeRef = useRef<'idle' | 'locked'>('idle');
   const lockedCameraBasePositionRef = useRef(
     new THREE.Vector3(0, LOCKED_CAMERA_HEIGHT, LOCKED_CAMERA_DISTANCE)
   );
@@ -102,11 +102,6 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     pendingApproachRef.current = false;
   };
   const lockedCameraTargetRef = useRef(new THREE.Vector3(0, 2, -CELL_SIZE * 0.8));
-  const spinStateRef = useRef<{ active: boolean; start: number; duration: number }>({
-    active: false,
-    start: 0,
-    duration: 3200
-  });
   const zoomPressedRef = useRef(false);
   const zoomFactorRef = useRef(0);
   const ZOOM_LERP_SPEED = 0.12;
@@ -153,21 +148,27 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     if (!mount) return;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x020617);
-    scene.fog = new THREE.Fog(0x020617, 45, 85);
+    const voidHex = 0x01060f;
+    scene.background = new THREE.Color(voidHex);
+    scene.fog = new THREE.FogExp2(voidHex, 0.018);
 
-    const camera = new THREE.PerspectiveCamera(50, mount.clientWidth / mount.clientHeight, 0.2, 500);
-    camera.position.set(ORBIT_RADIUS, BASE_CAMERA_HEIGHT, ORBIT_RADIUS * 0.6);
-    camera.lookAt(0, 0, 0);
+    const camera = new THREE.PerspectiveCamera(56, mount.clientWidth / mount.clientHeight, 0.2, 1200);
+    // Start the camera extremely far and high so the board feels tiny, then let it fall into place
+    const boardExtent = boardSize * CELL_SIZE;
+    const distantHeight = Math.max(BASE_CAMERA_HEIGHT * 4.5, boardExtent * 4.2);
+    const distantDistance = Math.max(ORBIT_RADIUS * 4.8, boardExtent * 4.5);
+    camera.position.set(-distantDistance, distantHeight, distantDistance * 1.15);
+    camera.lookAt(lockedCameraTargetRef.current);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.15;
+    renderer.toneMappingExposure = 1.05;
     renderer.setSize(mount.clientWidth, mount.clientHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(voidHex, 1);
     mount.appendChild(renderer.domElement);
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -177,63 +178,30 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     pmremRef.current = pmremGenerator;
     envTargetRef.current = envTarget;
 
-    const hemi = new THREE.HemisphereLight(0xdbeafe, 0x0f172a, 0.65);
-    scene.add(hemi);
+    const ambient = new THREE.AmbientLight(0x0f172a, 0.4);
+    scene.add(ambient);
 
-    const keyLight = new THREE.DirectionalLight(0xfef3c7, 2.4);
-    keyLight.position.set(12, 18, 10);
+    const keyLight = new THREE.DirectionalLight(0x93c5fd, 2.1);
+    keyLight.position.set(-20, 32, 38);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.width = 1024;
-    keyLight.shadow.mapSize.height = 1024;
-    keyLight.shadow.camera.near = 6;
-    keyLight.shadow.camera.far = 60;
+    keyLight.shadow.mapSize.width = 2048;
+    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.camera.near = 10;
+    keyLight.shadow.camera.far = 140;
+    const shadowRange = boardSize * CELL_SIZE * 1.2;
+    keyLight.shadow.camera.left = -shadowRange;
+    keyLight.shadow.camera.right = shadowRange;
+    keyLight.shadow.camera.top = shadowRange;
+    keyLight.shadow.camera.bottom = -shadowRange;
     scene.add(keyLight);
 
-    const rimLight = new THREE.SpotLight(0x60a5fa, 1.35, 100, Math.PI / 4, 0.35);
-    rimLight.position.set(-18, 14, -12);
-    rimLight.target.position.set(0, 0, 0);
-    rimLight.castShadow = true;
-    scene.add(rimLight);
-    scene.add(rimLight.target);
+    const fillLight = new THREE.DirectionalLight(0xffe7c2, 0.55);
+    fillLight.position.set(28, 18, -26);
+    scene.add(fillLight);
 
-    const boardGroup = new THREE.Group();
-    const boardBaseGeometry = new THREE.PlaneGeometry(boardSize * CELL_SIZE * 1.2, boardSize * CELL_SIZE * 1.2);
-    const boardBaseMaterial = new THREE.MeshStandardMaterial({
-      color: boardBaseColor,
-      metalness: 0.35,
-      roughness: 0.8
-    });
-    const boardBase = new THREE.Mesh(boardBaseGeometry, boardBaseMaterial);
-    boardBase.receiveShadow = true;
-    boardBase.rotation.x = -Math.PI / 2;
-    boardGroup.add(boardBase);
-
-    const gridHelper = new THREE.GridHelper(boardSize * CELL_SIZE, boardSize, 0x1f2937, 0x111827);
-    boardGroup.add(gridHelper);
-
-    const tileGeometry = new THREE.PlaneGeometry(CELL_SIZE * 0.96, CELL_SIZE * 0.96);
-    tileGeometry.rotateX(-Math.PI / 2);
-    const basePlayerColor = new THREE.Color(0x1d4ed8);
-    const baseEnemyColor = new THREE.Color(0x881337);
-
-    for (let row = 0; row < boardSize; row += 1) {
-      for (let col = 0; col < boardSize; col += 1) {
-        const tileMaterial = new THREE.MeshStandardMaterial({
-          color: row >= boardSize / 2 ? basePlayerColor : baseEnemyColor,
-          emissive: new THREE.Color(0x000000),
-          metalness: 0.15,
-          roughness: 0.9
-        });
-        const tile = new THREE.Mesh(tileGeometry, tileMaterial);
-        const { x, z } = cellToWorld(row, col, boardSize);
-        tile.position.set(x, 0.01, z);
-        tile.receiveShadow = true;
-        boardTilesRef.current.set(boardKey(row, col), tile);
-        boardGroup.add(tile);
-      }
-    }
-
-    scene.add(boardGroup);
+    const tacticalBoard = createTacticalBoard({ boardSize, cellSize: CELL_SIZE });
+    tacticalBoardRef.current = tacticalBoard;
+    scene.add(tacticalBoard.group);
 
     const unitRoot = new THREE.Group();
     unitRootRef.current = unitRoot;
@@ -263,31 +231,7 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     const updateCamera = (elapsed: number) => {
       const camera = cameraRef.current;
       if (!camera) return;
-      const spinState = spinStateRef.current;
       const flightActive = flightModeRef.current;
-
-      if (cameraModeRef.current === 'spin' && spinState.active) {
-        const now = performance.now();
-        const progress = clamp((now - spinState.start) / spinState.duration, 0, 1);
-        const eased = easeOutCubic(progress);
-        const angle = eased * Math.PI * 2 + elapsed * 0.25;
-        const spinRadius = boardSize * CELL_SIZE * 1.6;
-        const heightBoost = BASE_CAMERA_HEIGHT + Math.sin(eased * Math.PI) * 4;
-        camera.position.set(
-          Math.cos(angle) * spinRadius,
-          heightBoost,
-          Math.sin(angle) * spinRadius
-        );
-        camera.lookAt(lockedCameraTargetRef.current);
-        if (progress >= 1) {
-          spinState.active = false;
-          cameraModeRef.current = flightActive ? 'locked' : 'idle';
-          if (flightActive && pendingApproachRef.current) {
-            beginCameraApproach();
-          }
-        }
-        return;
-      }
 
       if (flightActive && cameraModeRef.current === 'locked') {
         if (cameraApproachRef.current.active) {
@@ -401,7 +345,7 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
       renderer.domElement.removeEventListener('pointerup', handlePointerUp);
       renderer.domElement.removeEventListener('pointerleave', handlePointerUp);
       if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
-      boardTilesRef.current.clear();
+      tacticalBoardRef.current = null;
       disposeAll();
       renderer.dispose();
       envTargetRef.current?.dispose();
@@ -418,25 +362,30 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const hitSet = new Set(hitCells);
-    const moveSet = new Set(moveCells);
-    const marchSet = new Set(marchCells);
-
-    boardTilesRef.current.forEach((tile, key) => {
-      const material = tile.material as THREE.MeshStandardMaterial;
-      material.emissiveIntensity = 0.25;
-      material.emissive.setHex(0x000000);
-      if (hitSet.has(key)) {
-        material.emissive.setHex(0xff5f6d);
-        material.emissiveIntensity = 1.2;
-      } else if (moveSet.has(key)) {
-        material.emissive.setHex(0x38bdf8);
-        material.emissiveIntensity = 0.7;
-      } else if (marchSet.has(key)) {
-        material.emissive.setHex(0xfcd34d);
-        material.emissiveIntensity = 0.6;
-      }
+    const board = tacticalBoardRef.current;
+    if (!board) return;
+    board.clearOccupants();
+    units.forEach((unit) => {
+      const occupant: TileOwner = unit.team === 'player' ? 'blue' : 'red';
+      board.setTileOccupiedBy(unit.position.row, unit.position.col, occupant);
     });
+  }, [units, boardSize]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const board = tacticalBoardRef.current;
+    if (board) {
+      board.clearEffects();
+      const applyEffect = (cellKeys: string[], effect: TileEffect) => {
+        cellKeys.forEach((key) => {
+          const [row, col] = key.split('-').map(Number);
+          board.setTileEffect(row, col, effect);
+        });
+      };
+      applyEffect(hitCells, 'hit');
+      applyEffect(moveCells, 'move');
+      applyEffect(marchCells, 'march');
+    }
 
     applyBattleState({ hitCells, hitEvents, moveCells, marchCells, units, demoState, boardSize });
   }, [applyBattleState, boardSize, demoState, hitCells, hitEvents, marchCells, moveCells, units]);
@@ -452,18 +401,17 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
       pendingApproachRef.current = false;
       cameraApproachRef.current = { active: false, start: 0, progress: 0 };
       lockedCameraPositionRef.current.copy(lockedCameraBasePositionRef.current);
-      cameraModeRef.current = 'spin';
-      spinStateRef.current = { active: true, start: performance.now(), duration: 2000 };
+      // During countdown, smoothly glide from the distant intro position toward the locked position
+      cameraModeRef.current = 'locked';
+      beginCameraApproach();
     } else if (demoState === 'running') {
-      if (!spinStateRef.current.active) {
-        cameraModeRef.current = 'locked';
+      cameraModeRef.current = 'locked';
+      // If for some reason the approach hasn't started yet, ensure it runs
+      if (!cameraApproachRef.current.active && cameraApproachRef.current.progress < 1) {
         beginCameraApproach();
-      } else {
-        pendingApproachRef.current = true;
       }
     } else {
       cameraModeRef.current = 'idle';
-      spinStateRef.current.active = false;
       pendingApproachRef.current = false;
       cameraApproachRef.current = { active: false, start: 0, progress: 0 };
     }
