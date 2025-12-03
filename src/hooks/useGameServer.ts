@@ -54,7 +54,7 @@ function getWebSocketUrl(): string {
   }
 
   if (host.includes('.github.dev')) {
-    const wsHost = host.replace('-5173', '-4000');
+    const wsHost = host.replace(/-\d+\.app\.github\.dev$/, `-4000.app.github.dev`);
     return `wss://${wsHost}`;
   }
 
