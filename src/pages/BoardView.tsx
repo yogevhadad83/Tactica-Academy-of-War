@@ -55,6 +55,7 @@ const BoardView = () => {
     setArmy: setMultiplayerArmy,
     challenge: sendChallenge,
     respondToChallenge,
+    startDemoBattle,
     currentRole,
   } = useMultiplayer();
   const currentUserId = currentUser?.id ?? null;
@@ -195,6 +196,19 @@ const BoardView = () => {
     }
     respondToChallenge(incomingChallenge, false);
   }, [incomingChallenge, respondToChallenge]);
+
+  const handleDemoBattle = useCallback(() => {
+    if (!isServerConnected) {
+      alert('Connect to the multiplayer server before starting a demo battle.');
+      return;
+    }
+    if (placedUnits.length === 0) {
+      alert('Place at least one unit before starting a demo battle.');
+      return;
+    }
+    const armyConfig = placementToArmyConfig(placedUnits);
+    startDemoBattle(armyConfig);
+  }, [isServerConnected, placedUnits, startDemoBattle]);
 
   const getUnitAt = useCallback(
     (row: number, col: number): PlacedUnit | undefined => {
@@ -479,7 +493,15 @@ const BoardView = () => {
       >
         Save Multiplayer Army
       </button>
-      <p className="army-note">Position your units on rows 6-11, save your army, then challenge another player.</p>
+      <button
+        type="button"
+        className="demo-battle-btn"
+        disabled={!isServerConnected || placedUnits.length === 0}
+        onClick={handleDemoBattle}
+      >
+        ⚔️ Demo Battle
+      </button>
+      <p className="army-note">Position your units on rows 6-11, save your army, then challenge another player or try a demo battle.</p>
     </div>
   );
 

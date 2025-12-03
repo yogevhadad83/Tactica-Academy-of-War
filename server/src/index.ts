@@ -136,6 +136,85 @@ wss.on('connection', (socket: WebSocket) => {
           break;
         }
 
+        case 'demo_battle': {
+          const client = clientsBySocket.get(socket);
+          if (!client) {
+            send(socket, {
+              type: 'error',
+              message: 'Not authenticated. Send hello first.',
+            });
+            return;
+          }
+
+          const playerArmy = message.army;
+          if (!playerArmy || playerArmy.length === 0) {
+            send(socket, {
+              type: 'error',
+              message: 'You must provide an army for the demo battle.',
+            });
+            return;
+          }
+
+          // Generate fake enemy army: 3-10 knights at random positions in rows 0-5
+          const numKnights = Math.floor(Math.random() * 8) + 3; // 3 to 10
+          const usedPositions = new Set<string>();
+          const fakeEnemyArmy: ArmyConfig = [];
+
+          for (let i = 0; i < numKnights; i++) {
+            let row: number, col: number, posKey: string;
+            // Find an unoccupied position in enemy zone (rows 0-5)
+            do {
+              row = Math.floor(Math.random() * 6); // rows 0-5
+              col = Math.floor(Math.random() * 12); // cols 0-11
+              posKey = `${row}-${col}`;
+            } while (usedPositions.has(posKey));
+            usedPositions.add(posKey);
+
+            fakeEnemyArmy.push({
+              instanceId: `demo-knight-${i}`,
+              id: 'knight',
+              name: 'Knight',
+              icon: '🗡️',
+              cost: 85,
+              hp: 190,
+              damage: 32,
+              defense: 16,
+              speed: 8,
+              range: 1,
+              position: { row, col },
+              team: 'enemy',
+              currentHp: 190,
+              behaviorOptions: [],
+              upgradeOptions: [],
+            });
+          }
+
+          console.log(`Demo battle: ${client.name} vs ${numKnights} AI knights`);
+
+          const matchId = randomUUID();
+
+          // Send battle_start to the player
+          send(socket, {
+            type: 'battle_start',
+            matchId,
+            youAre: 'A',
+            opponentName: 'Demo AI',
+          });
+
+          // Run the battle - player is A, fake enemy is B
+          const { winner, timeline } = runServerBattle(playerArmy, fakeEnemyArmy);
+          console.log(`Demo battle ${matchId}: winner ${winner}`);
+
+          // Send result to the player (as player A, they get canonical timeline)
+          send(socket, {
+            type: 'battle_result',
+            matchId,
+            winner,
+            timeline,
+          });
+          break;
+        }
+
         case 'challenge_response': {
           const responder = clientsBySocket.get(socket);
           if (!responder) {

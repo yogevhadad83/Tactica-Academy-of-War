@@ -260,6 +260,29 @@
   flex-wrap: wrap;
 }
 
+.army-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.5rem;
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
+  border-radius: 16px;
+}
+
+.army-controls .army-note {
+  margin: 0;
+  color: var(--tactica-muted);
+  font-size: 0.9rem;
+  flex-basis: 100%;
+}
+
+.army-controls .army-note.warning {
+  color: #f97316;
+}
+
 .multiplayer-panel {
   margin-bottom: 2rem;
   padding: 1.5rem;
@@ -334,7 +357,8 @@
 
 .accept-btn,
 .decline-btn,
-.challenge-btn {
+.challenge-btn,
+.demo-battle-btn {
   border: none;
   border-radius: 999px;
   padding: 0.5rem 1.25rem;
@@ -347,6 +371,12 @@
   background: linear-gradient(120deg, #22c55e, #10b981);
   color: #f8fafc;
   box-shadow: 0 10px 18px rgba(16, 185, 129, 0.3);
+}
+
+.demo-battle-btn {
+  background: linear-gradient(120deg, #f97316, #f43f5e);
+  color: #f8fafc;
+  box-shadow: 0 10px 18px rgba(249, 115, 22, 0.3);
 }
 
 .decline-btn {
@@ -364,13 +394,15 @@
 
 .accept-btn:hover,
 .decline-btn:hover,
-.challenge-btn:hover {
+.challenge-btn:hover,
+.demo-battle-btn:hover {
   transform: translateY(-1px);
 }
 
 .accept-btn:disabled,
 .decline-btn:disabled,
-.challenge-btn:disabled {
+.challenge-btn:disabled,
+.demo-battle-btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
