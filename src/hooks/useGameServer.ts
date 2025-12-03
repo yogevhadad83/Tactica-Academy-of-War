@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { PlacedUnit } from '../types';
 import type { BattleTickResult } from '../engine/battleEngine';
+import { buildWsUrl } from '../config/api';
 
 // Types duplicated from server - will be unified later
 export type ArmyConfig = PlacedUnit[];
@@ -39,27 +40,6 @@ export interface BattleResult {
   matchId: string;
   winner: 'A' | 'B' | 'draw';
   timeline?: BattleTickResult[];
-}
-
-function getWebSocketUrl(): string {
-  if (typeof window === 'undefined') {
-    return 'ws://localhost:4000';
-  }
-
-  const { protocol, host, hostname } = window.location;
-
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${wsProtocol}//localhost:4000`;
-  }
-
-  if (host.includes('.github.dev')) {
-    const wsHost = host.replace(/-\d+\.app\.github\.dev$/, `-4000.app.github.dev`);
-    return `wss://${wsHost}`;
-  }
-
-  const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${wsProtocol}//${hostname}:4000`;
 }
 
 export function useGameServer(username: string | null) {
@@ -137,7 +117,7 @@ export function useGameServer(username: string | null) {
       if (destroyed) {
         return;
       }
-      const ws = new WebSocket(getWebSocketUrl());
+      const ws = new WebSocket(buildWsUrl('/'));
       wsRef.current = ws;
 
       ws.onopen = () => {
