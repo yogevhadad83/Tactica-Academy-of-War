@@ -1,10 +1,10 @@
-import type { PlacedUnit, Team } from '../../src/engine/battleEngine';
+import type { PlacedUnit, Team, BattleEngineModule } from './battleTypes';
 
 const {
   advanceBattleTick,
   initializeBattle,
   BOARD_SIZE,
-} = require('../../src/engine/battleEngine.cjs') as typeof import('../../src/engine/battleEngine');
+} = require('../../src/engine/battleEngine.cjs') as BattleEngineModule;
 import type { ArmyConfig, BattleTickResult } from './types';
 
 type Position = { row: number; col: number };

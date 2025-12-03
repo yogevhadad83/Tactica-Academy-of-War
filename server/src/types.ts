@@ -1,4 +1,4 @@
-import type { PlacedUnit, BattleTickResult } from '../../src/engine/battleEngine';
+import type { PlacedUnit, BattleTickResult } from './battleTypes';
 
 export type ArmyConfig = PlacedUnit[];
 export type { BattleTickResult };
