@@ -1,4 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
+import cors from 'cors';
+import express from 'express';
 import { randomUUID } from 'crypto';
 import { ClientToServer, ServerToClient, ArmyConfig } from './types';
 import { runServerBattle, mirrorTimelineForPlayerB } from './runBattle';
@@ -10,7 +12,23 @@ interface Client {
   army?: ArmyConfig;
 }
 
+
 const PORT = 4000;
+const allowedOrigin = process.env.CLIENT_ORIGIN ?? 'http://localhost:5173';
+
+// Create an Express app for HTTP (needed for CORS preflight)
+const app = express();
+app.use(
+  cors({
+    origin: allowedOrigin,
+    credentials: true,
+  })
+);
+
+// Start HTTP server (required for CORS)
+const server = app.listen(PORT, () => {
+  console.log(`HTTP server listening on port ${PORT}`);
+});
 
 // Track connected clients
 const clientsBySocket = new Map<WebSocket, Client>();
@@ -35,10 +53,11 @@ function broadcastPresence() {
   }
 }
 
-// Create WebSocket server
-const wss = new WebSocketServer({ port: PORT });
 
-console.log(`WebSocket server listening on port ${PORT}`);
+// Create WebSocket server, attach to HTTP server
+const wss = new WebSocketServer({ server });
+
+console.log(`WebSocket + HTTP server listening on port ${PORT}`);
 
 wss.on('connection', (socket: WebSocket) => {
   console.log('New connection established');
