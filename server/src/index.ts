@@ -155,16 +155,18 @@ wss.on('connection', (socket: WebSocket) => {
             return;
           }
 
-          // Generate fake enemy army: 3-10 knights at random positions in rows 0-5
+          // Generate fake enemy army: 3-10 knights at random positions in rows 6-11
+          // (This simulates Player B placing units in their "player zone" from their perspective)
+          // The runServerBattle function will mirror these to rows 0-5 automatically
           const numKnights = Math.floor(Math.random() * 8) + 3; // 3 to 10
           const usedPositions = new Set<string>();
           const fakeEnemyArmy: ArmyConfig = [];
 
           for (let i = 0; i < numKnights; i++) {
             let row: number, col: number, posKey: string;
-            // Find an unoccupied position in enemy zone (rows 0-5)
+            // Find an unoccupied position in "player zone" (rows 6-11) from fake Player B's perspective
             do {
-              row = Math.floor(Math.random() * 6); // rows 0-5
+              row = Math.floor(Math.random() * 6) + 6; // rows 6-11
               col = Math.floor(Math.random() * 12); // cols 0-11
               posKey = `${row}-${col}`;
             } while (usedPositions.has(posKey));
