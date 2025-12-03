@@ -7,7 +7,8 @@ export type ClientToServer =
   | { type: 'hello'; name: string }
   | { type: 'set_army'; army: ArmyConfig }
   | { type: 'challenge'; opponentName: string }
-  | { type: 'challenge_response'; challengerName: string; accepted: boolean };
+  | { type: 'challenge_response'; challengerName: string; accepted: boolean }
+  | { type: 'demo_battle'; army: ArmyConfig };
 
 export type ServerToClient =
   | { type: 'hello_ack'; userId: string }

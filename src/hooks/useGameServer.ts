@@ -9,7 +9,8 @@ type ClientToServer =
   | { type: 'hello'; name: string }
   | { type: 'set_army'; army: ArmyConfig }
   | { type: 'challenge'; opponentName: string }
-  | { type: 'challenge_response'; challengerName: string; accepted: boolean };
+  | { type: 'challenge_response'; challengerName: string; accepted: boolean }
+  | { type: 'demo_battle'; army: ArmyConfig };
 
 export type MatchRole = 'A' | 'B';
 
@@ -100,6 +101,13 @@ export function useGameServer(username: string | null) {
       sendMessage({ type: 'challenge_response', challengerName, accepted });
       // Clear incoming challenge after responding
       setIncomingChallenge(null);
+    },
+    [sendMessage]
+  );
+
+  const startDemoBattle = useCallback(
+    (armyConfig: ArmyConfig) => {
+      sendMessage({ type: 'demo_battle', army: armyConfig });
     },
     [sendMessage]
   );
@@ -239,6 +247,7 @@ export function useGameServer(username: string | null) {
       setArmy,
       challenge,
       respondToChallenge,
+      startDemoBattle,
       currentMatchId,
       currentRole,
     }),
@@ -251,6 +260,7 @@ export function useGameServer(username: string | null) {
       setArmy,
       challenge,
       respondToChallenge,
+      startDemoBattle,
       currentMatchId,
       currentRole,
     ]
