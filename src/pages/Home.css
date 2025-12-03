@@ -8,7 +8,7 @@
   text-align: center;
   margin-bottom: 3rem;
   padding: 2rem;
-  background: linear-gradient(135deg, var(--armoria-purple) 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--tactica-purple) 0%, #764ba2 100%);
   border-radius: 16px;
   color: white;
   box-shadow: 0 20px 40px rgba(102, 126, 234, 0.25);
@@ -56,8 +56,8 @@
 
 .commander-summary,
 .guest-cta {
-  background: var(--armoria-card);
-  border: 1px solid var(--armoria-border);
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
   border-radius: 16px;
   padding: 2rem;
   margin-bottom: 3rem;
@@ -73,17 +73,17 @@
 
 .summary-card {
   background: #f8f7ff;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   border-radius: 12px;
   padding: 1rem;
   text-align: center;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 
 .summary-card strong {
   display: block;
   font-size: 1.5rem;
-  color: var(--armoria-text);
+  color: var(--tactica-text);
 }
 
 .quick-links {
@@ -93,7 +93,7 @@
 }
 
 .quick-link-card {
-  border: 1px dashed var(--armoria-border);
+  border: 1px dashed var(--tactica-border);
   border-radius: 12px;
   padding: 1rem 1.25rem;
   text-decoration: none;
@@ -107,7 +107,7 @@
 
 .quick-link-card p {
   margin: 0.35rem 0 0;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 
 .guest-actions {
@@ -125,8 +125,8 @@
 }
 
 .menu-card {
-  background: var(--armoria-card);
-  border: 1px solid var(--armoria-border);
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
   border-radius: 16px;
   padding: 2rem;
   text-align: center;
@@ -163,7 +163,7 @@
   border-radius: 16px;
   padding: 2rem;
   margin-top: 3rem;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
 }
 
 .info-section h3 {

@@ -128,7 +128,7 @@ const StrategyEditor = () => {
           </form>
 
           <div className="example-rules">
-            <h3>Armoria Examples</h3>
+            <h3>Tactica Examples</h3>
             <div className="rule-card">
               <div className="rule-header">
                 <span className="rule-name">Knight Shield Wall</span>

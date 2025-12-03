@@ -26,7 +26,7 @@ const Login = () => {
     <div className="auth-page">
       <div className="auth-card">
         <h1>Welcome back</h1>
-        <p>Log into Armoria to manage your armies and strategies.</p>
+        <p>Log into Tactica to manage your armies and strategies.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
           <label htmlFor="username">Username</label>
           <input

@@ -25,10 +25,10 @@ const Home = () => {
   return (
     <div className="home-container">
       <div className="hero-section">
-        <h1 className="game-title">⚔️ ARMORIA ⚔️</h1>
+        <h1 className="game-title">⚔️ Tactica: Academy of War ⚔️</h1>
         <p className="game-subtitle">
           Draft Knights, Horsemen, Archers, Beasts, and Dragons, assign battlefield instincts,
-          and watch them clash autonomously on Armoria&apos;s tactical grid.
+          and watch them clash autonomously on Tactica&apos;s tactical grid.
         </p>
         {!currentUser && (
           <div className="hero-cta">
@@ -60,7 +60,7 @@ const Home = () => {
       ) : (
         <section className="guest-cta">
           <h2>Ready to command?</h2>
-          <p>Create an Armoria profile to unlock army building and strategic tools.</p>
+          <p>Create a Tactica profile to unlock army building and strategic tools.</p>
           <div className="guest-actions">
             <Link to="/register" className="hero-btn primary">Create Account</Link>
             <Link to="/login" className="hero-btn ghost">Login</Link>
@@ -93,7 +93,7 @@ const Home = () => {
         <ol>
           <li><strong>Build your army:</strong> Spend your supply budget across Knights, Horsemen, Archers, Beasts, and Dragons.</li>
           <li><strong>Set behaviors:</strong> Craft IF/THEN rules that tell units how to react mid-fight.</li>
-          <li><strong>Watch auto-battles:</strong> Drop your formation on the board and let Armoria resolve the clash.</li>
+          <li><strong>Watch auto-battles:</strong> Drop your formation on the board and let Tactica resolve the clash.</li>
         </ol>
       </div>
     </div>

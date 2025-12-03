@@ -1,7 +1,7 @@
 {
-  "name": "armoria-server",
+  "name": "tactica-server",
   "version": "1.0.0",
-  "description": "Armoria game server with WebSocket support",
+  "description": "Tactica game server with WebSocket support",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn src/index.ts",

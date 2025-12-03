@@ -31,7 +31,7 @@ const Register = () => {
     <div className="auth-page">
       <div className="auth-card">
         <h1>Create Commander</h1>
-        <p>Register to start building your Armoria forces.</p>
+        <p>Register to start building your Tactica forces.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
           <label htmlFor="username">Username</label>
           <input

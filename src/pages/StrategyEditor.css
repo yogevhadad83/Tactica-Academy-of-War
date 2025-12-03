@@ -8,7 +8,7 @@
   text-align: center;
   margin-bottom: 3rem;
   padding: 2rem;
-  background: linear-gradient(135deg, var(--armoria-purple) 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--tactica-purple) 0%, #764ba2 100%);
   border-radius: 16px;
   color: white;
   box-shadow: 0 20px 40px rgba(102, 126, 234, 0.25);
@@ -33,9 +33,9 @@
 
 .coming-soon-panel,
 .rule-builder-panel {
-  background: var(--armoria-card);
+  background: var(--tactica-card);
   border-radius: 16px;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   padding: 2rem;
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.05);
 }
@@ -48,12 +48,12 @@
 .coming-soon-panel h2 {
   margin: 0 0 0.75rem 0;
   font-size: 2rem;
-  color: var(--armoria-text);
+  color: var(--tactica-text);
 }
 
 .coming-soon-panel p {
   margin: 0 0 1.5rem 0;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
   line-height: 1.6;
 }
 
@@ -67,8 +67,8 @@
 .unit-chip {
   padding: 0.35rem 0.9rem;
   border-radius: 999px;
-  background: var(--armoria-purple-soft);
-  color: var(--armoria-purple-dark);
+  background: var(--tactica-purple-soft);
+  color: var(--tactica-purple-dark);
   font-weight: 600;
   font-size: 0.85rem;
 }
@@ -86,7 +86,7 @@
 .feature-preview ul {
   margin: 0;
   padding-left: 1.2rem;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
   line-height: 1.6;
 }
 
@@ -96,7 +96,7 @@
 
 .rule-builder-header p {
   margin: 0.25rem 0 1.5rem 0;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 
 .rule-form {
@@ -110,28 +110,28 @@
   flex-direction: column;
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 
 .rule-form select {
   margin-top: 0.35rem;
   padding: 0.75rem 1rem;
   border-radius: 10px;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   font-size: 1rem;
 }
 
 .rule-message {
   margin: 0;
   font-size: 0.9rem;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 
 .save-rule-btn {
   border: none;
   border-radius: 10px;
   padding: 0.85rem 1.5rem;
-  background: var(--armoria-purple);
+  background: var(--tactica-purple);
   color: white;
   font-weight: 600;
   cursor: pointer;
@@ -146,8 +146,8 @@
 }
 
 .rule-card {
-  background: var(--armoria-card);
-  border: 1px solid var(--armoria-border);
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
   border-radius: 12px;
   padding: 1.25rem;
   margin-bottom: 1rem;
@@ -155,7 +155,7 @@
 }
 
 .rule-card:hover {
-  border-color: var(--armoria-purple);
+  border-color: var(--tactica-purple);
 }
 
 .rule-header {
@@ -172,7 +172,7 @@
 .rule-tag {
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
-  background: var(--armoria-purple);
+  background: var(--tactica-purple);
   color: white;
   font-size: 0.75rem;
   text-transform: uppercase;
@@ -181,21 +181,21 @@
 
 .rule-description {
   margin: 0;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
   line-height: 1.5;
 }
 
 .saved-rules-panel {
   margin-top: 2rem;
-  background: var(--armoria-card);
+  background: var(--tactica-card);
   border-radius: 16px;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   padding: 2rem;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
 }
 
 .saved-rules-group {
-  border-top: 1px solid var(--armoria-border);
+  border-top: 1px solid var(--tactica-border);
   padding: 1rem 0;
 }
 
@@ -208,7 +208,7 @@
   display: flex;
   justify-content: space-between;
   font-weight: 600;
-  color: var(--armoria-text);
+  color: var(--tactica-text);
 }
 
 .saved-rules-group ul {
@@ -226,7 +226,7 @@
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   border-radius: 10px;
   background: #f8f7ff;
   font-size: 0.95rem;

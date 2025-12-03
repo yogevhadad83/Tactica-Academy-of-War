@@ -5,8 +5,8 @@
 }
 
 .auth-card {
-  background: var(--armoria-card);
-  border: 1px solid var(--armoria-border);
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
   border-radius: 16px;
   padding: 2rem;
   box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
@@ -19,7 +19,7 @@
 
 .auth-card p {
   margin: 0 0 1.5rem 0;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 
 .auth-form {
@@ -30,13 +30,13 @@
 
 .auth-form label {
   font-weight: 600;
-  color: var(--armoria-text);
+  color: var(--tactica-text);
 }
 
 .auth-form input {
   width: 100%;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   border-radius: 10px;
   font-size: 1rem;
 }
@@ -45,7 +45,7 @@
   padding: 0.85rem;
   border: none;
   border-radius: 10px;
-  background: var(--armoria-purple);
+  background: var(--tactica-purple);
   color: white;
   font-weight: 600;
   font-size: 1rem;
@@ -58,7 +58,7 @@
 .auth-helper {
   margin-top: 1rem;
   font-size: 0.95rem;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 
 .auth-error {

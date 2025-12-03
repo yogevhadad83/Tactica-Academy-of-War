@@ -9,8 +9,8 @@ import type {
   UserProfile
 } from '../types';
 
-const USERS_KEY = 'armoria_users';
-const CURRENT_USER_KEY = 'armoria_current_user';
+const USERS_KEY = 'tactica_users';
+const CURRENT_USER_KEY = 'tactica_current_user';
 
 const createId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 

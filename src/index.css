@@ -6,15 +6,15 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --armoria-bg: #f7fafc;
-  --armoria-card: #ffffff;
-  --armoria-border: #e2e8f0;
-  --armoria-border-strong: #cbd5f5;
-  --armoria-purple: #667eea;
-  --armoria-purple-dark: #4c2c92;
-  --armoria-purple-soft: #e0d8ff;
-  --armoria-text: #2d3748;
-  --armoria-muted: #718096;
+  --tactica-bg: #f7fafc;
+  --tactica-card: #ffffff;
+  --tactica-border: #e2e8f0;
+  --tactica-border-strong: #cbd5f5;
+  --tactica-purple: #667eea;
+  --tactica-purple-dark: #4c2c92;
+  --tactica-purple-soft: #e0d8ff;
+  --tactica-text: #2d3748;
+  --tactica-muted: #718096;
 }
 
 * {
@@ -26,8 +26,8 @@ body {
   padding: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: var(--armoria-bg);
-  color: var(--armoria-text);
+  background-color: var(--tactica-bg);
+  color: var(--tactica-text);
 }
 
 body.flight-mode-active {

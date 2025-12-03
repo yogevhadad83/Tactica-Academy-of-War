@@ -25,7 +25,7 @@ const Layout = () => {
     <div className="layout">
       <nav className="navbar">
         <Link to="/" className="nav-brand">
-          ⚔️ ARMORIA
+          ⚔️ Tactica: Academy of War
         </Link>
         <div className="nav-links">
           <Link to="/" className={`nav-link ${isActive('/')}`}>
@@ -88,7 +88,7 @@ const Layout = () => {
         <Outlet />
       </main>
       <footer className="footer">
-        <p>Armoria - Browser-based PvP Strategy Game</p>
+        <p>Tactica: Academy of War - Browser-based PvP Strategy Game</p>
         <p className="footer-note">Built with React + TypeScript</p>
       </footer>
     </div>

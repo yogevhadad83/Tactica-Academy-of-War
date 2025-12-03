@@ -71,7 +71,7 @@
   text-align: center;
   margin-bottom: 2rem;
   padding: 2rem;
-  background: linear-gradient(135deg, var(--armoria-purple) 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--tactica-purple) 0%, #764ba2 100%);
   border-radius: 16px;
   color: white;
   box-shadow: 0 20px 40px rgba(102, 126, 234, 0.25);
@@ -264,8 +264,8 @@
   margin-bottom: 2rem;
   padding: 1.5rem;
   border-radius: 16px;
-  border: 1px solid var(--armoria-border);
-  background: var(--armoria-card);
+  border: 1px solid var(--tactica-border);
+  background: var(--tactica-card);
   box-shadow: 0 20px 35px rgba(15, 23, 42, 0.18);
 }
 
@@ -283,7 +283,7 @@
 
 .panel-subtitle {
   margin: 0.35rem 0 0;
-  color: var(--armoria-muted, #94a3b8);
+  color: var(--tactica-muted, #94a3b8);
   font-size: 0.9rem;
 }
 
@@ -428,7 +428,7 @@
 }
 
 .enemy-preset-select {
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   border-radius: 999px;
   padding: 0.6rem 1rem;
   background: white;
@@ -488,14 +488,14 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: var(--armoria-card);
-  border: 1px solid var(--armoria-border);
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
   border-radius: 12px;
   padding: 0.5rem 1rem;
 }
 
 .enemy-count-control label {
-  color: var(--armoria-fg);
+  color: var(--tactica-fg);
   font-size: 0.875rem;
   white-space: nowrap;
 }
@@ -553,13 +553,13 @@
 
 .demo-note {
   margin: 0;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
   max-width: 420px;
 }
 
 .board-wrapper {
-  background: var(--armoria-card);
-  border: 1px solid var(--armoria-border);
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
   border-radius: 16px;
   padding: 0.75rem;
   overflow: hidden;
@@ -586,14 +586,14 @@
   grid-template-columns: repeat(12, 1fr);
   gap: 1px;
   background: #cbd5f5;
-  border: 1px solid var(--armoria-border);
+  border: 1px solid var(--tactica-border);
   width: 100%;
   margin: 0 auto;
 }
 
 .board-cell {
   aspect-ratio: 1;
-  background: var(--armoria-card);
+  background: var(--tactica-card);
   border: 1px solid #d7dcef;
   position: relative;
   cursor: pointer;
@@ -698,8 +698,8 @@
 
 /* Sidebar */
 .board-sidebar {
-  background: var(--armoria-card);
-  border: 1px solid var(--armoria-border);
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
   border-radius: 16px;
   padding: 1.5rem;
   height: fit-content;
@@ -794,7 +794,7 @@
 .legend {
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid var(--armoria-border);
+  border-top: 1px solid var(--tactica-border);
 }
 
 .legend h3 {
@@ -803,7 +803,7 @@
 
 .legend-note {
   margin: 0 0 1rem 0;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
   font-size: 0.9rem;
 }
 
@@ -817,7 +817,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  border: 1px dashed var(--armoria-border);
+  border: 1px dashed var(--tactica-border);
   border-radius: 12px;
   padding: 0.75rem 1rem;
   background: #f8f7ff;
@@ -839,7 +839,7 @@
 
 .placement-token span {
   font-size: 0.85rem;
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
 }
 .demo-battle-stage {
   margin-top: 1rem;
@@ -883,7 +883,7 @@
   transform: translate(-50%, -50%);
   width: min(90%, 420px);
   text-align: center;
-  background: var(--armoria-card);
+  background: var(--tactica-card);
   border: 2px solid #fbbf24;
   border-radius: 16px;
   padding: 1.5rem;
@@ -917,7 +917,7 @@
 }
 
 .rule-message {
-  color: var(--armoria-muted);
+  color: var(--tactica-muted);
   font-style: italic;
 }
 

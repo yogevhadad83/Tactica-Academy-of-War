@@ -1,4 +1,4 @@
-// Core Armoria unit definition
+// Core Tactica unit definition
 export interface Unit {
   id: string;
   name: string;
