@@ -25,11 +25,6 @@ app.use(
   })
 );
 
-// Start HTTP server (required for CORS)
-const server = app.listen(PORT, () => {
-  console.log(`HTTP server listening on port ${PORT}`);
-});
-
 // Track connected clients
 const clientsBySocket = new Map<WebSocket, Client>();
 const clientsByName = new Map<string, Client>();
@@ -53,11 +48,12 @@ function broadcastPresence() {
   }
 }
 
-
 // Create WebSocket server, attach to HTTP server
-const wss = new WebSocketServer({ server });
+const server = app.listen(PORT, () => {
+  console.log(`WebSocket + HTTP server listening on port ${PORT}`);
+});
 
-console.log(`WebSocket + HTTP server listening on port ${PORT}`);
+const wss = new WebSocketServer({ server });
 
 wss.on('connection', (socket: WebSocket) => {
   console.log('New connection established');
