@@ -11,6 +11,7 @@
     "extract-animations": "tsx scripts/extract-animation-metadata.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.87.0",
     "@types/three": "^0.181.0",
     "cors": "^2.8.5",
     "express": "^5.2.1",
