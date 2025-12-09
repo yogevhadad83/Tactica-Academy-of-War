@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "rootDir": "src",
+    "rootDir": "..",
     "outDir": "dist",
     "module": "commonjs",
     "target": "ES2020",
@@ -9,8 +9,9 @@
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "moduleResolution": "node",
-    "types": ["node"]
+    "types": ["node"],
+    "allowJs": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../shared/**/*", "../src/engine/battleEngine.cjs"],
   "exclude": ["node_modules", "dist"]
 }

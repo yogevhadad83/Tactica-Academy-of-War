@@ -2,11 +2,11 @@
   "name": "tactica-server",
   "version": "1.0.0",
   "description": "Tactica game server with WebSocket support",
-  "main": "dist/index.js",
+  "main": "dist/server/src/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/server/src/index.js"
   },
   "keywords": ["game", "websocket", "server"],
   "author": "",
