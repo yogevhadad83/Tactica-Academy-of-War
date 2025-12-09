@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 import { MultiplayerProvider } from './context/MultiplayerContext';
 
@@ -9,7 +10,8 @@ const ArmyBuilder = lazy(() => import('./pages/ArmyBuilder'));
 const StrategyEditor = lazy(() => import('./pages/StrategyEditor'));
 const BoardView = lazy(() => import('./pages/BoardView'));
 const Login = lazy(() => import('./pages/Login'));
-const Register = lazy(() => import('./pages/Register'));
+const Signup = lazy(() => import('./pages/Signup'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DebugNetwork = lazy(() => import('./pages/DebugNetwork'));
 
 const RouteLoader = ({ children }: { children: React.ReactNode }) => (
@@ -35,7 +37,15 @@ function App() {
             <Route path="strategy" element={<RouteLoader><StrategyEditor /></RouteLoader>} />
             <Route path="board" element={<RouteLoader><BoardView /></RouteLoader>} />
             <Route path="login" element={<RouteLoader><Login /></RouteLoader>} />
-            <Route path="register" element={<RouteLoader><Register /></RouteLoader>} />
+            <Route path="signup" element={<RouteLoader><Signup /></RouteLoader>} />
+            <Route
+              path="dashboard"
+              element={(
+                <ProtectedRoute>
+                  <RouteLoader><Dashboard /></RouteLoader>
+                </ProtectedRoute>
+              )}
+            />
             <Route path="debug" element={<RouteLoader><DebugNetwork /></RouteLoader>} />
           </Route>
         </Routes>

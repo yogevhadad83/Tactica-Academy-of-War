@@ -1,6 +1,12 @@
 import type { PlacedUnit, Position, Unit } from '../types';
 
+/**
+ * BOARD CONFIGURATION
+ * These constants should match battleEngine.ts (the single source of truth).
+ * They define a 12x8 board with 6-row deployment zones for each player.
+ */
 export const BOARD_SIZE = 12;
+export const BOARD_COLS = 8;
 export const PLAYER_ROWS = 6;
 export const PLAYER_ZONE_START = BOARD_SIZE - PLAYER_ROWS;
 

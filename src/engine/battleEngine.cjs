@@ -1,20 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildEnemyArmy = exports.initializeBattle = exports.advanceBattleTick = exports.luckyDraw = exports.DEFAULT_ENEMY_FORMATION = exports.PLAYER_ZONE_START = exports.PLAYER_ROWS = exports.BOARD_SIZE = void 0;
+exports.buildEnemyArmy = exports.initializeBattle = exports.advanceBattleTick = exports.luckyDraw = exports.DEFAULT_ENEMY_FORMATION = exports.PLAYER_ZONE_START = exports.PLAYER_ROWS = exports.BOARD_COLS = exports.BOARD_SIZE = void 0;
 exports.BOARD_SIZE = 12;
+exports.BOARD_COLS = 8;
 exports.PLAYER_ROWS = 6;
 exports.PLAYER_ZONE_START = exports.BOARD_SIZE - exports.PLAYER_ROWS;
 exports.DEFAULT_ENEMY_FORMATION = [
     { row: 0, col: 2 },
     { row: 0, col: 4 },
     { row: 0, col: 6 },
-    { row: 0, col: 8 },
     { row: 1, col: 3 },
     { row: 1, col: 5 },
-    { row: 1, col: 7 },
     { row: 2, col: 2 },
-    { row: 2, col: 6 },
-    { row: 2, col: 9 }
+    { row: 2, col: 6 }
 ];
 /** Randomly picks which team starts the battle */
 const luckyDraw = () => (Math.random() < 0.5 ? 'player' : 'enemy');
@@ -39,7 +37,7 @@ const findClosestTarget = (actor, candidates) => candidates
     .sort((a, b) => manhattan(actor.position, a.position) - manhattan(actor.position, b.position))[0];
 const findArcherForwardTarget = (actor, snapshot) => {
     const direction = directionForTeam(actor.team);
-    const validCols = ARCHER_FORWARD_COLUMN_OFFSETS.map((offset) => actor.position.col + offset).filter((col) => col >= 0 && col < exports.BOARD_SIZE);
+    const validCols = ARCHER_FORWARD_COLUMN_OFFSETS.map((offset) => actor.position.col + offset).filter((col) => col >= 0 && col < exports.BOARD_COLS);
     const candidates = [];
     for (let step = 1; step <= ARCHER_FORWARD_RANGE; step += 1) {
         const row = actor.position.row + direction * step;

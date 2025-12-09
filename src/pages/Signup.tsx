@@ -1,30 +1,30 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import { useAuth } from '../context/AuthContext';
 import './Auth.css';
 
-const Register = () => {
+const Signup = () => {
   const navigate = useNavigate();
-  const { register } = useUser();
-  const [username, setUsername] = useState('');
+  const { signUp } = useAuth();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [confirm, setConfirm] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (password !== confirm) {
-      setError('Passwords do not match');
-      return;
-    }
-    const result = register(username.trim(), password);
-    if (!result.success && result.message) {
-      setError(result.message);
-      return;
-    }
+    setSubmitting(true);
     setError('');
-    navigate('/');
+    try {
+      await signUp(email.trim(), password);
+      navigate('/dashboard');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to sign up';
+      setError(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -33,12 +33,13 @@ const Register = () => {
         <h1>Create Commander</h1>
         <p>Register to start building your Tactica forces.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <label htmlFor="username">Username</label>
+          <label htmlFor="email">Email</label>
           <input
-            id="username"
-            name="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            type="email"
+            id="email"
+            name="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             required
           />
 
@@ -52,19 +53,11 @@ const Register = () => {
             required
           />
 
-          <label htmlFor="confirm">Confirm Password</label>
-          <input
-            type="password"
-            id="confirm"
-            name="confirm"
-            value={confirm}
-            onChange={(event) => setConfirm(event.target.value)}
-            required
-          />
-
           {error && <div className="auth-error">{error}</div>}
 
-          <button type="submit">Register</button>
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Signing up…' : 'Sign up'}
+          </button>
         </form>
         <div className="auth-helper">
           Already registered? <Link to="/login">Login instead</Link>
@@ -74,4 +67,4 @@ const Register = () => {
   );
 };
 
-export default Register;
+export default Signup;

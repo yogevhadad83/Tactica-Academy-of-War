@@ -92,7 +92,7 @@ export function useGameServer(username: string | null) {
     [sendMessage]
   );
 
-  // WebSocket connection effect
+  // WebSocket connection effect with auto-reconnect
   useEffect(() => {
     if (!username) {
       // No username, stay disconnected
@@ -109,19 +109,35 @@ export function useGameServer(username: string | null) {
       return;
     }
 
-    setStatus('connecting');
     let destroyed = false;
-    let connectTimeout: number | null = null;
+    let reconnectTimeout: number | null = null;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_DELAY = 30000; // 30 seconds max
+    const INITIAL_RECONNECT_DELAY = 1000; // 1 second initial delay
+
+    const calculateReconnectDelay = () => {
+      // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 30s, 30s...
+      const delay = Math.min(
+        INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
+        MAX_RECONNECT_DELAY
+      );
+      return delay;
+    };
 
     const establishConnection = () => {
       if (destroyed) {
         return;
       }
+
+      setStatus('connecting');
+      console.log(`WebSocket connecting... (attempt ${reconnectAttempts + 1})`);
+
       const ws = new WebSocket(buildWsUrl('/'));
       wsRef.current = ws;
 
       ws.onopen = () => {
         console.log('WebSocket connected');
+        reconnectAttempts = 0; // Reset on successful connection
         ws.send(JSON.stringify({ type: 'hello', name: username }));
       };
 
@@ -187,25 +203,36 @@ export function useGameServer(username: string | null) {
 
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        setStatus('disconnected');
       };
 
-      ws.onclose = () => {
-        console.log('WebSocket disconnected');
+      ws.onclose = (event) => {
+        console.log('WebSocket disconnected', event.code, event.reason);
         setStatus('disconnected');
         setUsers([]);
         setUserId(null);
-        setCurrentMatchId(null);
-        setCurrentRole(null);
+        
+        // Don't clear match state on disconnect - user might be in a battle
+        // setCurrentMatchId(null);
+        // setCurrentRole(null);
+
+        // Attempt to reconnect unless the component is being destroyed
+        if (!destroyed && wsRef.current === ws) {
+          wsRef.current = null;
+          const delay = calculateReconnectDelay();
+          console.log(`Reconnecting in ${delay}ms...`);
+          reconnectAttempts++;
+          reconnectTimeout = window.setTimeout(establishConnection, delay);
+        }
       };
     };
 
-    connectTimeout = window.setTimeout(establishConnection, 0);
+    // Initial connection
+    establishConnection();
 
     return () => {
       destroyed = true;
-      if (connectTimeout !== null) {
-        window.clearTimeout(connectTimeout);
+      if (reconnectTimeout !== null) {
+        window.clearTimeout(reconnectTimeout);
       }
       if (wsRef.current) {
         const ws = wsRef.current;

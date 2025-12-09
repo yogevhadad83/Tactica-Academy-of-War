@@ -6,7 +6,8 @@ export type TileOccupant = TileOwner | null;
 export type TileEffect = 'hit' | 'move' | 'march' | null;
 
 interface TacticalBoardOptions {
-  boardSize: number;
+  boardRows: number;
+  boardCols: number;
   cellSize: number;
 }
 
@@ -158,17 +159,18 @@ const createTileMesh = (owner: TileOwner, tileSize: number, tileThickness: numbe
   return { tileGroup, mesh, material, glow, glowMaterial };
 };
 
-export const createTacticalBoard = ({ boardSize, cellSize }: TacticalBoardOptions): TacticalBoard => {
+export const createTacticalBoard = ({ boardRows, boardCols, cellSize }: TacticalBoardOptions): TacticalBoard => {
   const boardGroup = new THREE.Group();
   boardGroup.name = 'TacticalBoard';
 
-  const boardExtent = boardSize * cellSize;
+  const boardExtentRows = boardRows * cellSize;
+  const boardExtentCols = boardCols * cellSize;
   const platformHeight = 0.8;
   const lipHeight = 0.18;
   const tileThickness = 0.16;
   const tileSize = cellSize * 0.86;
   // Change 1: Reduced platform overhang for thinner border
-  const platformGeometry = new THREE.BoxGeometry(boardExtent * 1.04, platformHeight, boardExtent * 1.04);
+  const platformGeometry = new THREE.BoxGeometry(boardExtentCols * 1.04, platformHeight, boardExtentRows * 1.04);
   const platformMaterial = new THREE.MeshStandardMaterial({
     color: 0x050b14,
     metalness: 0.8,
@@ -181,7 +183,7 @@ export const createTacticalBoard = ({ boardSize, cellSize }: TacticalBoardOption
   boardGroup.add(platform);
 
   // Change 1: Reduced lip overhang for thinner border
-  const lipGeometry = new THREE.BoxGeometry(boardExtent * 1.06, lipHeight, boardExtent * 1.06);
+  const lipGeometry = new THREE.BoxGeometry(boardExtentCols * 1.06, lipHeight, boardExtentRows * 1.06);
   const lipMaterial = new THREE.MeshStandardMaterial({
     color: 0x0d1b2a,
     emissive: new THREE.Color(0x0ea5e9),
@@ -202,10 +204,11 @@ export const createTacticalBoard = ({ boardSize, cellSize }: TacticalBoardOption
     metalness: 0.65,
     roughness: 0.35
   });
-  const detailOffset = boardExtent * 0.55;
+  const detailOffsetRows = boardExtentRows * 0.55;
+  const detailOffsetCols = boardExtentCols * 0.55;
   techDetailPositions.forEach((pos) => {
     const detail = new THREE.Mesh(edgeDetailGeometry, edgeDetailMaterial);
-    detail.position.set(pos.x * detailOffset, -platformHeight + lipHeight, pos.z * detailOffset);
+    detail.position.set(pos.x * detailOffsetCols, -platformHeight + lipHeight, pos.z * detailOffsetRows);
     detail.castShadow = true;
     detail.receiveShadow = true;
     boardGroup.add(detail);
@@ -214,11 +217,11 @@ export const createTacticalBoard = ({ boardSize, cellSize }: TacticalBoardOption
   const tiles = new Map<string, SciFiTile>();
   const tileY = tileThickness / 2;
 
-  for (let row = 0; row < boardSize; row += 1) {
-    for (let col = 0; col < boardSize; col += 1) {
-      const owner: TileOwner = row >= boardSize / 2 ? 'blue' : 'red';
+  for (let row = 0; row < boardRows; row += 1) {
+    for (let col = 0; col < boardCols; col += 1) {
+      const owner: TileOwner = row >= boardRows / 2 ? 'blue' : 'red';
       const { tileGroup, mesh, material, glow, glowMaterial } = createTileMesh(owner, tileSize, tileThickness);
-      const { x, z } = cellToWorld(row, col, boardSize);
+      const { x, z } = cellToWorld(row, col, boardRows, boardCols);
       tileGroup.position.set(x, tileY, z);
 
       const key = boardKey(row, col);

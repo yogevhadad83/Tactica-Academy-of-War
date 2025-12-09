@@ -175,7 +175,7 @@ const UnitPreviewCanvas = ({ unit }: UnitPreviewCanvasProps) => {
   useEffect(() => {
     if (!sceneReady) return;
     ensureAssetsForUnits(previewUnits);
-    syncUnits(previewUnits, PREVIEW_BOARD_SIZE);
+    syncUnits(previewUnits, PREVIEW_BOARD_SIZE, PREVIEW_BOARD_SIZE);
   }, [ensureAssetsForUnits, previewUnits, sceneReady, syncUnits, modelRevision]);
 
   return <div className="unit-preview-canvas" ref={mountRef} aria-hidden={!unit}></div>;

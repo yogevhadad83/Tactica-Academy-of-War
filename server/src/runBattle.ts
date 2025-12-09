@@ -4,6 +4,8 @@ const {
   advanceBattleTick,
   initializeBattle,
   BOARD_SIZE,
+  BOARD_COLS,
+  PLAYER_ROWS,
 } = require('../../src/engine/battleEngine.cjs') as BattleEngineModule;
 import type { ArmyConfig, BattleTickResult } from './types';
 

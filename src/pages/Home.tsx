@@ -1,15 +1,17 @@
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
 import './Home.css';
 
 const Home = () => {
+  const { user } = useAuth();
   const { currentUser } = useUser();
 
   const quickLinks = (
     <div className="quick-links">
       <Link to="/army-builder" className="quick-link-card">
         <span>⚔️ Build Army</span>
-        <p>Spend supply to assemble elite squads.</p>
+        <p>Assemble elite squads without leaving the browser.</p>
       </Link>
       <Link to="/strategy" className="quick-link-card">
         <span>🧠 Strategy</span>
@@ -30,29 +32,21 @@ const Home = () => {
           Draft Knights, Horsemen, Archers, Beasts, and Dragons, assign battlefield instincts,
           and watch them clash autonomously on Tactica&apos;s tactical grid.
         </p>
-        {!currentUser && (
+        {!user && (
           <div className="hero-cta">
-            <Link to="/register" className="hero-btn primary">Register</Link>
+            <Link to="/signup" className="hero-btn primary">Register</Link>
             <Link to="/login" className="hero-btn ghost">Login</Link>
           </div>
         )}
       </div>
 
-      {currentUser ? (
+      {user ? (
         <section className="commander-summary">
-          <h2>Welcome back, {currentUser.username}</h2>
+          <h2>Welcome back, {currentUser?.username ?? user.email}</h2>
           <div className="summary-grid">
             <div className="summary-card">
-              <span>Gold</span>
-              <strong>{currentUser.gold}</strong>
-            </div>
-            <div className="summary-card">
-              <span>Level</span>
-              <strong>{currentUser.level}</strong>
-            </div>
-            <div className="summary-card">
               <span>Army Size</span>
-              <strong>{currentUser.army.length} / 20</strong>
+              <strong>{currentUser?.army.length ?? 0} / 20</strong>
             </div>
           </div>
           {quickLinks}
@@ -62,7 +56,7 @@ const Home = () => {
           <h2>Ready to command?</h2>
           <p>Create a Tactica profile to unlock army building and strategic tools.</p>
           <div className="guest-actions">
-            <Link to="/register" className="hero-btn primary">Create Account</Link>
+            <Link to="/signup" className="hero-btn primary">Create Account</Link>
             <Link to="/login" className="hero-btn ghost">Login</Link>
           </div>
         </section>
@@ -91,7 +85,7 @@ const Home = () => {
       <div className="info-section">
         <h3>How to Play</h3>
         <ol>
-          <li><strong>Build your army:</strong> Spend your supply budget across Knights, Horsemen, Archers, Beasts, and Dragons.</li>
+          <li><strong>Build your army:</strong> Choose Knights, Horsemen, Archers, Beasts, and Dragons to fill your formation.</li>
           <li><strong>Set behaviors:</strong> Craft IF/THEN rules that tell units how to react mid-fight.</li>
           <li><strong>Watch auto-battles:</strong> Drop your formation on the board and let Tactica resolve the clash.</li>
         </ol>
