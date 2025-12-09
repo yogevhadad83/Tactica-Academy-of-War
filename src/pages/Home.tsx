@@ -19,7 +19,7 @@ const Home = () => {
       </Link>
       <Link to="/board" className="quick-link-card">
         <span>🎯 Board</span>
-        <p>Place units on the 12×12 battlefield.</p>
+        <p>Place units on the 12×8 battlefield.</p>
       </Link>
     </div>
   );
@@ -29,7 +29,7 @@ const Home = () => {
       <div className="hero-section">
         <h1 className="game-title">⚔️ Tactica: Academy of War ⚔️</h1>
         <p className="game-subtitle">
-          Draft Knights, Horsemen, Archers, Beasts, and Dragons, assign battlefield instincts,
+          Draft Recruits, Knights, Archers, Beasts, Mages, Zombies, and Giants, assign battlefield instincts,
           and watch them clash autonomously on Tactica&apos;s tactical grid.
         </p>
         {!user && (
@@ -66,7 +66,7 @@ const Home = () => {
         <Link to="/army-builder" className="menu-card">
           <div className="menu-icon">🏰</div>
           <h2>Army Builder</h2>
-          <p>Assemble your front line of Knights, Horsemen, Archers, Beasts, and Dragons.</p>
+          <p>Assemble your front line of Recruits, Knights, Archers, Beasts, Mages, Zombies, and Giants.</p>
         </Link>
 
         <Link to="/strategy" className="menu-card">
@@ -78,14 +78,14 @@ const Home = () => {
         <Link to="/board" className="menu-card">
           <div className="menu-icon">🎮</div>
           <h2>Battle Board</h2>
-          <p>Preview placements on the 12×12 battlefield.</p>
+          <p>Preview placements on the 12×8 battlefield.</p>
         </Link>
       </div>
 
       <div className="info-section">
         <h3>How to Play</h3>
         <ol>
-          <li><strong>Build your army:</strong> Choose Knights, Horsemen, Archers, Beasts, and Dragons to fill your formation.</li>
+          <li><strong>Build your army:</strong> Choose Recruits, Knights, Archers, Beasts, Mages, Zombies, and Giants to fill your formation.</li>
           <li><strong>Set behaviors:</strong> Craft IF/THEN rules that tell units how to react mid-fight.</li>
           <li><strong>Watch auto-battles:</strong> Drop your formation on the board and let Tactica resolve the clash.</li>
         </ol>

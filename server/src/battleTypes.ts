@@ -11,6 +11,7 @@ export interface Unit {
   hp: number;
   damage: number;
   defense: number;
+  shield?: number;
   speed: number;
   range: number;
   behaviorOptions: string[];
@@ -30,6 +31,7 @@ export interface PlacedUnit extends ArmyUnitInstance {
   position: Position;
   team: Team;
   currentHp?: number;
+  currentShield?: number;
 }
 
 export interface HitEvent {

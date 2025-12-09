@@ -34,6 +34,7 @@ export interface PlacedUnit extends ArmyUnitInstance {
   position: Position;
   team: 'player' | 'enemy';
   currentHp?: number;
+  currentShield?: number;
 }
 
 // Strategy rule saved per unit type

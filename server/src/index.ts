@@ -4,6 +4,7 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { ClientToServer, ServerToClient, ArmyConfig } from './types';
 import { runServerBattle, mirrorTimelineForPlayerB } from './runBattle';
+import { buildGddUnit } from '../../shared/gddUnits';
 
 interface Client {
   socket: WebSocket;
@@ -176,6 +177,7 @@ wss.on('connection', (socket: WebSocket) => {
           const numKnights = Math.floor(Math.random() * 8) + 3; // 3 to 10
           const usedPositions = new Set<string>();
           const fakeEnemyArmy: ArmyConfig = [];
+          const knightTemplate = buildGddUnit('knight');
 
           // Board is 12 rows x 8 cols, with player zones being rows 6-11 (6 rows)
           const BOARD_COLS = 8;
@@ -193,21 +195,11 @@ wss.on('connection', (socket: WebSocket) => {
             usedPositions.add(posKey);
 
             fakeEnemyArmy.push({
+              ...knightTemplate,
               instanceId: `demo-knight-${i}`,
-              id: 'knight',
-              name: 'Knight',
-              icon: '🗡️',
-              cost: 85,
-              hp: 190,
-              damage: 32,
-              defense: 16,
-              speed: 8,
-              range: 1,
               position: { row, col },
               team: 'enemy',
-              currentHp: 190,
-              behaviorOptions: [],
-              upgradeOptions: [],
+              currentHp: knightTemplate.hp,
             });
           }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { Unit } from '../types';
+import { buildGddUnit, GDD_UNIT_IDS } from '../../shared/gddUnits';
 
 export type UnitCatalogEntry = Unit & {
   description?: string | null;
@@ -45,6 +46,9 @@ const coerceStats = (stats: RawUnitTypeRow['unit_type_stats']): RawUnitStats => 
   return stats;
 };
 
+const gddUnits = GDD_UNIT_IDS.map((id) => buildGddUnit(id) as UnitCatalogEntry);
+const gddById = new Map(gddUnits.map((unit) => [unit.id, unit]));
+
 const mapRowToUnit = (row: RawUnitTypeRow): UnitCatalogEntry => {
   const stats = coerceStats(row.unit_type_stats);
   const iconKey = row.id.toLowerCase();
@@ -70,7 +74,7 @@ const mapRowToUnit = (row: RawUnitTypeRow): UnitCatalogEntry => {
 };
 
 export const useUnitCatalog = () => {
-  const [units, setUnits] = useState<UnitCatalogEntry[]>([]);
+  const [units, setUnits] = useState<UnitCatalogEntry[]>(gddUnits);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,13 +109,21 @@ export const useUnitCatalog = () => {
 
       if (fetchError) {
         setError(fetchError.message);
-        setUnits([]);
+        setUnits(gddUnits);
         setLoading(false);
         return;
       }
 
-      const mapped = (data ?? []).map(mapRowToUnit);
-      setUnits(mapped);
+      const mapped = (data ?? []).map((row) => {
+        const dbUnit = mapRowToUnit(row);
+        const base = gddById.get(dbUnit.id) ?? null;
+        // Preserve GDD stats as the single source of truth; prefer DB description when present.
+        return base
+          ? { ...base, description: dbUnit.description ?? base.description }
+          : dbUnit;
+      });
+
+      setUnits(mapped.length ? mapped : gddUnits);
       setError(null);
       setLoading(false);
     };

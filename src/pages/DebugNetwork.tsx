@@ -9,8 +9,8 @@ const DEMO_POSITIONS = [
   { id: 'knight', suffix: '1', position: { row: 11, col: 2 } },
   { id: 'knight', suffix: '2', position: { row: 11, col: 4 } },
   { id: 'archer', suffix: '1', position: { row: 10, col: 3 } },
-  { id: 'horseman', suffix: '1', position: { row: 10, col: 5 } },
-  { id: 'dragon', suffix: '1', position: { row: 9, col: 3 } },
+  { id: 'beast', suffix: '1', position: { row: 10, col: 5 } },
+  { id: 'mage', suffix: '1', position: { row: 9, col: 3 } },
 ];
 
 const buildDemoArmy = (): ArmyConfig => {

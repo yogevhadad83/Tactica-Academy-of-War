@@ -27,6 +27,7 @@ const cloneUnit = (unit: PlacedUnit, team: Team): PlacedUnit => ({
   team,
   position: { ...unit.position },
   currentHp: unit.currentHp ?? unit.hp,
+  currentShield: unit.currentShield ?? unit.shield ?? 0,
 });
 
 const mirrorPositionVertically = (pos: Position): Position => ({

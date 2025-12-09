@@ -22,7 +22,8 @@ const otherTeam = (team) => (team === 'player' ? 'enemy' : 'player');
 const cloneUnits = (units) => units.map((unit) => ({
     ...unit,
     position: { ...unit.position },
-    currentHp: unit.currentHp ?? unit.hp
+    currentHp: unit.currentHp ?? unit.hp,
+    currentShield: unit.currentShield ?? unit.shield ?? 0
 }));
 const isAlive = (unit) => (unit.currentHp ?? unit.hp) > 0;
 const manhattan = (a, b) => Math.abs(a.row - b.row) + Math.abs(a.col - b.col);
@@ -32,6 +33,47 @@ const targetRowForTeam = (team) => (team === 'player' ? 0 : exports.BOARD_SIZE -
 const ARCHER_ID = 'archer';
 const ARCHER_FORWARD_RANGE = 5; // keep constant for now; future player configs can override
 const ARCHER_FORWARD_COLUMN_OFFSETS = [-1, 0, 1];
+
+const resolveAttack = ({ damage, targetHp, targetShield, targetDefense }) => {
+    const hasShield = targetShield > 0;
+    if (hasShield) {
+        const newShield = Math.max(targetShield - damage, 0);
+        const overflow = Math.max(damage - targetShield, 0);
+        const damageToHp = Math.max(overflow - targetDefense, 0);
+        const newHp = Math.max(targetHp - damageToHp, 0);
+        return {
+            newHp,
+            newShield,
+            damageToShield: Math.min(damage, targetShield),
+            damageToHp,
+            overflow
+        };
+    }
+    const raw = damage - targetDefense;
+    const effective = Math.max(raw, 1);
+    const newHp = Math.max(targetHp - effective, 0);
+    return {
+        newHp,
+        newShield: 0,
+        damageToShield: 0,
+        damageToHp: effective,
+        overflow: 0
+    };
+};
+
+const applyAttackToUnit = (attacker, target) => {
+    const currentHp = target.currentHp ?? target.hp;
+    const currentShield = target.currentShield ?? target.shield ?? 0;
+    const result = resolveAttack({
+        damage: attacker.damage,
+        targetHp: currentHp,
+        targetShield: currentShield,
+        targetDefense: target.defense
+    });
+    target.currentHp = result.newHp;
+    target.currentShield = result.newShield;
+    return result;
+};
 const findClosestTarget = (actor, candidates) => candidates
     .filter((unit) => unit.team !== actor.team && isAlive(unit))
     .sort((a, b) => manhattan(actor.position, a.position) - manhattan(actor.position, b.position))[0];
@@ -166,30 +208,16 @@ const collectTeamActions = (team, snapshot) => {
 };
 /** Apply all collected actions simultaneously */
 const applyActions = (actions, snapshot, recordMove, recordHit) => {
-    // Apply all attacks simultaneously (damage is calculated based on pre-action state)
-    const damageMap = new Map();
-    for (const action of actions) {
-        if (action.type === 'attack' && action.targetUnit) {
-            const targetId = action.targetUnit.instanceId;
-            const currentDamage = damageMap.get(targetId) ?? 0;
-            damageMap.set(targetId, currentDamage + action.actor.damage);
-        }
-    }
-    // Apply accumulated damage
-    for (const [targetId, totalDamage] of damageMap) {
-        const target = snapshot.find((unit) => unit.instanceId === targetId);
-        if (target) {
-            target.currentHp = Math.max(0, (target.currentHp ?? target.hp) - totalDamage);
-        }
-    }
-    // Record hit events
+    // Apply attacks using deterministic resolution rules
     for (const action of actions) {
         if (action.type === 'attack' && action.targetUnit && action.attackType) {
             const target = snapshot.find((unit) => unit.instanceId === action.targetUnit.instanceId);
-            if (target) {
-                const didKill = !isAlive(target);
-                recordHit(action.actor, target, action.attackType, didKill);
+            if (!target || !isAlive(target)) {
+                continue;
             }
+            applyAttackToUnit(action.actor, target);
+            const didKill = !isAlive(target);
+            recordHit(action.actor, target, action.attackType, didKill);
         }
     }
     // Apply all moves simultaneously

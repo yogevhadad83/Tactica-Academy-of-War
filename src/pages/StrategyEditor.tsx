@@ -9,7 +9,7 @@ const conditionOptions = [
   'Enemy in range',
   'Ally injured nearby',
   'Path blocked',
-  'Enemy type: Dragon'
+  'Enemy type: Giant'
 ];
 
 const actionOptions = [
@@ -55,7 +55,7 @@ const StrategyEditor = () => {
     <div className="strategy-editor-container">
       <div className="strategy-editor-header">
         <h1>📋 Strategy Editor</h1>
-        <p className="header-subtitle">
+          <p className="header-subtitle">
           Define behavior rules for your units (Coming Soon)
         </p>
       </div>
@@ -66,11 +66,11 @@ const StrategyEditor = () => {
           <h2>Under Construction</h2>
           <p>
             The editor will let you chain IF conditions with THEN actions to choreograph how
-            Knights, Archers, Horsemen, Beasts, and Dragons react each tick.
+            Recruits, Knights, Archers, Beasts, Mages, Zombies, and Giants react each tick.
           </p>
 
           <div className="unit-showcase">
-            {['Knight', 'Archer', 'Horseman', 'Beast', 'Dragon'].map((label) => (
+            {['Recruit', 'Knight', 'Archer', 'Beast', 'Mage', 'Zombie', 'Giant'].map((label) => (
               <span key={label} className="unit-chip">{label}</span>
             ))}
           </div>
@@ -145,17 +145,17 @@ const StrategyEditor = () => {
                 <span className="rule-tag">Focus</span>
               </div>
               <div className="rule-description">
-                IF enemy type: Dragon THEN attack priority target before moving.
+                IF enemy type: Giant THEN attack priority target before moving.
               </div>
             </div>
 
             <div className="rule-card">
               <div className="rule-header">
-                <span className="rule-name">Dragon Sweep</span>
-                <span className="rule-tag">Aerial</span>
+                <span className="rule-name">Giant Sweep</span>
+                <span className="rule-tag">Arc</span>
               </div>
               <div className="rule-description">
-                IF path blocked THEN move sideways, breathe flame, and retreat 2 tiles.
+                IF path blocked THEN shift toward the chosen arc and strike forward.
               </div>
             </div>
           </div>

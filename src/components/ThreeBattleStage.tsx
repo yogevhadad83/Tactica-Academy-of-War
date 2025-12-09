@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { CELL_SIZE } from '../constants/board';
@@ -75,6 +75,11 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
     new THREE.Vector3(0, BASE_CAMERA_HEIGHT * 0.9, ORBIT_RADIUS * 0.8)
   );
   const idleCameraLerpRef = useRef(new THREE.Vector3());
+  const debugMode = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('mode') === 'debug';
+  }, []);
+
   const {
     modelRevision,
     ensureAssetsForUnits,
@@ -89,7 +94,7 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
     updateProjectiles,
     clearProjectiles,
     disposeAll
-  } = useUnitLayer(unitRootRef, unitRootRef);
+  } = useUnitLayer(unitRootRef, unitRootRef, { showHpDetails: debugMode });
 
   const beginCameraApproach = () => {
     if (typeof window === 'undefined') return;

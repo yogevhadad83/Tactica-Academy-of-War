@@ -71,7 +71,6 @@ const playerColor = new THREE.Color(0x5ea3ff);
 const enemyColor = new THREE.Color(0xf87171);
 const HP_CANVAS_WIDTH = 340;
 const HP_CANVAS_HEIGHT = 64;
-const HP_BAR_MARGIN = 44;
 const HP_BAR_HEIGHT = 20;
 const HP_PLANE_WIDTH = 1.6;
 const HP_PLANE_HEIGHT = 0.22;
@@ -363,11 +362,10 @@ const updateHpCanvas = (
   ctx.stroke();
 
   // Inner track (inset area for HP bar)
-  // When showing details, leave room for heart icon on left and HP number on right
-  const trackX = showHpDetails ? Math.round(HP_BAR_MARGIN * dpr) : Math.round(20 * dpr);
-  const trackWidth = showHpDetails 
-    ? Math.round(canvas.width - HP_BAR_MARGIN * dpr - 58 * dpr) // leave room for HP number
-    : Math.round(canvas.width - 40 * dpr); // use more width when no details
+  // When showing details, leave room on the right for the numeric HP label (no icon)
+  const numberArea = showHpDetails ? Math.round(56 * dpr) : 0;
+  const trackX = Math.round(20 * dpr);
+  const trackWidth = Math.max(0, Math.round(canvas.width - trackX * 2 - numberArea));
   const trackY = Math.round((canvas.height - HP_BAR_HEIGHT * dpr) / 2);
   const cornerRadius = Math.round((HP_BAR_HEIGHT * dpr) / 2);
 
@@ -398,39 +396,20 @@ const updateHpCanvas = (
     ctx.fill();
   }
 
-  // Heart icon and HP number (only shown when showHpDetails is true)
+  // HP number shown next to the bar when showHpDetails is true (no heart icon)
   if (showHpDetails) {
-    // Heart icon (crisp vector, not skewed)
-    const heartSize = Math.round(12 * dpr);
-    const heartX = containerX + Math.round(14 * dpr);
-    const heartY = Math.round(canvas.height / 2);
-    ctx.save();
-    ctx.translate(heartX, heartY);
-    ctx.fillStyle = '#ff2d55'; // more vibrant heart color
-    ctx.beginPath();
-    // draw heart relative to translation origin (0,0)
-    ctx.moveTo(0, -heartSize * 0.3);
-    ctx.bezierCurveTo(0, -heartSize * 0.7, -heartSize * 0.6, -heartSize * 0.7, -heartSize * 0.6, -heartSize * 0.3);
-    ctx.bezierCurveTo(-heartSize * 0.6, heartSize * 0.1, 0, heartSize * 0.5, 0, heartSize * 0.7);
-    ctx.bezierCurveTo(0, heartSize * 0.5, heartSize * 0.6, heartSize * 0.1, heartSize * 0.6, -heartSize * 0.3);
-    ctx.bezierCurveTo(heartSize * 0.6, -heartSize * 0.7, 0, -heartSize * 0.7, 0, -heartSize * 0.3);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-
-    // HP number (small, crisp, subtle stroke to avoid blurriness)
-    const fontSize = Math.round(11 * dpr);
-    ctx.font = `600 ${fontSize}px system-ui, -apple-system, sans-serif`;
-    ctx.textAlign = 'right';
+    const fontSize = Math.round(18 * dpr);
+    ctx.font = `700 ${fontSize}px system-ui, -apple-system, sans-serif`;
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const numberX = canvas.width - containerX - Math.round(8 * dpr);
+    const numberX = canvas.width - Math.round(numberArea) + Math.round(8 * dpr);
     const numberY = Math.round(canvas.height / 2);
     ctx.fillStyle = 'rgba(255,255,255,0.96)';
     // subtle thin stroke for contrast
-    ctx.lineWidth = Math.max(0.6, 0.6 * dpr);
+    ctx.lineWidth = Math.max(0.9, 0.9 * dpr);
     ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.strokeText(String(Math.round(hpValue)), numberX, numberY + 0.5);
-    ctx.fillText(String(Math.round(hpValue)), numberX, numberY + 0.5);
+    ctx.strokeText(String(Math.round(hpValue)), numberX, numberY + 0.75);
+    ctx.fillText(String(Math.round(hpValue)), numberX, numberY + 0.75);
   }
 
   texture.needsUpdate = true;

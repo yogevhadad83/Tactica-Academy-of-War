@@ -1,27 +1,17 @@
 import type { PlacedUnit, Position, Unit } from '../types';
+import { applyAttackToUnit } from './attackResolution';
+import {
+  BOARD_SIZE,
+  BOARD_COLS,
+  PLAYER_ROWS,
+  PLAYER_ZONE_START,
+  DEFAULT_ENEMY_FORMATION
+} from './battleEngine';
 
-/**
- * BOARD CONFIGURATION
- * These constants should match battleEngine.ts (the single source of truth).
- * They define a 12x8 board with 6-row deployment zones for each player.
- */
-export const BOARD_SIZE = 12;
-export const BOARD_COLS = 8;
-export const PLAYER_ROWS = 6;
-export const PLAYER_ZONE_START = BOARD_SIZE - PLAYER_ROWS;
+// Re-export board constants so training demos mirror the core engine values
+export { BOARD_SIZE, BOARD_COLS, PLAYER_ROWS, PLAYER_ZONE_START } from './battleEngine';
 
-export const ENEMY_FORMATION: Position[] = [
-  { row: 0, col: 2 },
-  { row: 0, col: 4 },
-  { row: 0, col: 6 },
-  { row: 0, col: 8 },
-  { row: 1, col: 3 },
-  { row: 1, col: 5 },
-  { row: 1, col: 7 },
-  { row: 2, col: 2 },
-  { row: 2, col: 6 },
-  { row: 2, col: 9 }
-];
+export const ENEMY_FORMATION: Position[] = DEFAULT_ENEMY_FORMATION;
 
 export type Team = 'player' | 'enemy';
 
@@ -50,7 +40,8 @@ const cloneUnits = (units: PlacedUnit[]): PlacedUnit[] =>
   units.map((unit) => ({
     ...unit,
     position: { ...unit.position },
-    currentHp: unit.currentHp ?? unit.hp
+    currentHp: unit.currentHp ?? unit.hp,
+    currentShield: unit.currentShield ?? unit.shield ?? 0
   }));
 
 const isAlive = (unit: PlacedUnit) => (unit.currentHp ?? unit.hp) > 0;
@@ -151,22 +142,15 @@ const applyActions = (
   recordMove: (key: string) => void,
   recordHit: (key: string) => void
 ): void => {
-  // Apply all attacks simultaneously (damage is calculated based on pre-action state)
-  const damageMap = new Map<string, number>();
-  
+  // Apply attacks using deterministic resolution rules
   for (const action of actions) {
     if (action.type === 'attack' && action.targetUnit) {
-      const targetId = action.targetUnit.instanceId;
-      const currentDamage = damageMap.get(targetId) ?? 0;
-      damageMap.set(targetId, currentDamage + action.actor.damage);
-    }
-  }
+      const target = snapshot.find((unit) => unit.instanceId === action.targetUnit.instanceId);
+      if (!target || (target.currentHp ?? target.hp) <= 0) {
+        continue;
+      }
 
-  // Apply accumulated damage and record hits
-  for (const [targetId, totalDamage] of damageMap) {
-    const target = snapshot.find((unit) => unit.instanceId === targetId);
-    if (target) {
-      target.currentHp = Math.max(0, (target.currentHp ?? target.hp) - totalDamage);
+      applyAttackToUnit(action.actor, target);
       recordHit(`${target.position.row}-${target.position.col}`);
     }
   }

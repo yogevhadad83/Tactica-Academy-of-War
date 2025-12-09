@@ -56,7 +56,7 @@ const createDefaultProfile = (id: string, username: string): PlayerProfile => {
   return {
     id,
     username,
-    army: [cloneUnit('knight'), cloneUnit('archer'), cloneUnit('horseman')],
+    army: [cloneUnit('knight'), cloneUnit('archer'), cloneUnit('beast')],
     strategies: strategyBook,
     boardPlacements: {}
   };

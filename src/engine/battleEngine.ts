@@ -1,5 +1,6 @@
 import type { PlacedUnit, Position, Unit } from '../types';
 import type { HitEvent } from '../types/battle';
+import { applyAttackToUnit } from './attackResolution';
 
 export type { PlacedUnit } from '../types';
 
@@ -63,7 +64,8 @@ const cloneUnits = (units: PlacedUnit[]): PlacedUnit[] =>
   units.map((unit) => ({
     ...unit,
     position: { ...unit.position },
-    currentHp: unit.currentHp ?? unit.hp
+    currentHp: unit.currentHp ?? unit.hp,
+    currentShield: unit.currentShield ?? unit.shield ?? 0
   }));
 
 const isAlive = (unit: PlacedUnit) => (unit.currentHp ?? unit.hp) > 0;
@@ -261,33 +263,17 @@ const applyActions = (
   recordMove: (key: string) => void,
   recordHit: (attacker: PlacedUnit, target: PlacedUnit, attackType: 'melee' | 'ranged', didKill: boolean) => void
 ): void => {
-  // Apply all attacks simultaneously (damage is calculated based on pre-action state)
-  const damageMap = new Map<string, number>();
-  
-  for (const action of actions) {
-    if (action.type === 'attack' && action.targetUnit) {
-      const targetId = action.targetUnit.instanceId;
-      const currentDamage = damageMap.get(targetId) ?? 0;
-      damageMap.set(targetId, currentDamage + action.actor.damage);
-    }
-  }
-
-  // Apply accumulated damage
-  for (const [targetId, totalDamage] of damageMap) {
-    const target = snapshot.find((unit) => unit.instanceId === targetId);
-    if (target) {
-      target.currentHp = Math.max(0, (target.currentHp ?? target.hp) - totalDamage);
-    }
-  }
-
-  // Record hit events
+  // Apply attacks one by one using deterministic resolution rules
   for (const action of actions) {
     if (action.type === 'attack' && action.targetUnit && action.attackType) {
-      const target = snapshot.find((unit) => unit.instanceId === action.targetUnit!.instanceId);
-      if (target) {
-        const didKill = !isAlive(target);
-        recordHit(action.actor, target, action.attackType, didKill);
+      const target = snapshot.find((unit) => unit.instanceId === action.targetUnit.instanceId);
+      if (!target || !isAlive(target)) {
+        continue;
       }
+
+      applyAttackToUnit(action.actor, target);
+      const didKill = !isAlive(target);
+      recordHit(action.actor, target, action.attackType, didKill);
     }
   }
 
