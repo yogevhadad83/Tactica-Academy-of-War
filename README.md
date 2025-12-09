@@ -15,19 +15,20 @@ npm run dev
 
 ### Using a Local Server (Optional)
 
-If you need to test with a local backend server:
+If you need to test with a local backend server (located in the `./server` directory):
 
-1. Create a `.env` file in the root directory:
+1. Create a `.env` file in the project root directory:
    ```bash
    VITE_USE_LOCAL_SERVER=true
    ```
 
-2. Start the local server (in a separate terminal):
+2. Start the local server in a separate terminal:
    ```bash
    cd server
    npm install
    npm run dev
    ```
+   The server will start on `http://localhost:4000`.
 
 3. Start the UI:
    ```bash
@@ -36,6 +37,7 @@ If you need to test with a local backend server:
 
 ### Environment Variables
 
+- `VITE_PRODUCTION_API_URL=<url>` - Override the default production server URL
 - `VITE_USE_LOCAL_SERVER=true` - Connect to `http://localhost:4000` instead of production
 - `VITE_API_URL=<url>` - Override with a custom API URL (takes precedence over all other settings)
 

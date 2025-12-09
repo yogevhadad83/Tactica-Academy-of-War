@@ -1,5 +1,6 @@
-// Production server URL - update this with your deployed backend URL
-const PRODUCTION_API_URL = 'https://tactica-server.onrender.com';
+// Production server URL - can be overridden via VITE_PRODUCTION_API_URL environment variable
+const DEFAULT_PRODUCTION_URL = 'https://tactica-server.onrender.com';
+const PRODUCTION_API_URL = (import.meta.env.VITE_PRODUCTION_API_URL as string | undefined) || DEFAULT_PRODUCTION_URL;
 const LOCAL_API_URL = 'http://localhost:4000';
 
 // Detect GitHub Codespaces environment and construct the API URL for port 4000
