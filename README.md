@@ -1,5 +1,50 @@
 # Tactica: Academy of War
 
+A browser-based PvP strategy game where players assemble an army, set behavior rules (no coding required), and send their forces into automatic battles on a 12×12 board.
+
+## Development Setup
+
+### Running the UI
+
+The UI connects to a remote production server by default, so you don't need to run the server locally for frontend development.
+
+```bash
+npm install
+npm run dev
+```
+
+### Using a Local Server (Optional)
+
+If you need to test with a local backend server (located in the `./server` directory):
+
+1. Create a `.env` file in the project root directory:
+   ```bash
+   VITE_USE_LOCAL_SERVER=true
+   ```
+
+2. Start the local server in a separate terminal:
+   ```bash
+   cd server
+   npm install
+   npm run dev
+   ```
+   The server will start on `http://localhost:4000`.
+
+3. Start the UI:
+   ```bash
+   npm run dev
+   ```
+
+### Environment Variables
+
+- `VITE_PRODUCTION_API_URL=<url>` - Override the default production server URL
+- `VITE_USE_LOCAL_SERVER=true` - Connect to `http://localhost:4000` instead of production
+- `VITE_API_URL=<url>` - Override with a custom API URL (takes precedence over all other settings)
+
+See `.env.example` for more details.
+
+## Vite + React
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:
