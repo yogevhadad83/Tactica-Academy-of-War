@@ -266,7 +266,8 @@ const applyActions = (
   // Apply attacks one by one using deterministic resolution rules
   for (const action of actions) {
     if (action.type === 'attack' && action.targetUnit && action.attackType) {
-      const target = snapshot.find((unit) => unit.instanceId === action.targetUnit.instanceId);
+      const targetUnit = action.targetUnit; // Type narrowing for TypeScript
+      const target = snapshot.find((unit) => unit.instanceId === targetUnit.instanceId);
       if (!target || !isAlive(target)) {
         continue;
       }

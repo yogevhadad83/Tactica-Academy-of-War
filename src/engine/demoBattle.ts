@@ -2,9 +2,6 @@ import type { PlacedUnit, Position, Unit } from '../types';
 import { applyAttackToUnit } from './attackResolution';
 import {
   BOARD_SIZE,
-  BOARD_COLS,
-  PLAYER_ROWS,
-  PLAYER_ZONE_START,
   DEFAULT_ENEMY_FORMATION
 } from './battleEngine';
 
@@ -145,7 +142,8 @@ const applyActions = (
   // Apply attacks using deterministic resolution rules
   for (const action of actions) {
     if (action.type === 'attack' && action.targetUnit) {
-      const target = snapshot.find((unit) => unit.instanceId === action.targetUnit.instanceId);
+      const targetUnit = action.targetUnit; // Type narrowing for TypeScript
+      const target = snapshot.find((unit) => unit.instanceId === targetUnit.instanceId);
       if (!target || (target.currentHp ?? target.hp) <= 0) {
         continue;
       }
