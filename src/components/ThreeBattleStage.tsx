@@ -35,6 +35,7 @@ const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2
 
 interface ThreeBattleStageProps {
   boardSize: number;
+  boardCols?: number;
   units: PlacedUnit[];
   hitCells: string[];
   hitEvents: HitEvent[];
@@ -43,7 +44,7 @@ interface ThreeBattleStageProps {
   demoState: DemoState;
 }
 
-const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, marchCells, demoState }: ThreeBattleStageProps) => {
+const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, moveCells, marchCells, demoState }: ThreeBattleStageProps) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -114,7 +115,11 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
   const groundPlaneRef = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
 
   useEffect(() => {
-    const boardExtent = boardSize * CELL_SIZE;
+    const rows = boardSize;
+    const cols = boardCols ?? boardSize;
+    const extentX = cols * CELL_SIZE;
+    const extentZ = rows * CELL_SIZE;
+    const boardExtent = Math.max(extentX, extentZ);
     const lockedDistance = Math.max(LOCKED_MIN_DISTANCE, boardExtent * LOCKED_DISTANCE_FACTOR);
     const lockedHeight = Math.max(LOCKED_MIN_HEIGHT, boardExtent * LOCKED_HEIGHT_FACTOR);
     lockedCameraBasePositionRef.current.set(LOCKED_CAMERA_X_OFFSET, lockedHeight, lockedDistance);
@@ -125,7 +130,7 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     // Set zoom position for dramatic close-up from the side, looking slightly down at units
     const zoomDistance = Math.max(3, lockedDistance * 0.15);
     const zoomHeight = Math.max(2.5, lockedHeight * 0.18);
-    const zoomSideOffset = boardExtent * 0.4; // Offset to the side for dramatic angle
+    const zoomSideOffset = extentX * 0.4; // Offset to the side for dramatic angle
     zoomCameraPositionRef.current.set(zoomSideOffset, zoomHeight, zoomDistance);
     const planningDistance = Math.max(14, lockedDistance * PLANNING_CAMERA_DISTANCE_FACTOR);
     const planningHeight = Math.max(12, lockedHeight * PLANNING_CAMERA_HEIGHT_FACTOR);
@@ -133,9 +138,9 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     cameraApproachRef.current = { active: false, start: 0, progress: 0 };
     const baseLookHeight = Math.max(LOCKED_LOOK_MIN, boardExtent * LOCKED_LOOK_HEIGHT_FACTOR);
     const lookHeight = baseLookHeight + LOCKED_LOOK_DOWN_OFFSET;
-    const targetZ = boardExtent * LOCKED_TARGET_Z_FACTOR + LOCKED_TARGET_Z_OFFSET;
+    const targetZ = extentZ * LOCKED_TARGET_Z_FACTOR + LOCKED_TARGET_Z_OFFSET;
     lockedCameraTargetRef.current.set(0, lookHeight, targetZ);
-  }, [boardSize]);
+  }, [boardSize, boardCols]);
 
   useEffect(() => {
     ensureAssetsForUnits(units);
@@ -153,7 +158,11 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
 
     const camera = new THREE.PerspectiveCamera(56, mount.clientWidth / mount.clientHeight, 0.2, 1200);
     // Start the camera extremely far and high so the board feels tiny, then let it fall into place
-    const boardExtent = boardSize * CELL_SIZE;
+    const rows = boardSize;
+    const cols = boardCols ?? boardSize;
+    const extentX = cols * CELL_SIZE;
+    const extentZ = rows * CELL_SIZE;
+    const boardExtent = Math.max(extentX, extentZ);
     const distantHeight = Math.max(BASE_CAMERA_HEIGHT * 4.5, boardExtent * 4.2);
     const distantDistance = Math.max(ORBIT_RADIUS * 4.8, boardExtent * 4.5);
     camera.position.set(-distantDistance, distantHeight, distantDistance * 1.15);
@@ -187,7 +196,7 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     keyLight.shadow.mapSize.height = 2048;
     keyLight.shadow.camera.near = 10;
     keyLight.shadow.camera.far = 140;
-    const shadowRange = boardSize * CELL_SIZE * 1.2;
+    const shadowRange = Math.max(extentX, extentZ) * 1.2;
     keyLight.shadow.camera.left = -shadowRange;
     keyLight.shadow.camera.right = shadowRange;
     keyLight.shadow.camera.top = shadowRange;
@@ -198,7 +207,7 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
     fillLight.position.set(28, 18, -26);
     scene.add(fillLight);
 
-    const tacticalBoard = createTacticalBoard({ boardSize, cellSize: CELL_SIZE });
+    const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE });
     tacticalBoardRef.current = tacticalBoard;
     scene.add(tacticalBoard.group);
 
@@ -353,11 +362,12 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
       pmremRef.current = null;
       mount.removeChild(renderer.domElement);
     };
-  }, [boardSize, disposeAll]);
+  }, [boardSize, boardCols, disposeAll]);
 
   useEffect(() => {
-    syncUnits(units, boardSize);
-  }, [syncUnits, units, boardSize, modelRevision]);
+    const cols = boardCols ?? boardSize;
+    syncUnits(units, boardSize, cols);
+  }, [syncUnits, units, boardSize, boardCols, modelRevision]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -386,8 +396,8 @@ const ThreeBattleStage = ({ boardSize, units, hitCells, hitEvents, moveCells, ma
       applyEffect(marchCells, 'march');
     }
 
-    applyBattleState({ hitCells, hitEvents, moveCells, marchCells, units, demoState, boardSize });
-  }, [applyBattleState, boardSize, demoState, hitCells, hitEvents, marchCells, moveCells, units]);
+    applyBattleState({ hitCells, hitEvents, moveCells, marchCells, units, demoState, boardSize, boardCols });
+  }, [applyBattleState, boardSize, boardCols, demoState, hitCells, hitEvents, marchCells, moveCells, units]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

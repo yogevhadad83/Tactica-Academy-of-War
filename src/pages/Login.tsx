@@ -1,25 +1,30 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useUser } from '../context/UserContext';
+import { useAuth } from '../context/AuthContext';
 import './Auth.css';
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useUser();
-  const [username, setUsername] = useState('');
+  const { signIn } = useAuth();
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const result = login(username.trim(), password);
-    if (!result.success && result.message) {
-      setError(result.message);
-      return;
-    }
+    setSubmitting(true);
     setError('');
-    navigate('/');
+    try {
+      await signIn(email.trim(), password);
+      navigate('/dashboard');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to login';
+      setError(message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -28,12 +33,13 @@ const Login = () => {
         <h1>Welcome back</h1>
         <p>Log into Tactica to manage your armies and strategies.</p>
         <form className="auth-form" onSubmit={handleSubmit}>
-          <label htmlFor="username">Username</label>
+          <label htmlFor="email">Email</label>
           <input
-            id="username"
-            name="username"
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
+            type="email"
+            id="email"
+            name="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
             required
           />
 
@@ -49,10 +55,12 @@ const Login = () => {
 
           {error && <div className="auth-error">{error}</div>}
 
-          <button type="submit">Login</button>
+          <button type="submit" disabled={submitting}>
+            {submitting ? 'Logging in…' : 'Login'}
+          </button>
         </form>
         <div className="auth-helper">
-          Need an account? <Link to="/register">Register here</Link>
+          Need an account? <Link to="/signup">Register here</Link>
         </div>
       </div>
     </div>

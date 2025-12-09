@@ -177,12 +177,17 @@ wss.on('connection', (socket: WebSocket) => {
           const usedPositions = new Set<string>();
           const fakeEnemyArmy: ArmyConfig = [];
 
+          // Board is 12 rows x 8 cols, with player zones being rows 6-11 (6 rows)
+          const BOARD_COLS = 8;
+          const PLAYER_ROWS = 6;
+          const PLAYER_ZONE_START = 12 - PLAYER_ROWS; // = 6
+
           for (let i = 0; i < numKnights; i++) {
             let row: number, col: number, posKey: string;
             // Find an unoccupied position in "player zone" (rows 6-11) from fake Player B's perspective
             do {
-              row = Math.floor(Math.random() * 6) + 6; // rows 6-11
-              col = Math.floor(Math.random() * 12); // cols 0-11
+              row = Math.floor(Math.random() * PLAYER_ROWS) + PLAYER_ZONE_START; // rows 6-11
+              col = Math.floor(Math.random() * BOARD_COLS); // cols 0-7 (8 columns total)
               posKey = `${row}-${col}`;
             } while (usedPositions.has(posKey));
             usedPositions.add(posKey);

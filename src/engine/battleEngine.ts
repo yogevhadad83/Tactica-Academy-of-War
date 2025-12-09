@@ -3,7 +3,25 @@ import type { HitEvent } from '../types/battle';
 
 export type { PlacedUnit } from '../types';
 
+/**
+ * BOARD CONFIGURATION - Single Source of Truth
+ * 
+ * These constants define the battle board dimensions:
+ * - BOARD_SIZE: Total rows (12) - full vertical height of the board
+ * - BOARD_COLS: Total columns (8) - full horizontal width of the board
+ * - PLAYER_ROWS: Rows available for each player's deployment zone (6)
+ * - PLAYER_ZONE_START: Starting row for player's deployment zone (6)
+ * 
+ * The board is 12 rows x 8 columns:
+ * - Rows 0-5: Enemy deployment zone (from player perspective)
+ * - Rows 6-11: Player deployment zone
+ * 
+ * These values are exported to:
+ * - battleEngine.cjs (for server-side battle resolution)
+ * - All client components that need board dimensions
+ */
 export const BOARD_SIZE = 12;
+export const BOARD_COLS = 8;
 export const PLAYER_ROWS = 6;
 export const PLAYER_ZONE_START = BOARD_SIZE - PLAYER_ROWS;
 
@@ -11,13 +29,10 @@ export const DEFAULT_ENEMY_FORMATION: Position[] = [
   { row: 0, col: 2 },
   { row: 0, col: 4 },
   { row: 0, col: 6 },
-  { row: 0, col: 8 },
   { row: 1, col: 3 },
   { row: 1, col: 5 },
-  { row: 1, col: 7 },
   { row: 2, col: 2 },
-  { row: 2, col: 6 },
-  { row: 2, col: 9 }
+  { row: 2, col: 6 }
 ];
 
 export type Team = 'player' | 'enemy';
@@ -74,7 +89,7 @@ const findClosestTarget = (actor: PlacedUnit, candidates: PlacedUnit[]) =>
 const findArcherForwardTarget = (actor: PlacedUnit, snapshot: PlacedUnit[]): PlacedUnit | undefined => {
   const direction = directionForTeam(actor.team);
   const validCols = ARCHER_FORWARD_COLUMN_OFFSETS.map((offset) => actor.position.col + offset).filter(
-    (col) => col >= 0 && col < BOARD_SIZE
+    (col) => col >= 0 && col < BOARD_COLS
   );
   const candidates: PlacedUnit[] = [];
   for (let step = 1; step <= ARCHER_FORWARD_RANGE; step += 1) {

@@ -1,20 +1,23 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent } from 'react';
-import { BOARD_SIZE, PLAYER_ZONE_START } from '../engine/battleEngine';
+import { BOARD_SIZE, BOARD_COLS, PLAYER_ZONE_START, PLAYER_ROWS } from '../engine/battleEngine';
 import type { Team, BattleTickResult } from '../engine/battleEngine';
-import type { BoardPlacements, PlacedUnit, Position } from '../types';
+import type { ArmyUnitInstance, BoardPlacements, PlacedUnit, Position } from '../types';
 import { useUser } from '../context/UserContext';
 import { useMultiplayer } from '../context/MultiplayerContext';
 import { placementToArmyConfig } from '../utils/placementToArmyConfig';
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
 import { calculateTickDuration } from '../components/units/useUnitLayer';
 import type { DemoState, HitEvent } from '../types/battle';
+import { useUnitCatalog } from '../hooks/useUnitCatalog';
+import { usePlayerArmy } from '../hooks/usePlayerArmy';
 import './BoardView.css';
 
 // Dynamic tick duration is now calculated per-tick based on animations that will play.
 // These constants provide fallbacks and minimum values.
 const DEFAULT_TICK_MS = 2000;  // Fallback when no animations are playing
 const MIN_TICK_MS = 800;       // Minimum tick duration for visual clarity
+const MAX_SUPPLY = 20;
 
 type OutcomeState = 'win' | 'lose' | 'draw' | 'pending';
 
@@ -59,10 +62,13 @@ const BoardView = () => {
     startDemoBattle,
     currentRole,
   } = useMultiplayer();
+  const { units: catalogUnits } = useUnitCatalog();
+  const { units: armyUnits, loading: armyLoading } = usePlayerArmy();
   const currentUserId = currentUser?.id ?? null;
   const currentUsername = currentUser?.username ?? null;
   const isServerConnected = multiplayerStatus === 'connected';
   const [placements, setPlacements] = useState<BoardPlacements>(currentUser?.boardPlacements ?? {});
+  const [supplyError, setSupplyError] = useState<string | null>(null);
   const [selectedCell, setSelectedCell] = useState<Position | null>(null);
   const [battleState, setBattleState] = useState<DemoState>('idle');
   const [simulationUnits, setSimulationUnits] = useState<PlacedUnit[]>([]);
@@ -88,9 +94,40 @@ const BoardView = () => {
   const [battleTimeline, setBattleTimeline] = useState<BattleTickResult[]>([]);
   const [pendingWinner, setPendingWinner] = useState<'player' | 'enemy' | 'draw' | null>(null);
 
+  const catalogById = useMemo(() => new Map(catalogUnits.map((unit) => [unit.id, unit])), [catalogUnits]);
+
+  const armyInstances = useMemo(() => {
+    return armyUnits
+      .map((armyUnit) => {
+        const meta = catalogById.get(armyUnit.unitTypeId);
+        if (!meta) return null;
+        return { ...meta, instanceId: armyUnit.id } as ArmyUnitInstance;
+      })
+      .filter(Boolean) as ArmyUnitInstance[];
+  }, [armyUnits, catalogById]);
+
+  const unitByInstanceId = useMemo(() => {
+    return armyInstances.reduce((acc, unit) => {
+      acc[unit.instanceId] = unit;
+      return acc;
+    }, {} as Record<string, ArmyUnitInstance>);
+  }, [armyInstances]);
+
+  const supplyByUnitType = useMemo(() => {
+    return catalogUnits.reduce((acc, unit) => {
+      acc[unit.id] = unit.supplyCost ?? unit.cost ?? 0;
+      return acc;
+    }, {} as Record<string, number>);
+  }, [catalogUnits]);
+
+  const resolveSupplyCost = useCallback(
+    (unitTypeId: string, instance?: ArmyUnitInstance) =>
+      supplyByUnitType[unitTypeId] ?? instance?.supplyCost ?? instance?.cost ?? 0,
+    [supplyByUnitType]
+  );
+
   const placedUnits: PlacedUnit[] = useMemo(() => {
-    if (!currentUser) return [];
-    return currentUser.army
+    return armyInstances
       .map((unit) => {
         const position = placements[unit.instanceId];
         if (!position) return null;
@@ -102,12 +139,19 @@ const BoardView = () => {
         };
       })
       .filter(Boolean) as PlacedUnit[];
-  }, [currentUser, placements]);
+  }, [armyInstances, placements]);
 
   const queueUnits = useMemo(() => {
-    if (!currentUser) return [];
-    return currentUser.army.filter((unit) => !placements[unit.instanceId]);
-  }, [currentUser, placements]);
+    return armyInstances.filter((unit) => !placements[unit.instanceId]);
+  }, [armyInstances, placements]);
+
+  const totalSupplyUsed = useMemo(
+    () => placedUnits.reduce((sum, unit) => sum + resolveSupplyCost(unit.id, unit), 0),
+    [placedUnits, resolveSupplyCost]
+  );
+
+  const remainingSupply = Math.max(0, MAX_SUPPLY - totalSupplyUsed);
+  const isSupplyCapReached = totalSupplyUsed >= MAX_SUPPLY;
 
   const activeUnits = battleState === 'idle' ? placedUnits : simulationUnits;
 
@@ -144,9 +188,37 @@ const BoardView = () => {
   }, [currentUserId]);
 
   useEffect(() => {
+    if (!armyInstances.length) return;
+    const validIds = new Set(armyInstances.map((unit) => unit.instanceId));
+    setPlacements((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      Object.keys(next).forEach((key) => {
+        if (!validIds.has(key)) {
+          delete next[key];
+          changed = true;
+        }
+      });
+      return changed ? next : prev;
+    });
+  }, [armyInstances]);
+
+  useEffect(() => {
     if (!currentUserId) return;
     updateBoardPlacements(placements);
   }, [placements, currentUserId, updateBoardPlacements]);
+
+  useEffect(() => {
+    if (!supplyError) return;
+    const timeout = window.setTimeout(() => setSupplyError(null), 2400);
+    return () => window.clearTimeout(timeout);
+  }, [supplyError]);
+
+  useEffect(() => {
+    if (totalSupplyUsed < MAX_SUPPLY) {
+      setSupplyError(null);
+    }
+  }, [totalSupplyUsed]);
 
   const syncArmyToServer = useCallback(() => {
     if (!isServerConnected || placedUnits.length === 0) {
@@ -249,6 +321,24 @@ const BoardView = () => {
     const [team, instanceId] = payload.split(':');
     if (team === 'player') {
       if (!currentUser || row < PLAYER_ZONE_START) return;
+      const unitInstance = unitByInstanceId[instanceId];
+      if (!unitInstance) return;
+
+      const unitSupply = resolveSupplyCost(unitInstance.id, unitInstance);
+      const alreadyPlaced = Boolean(placements[instanceId]);
+      const occupyingEntry = Object.entries(placements).find(([, position]) => position.row === row && position.col === col);
+      const occupyingInstanceId = occupyingEntry?.[0];
+      const isSameInstance = occupyingInstanceId === instanceId;
+      const occupyingUnit = !isSameInstance && occupyingInstanceId ? unitByInstanceId[occupyingInstanceId] : undefined;
+      const occupyingSupply = occupyingUnit ? resolveSupplyCost(occupyingUnit.id, occupyingUnit) : 0;
+      const projectedSupply = totalSupplyUsed + (alreadyPlaced ? 0 : unitSupply) - occupyingSupply;
+
+      if (projectedSupply > MAX_SUPPLY) {
+        setSupplyError(`Supply cap reached (${MAX_SUPPLY}). Remove a unit to add another.`);
+        return;
+      }
+
+      setSupplyError(null);
       setPlacements((prev) => {
         const next = { ...prev };
         Object.entries(next).forEach(([key, position]) => {
@@ -596,7 +686,18 @@ const BoardView = () => {
     );
   }
 
-  if (currentUser.army.length === 0) {
+  if (armyLoading) {
+    return (
+      <div className="board-view-container">
+        <div className="board-view-header">
+          <h1>🎮 Battle Board</h1>
+          <p className="header-subtitle">Loading your army…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (armyInstances.length === 0) {
     return (
       <div className="board-view-container">
         <div className="board-view-header">
@@ -712,6 +813,7 @@ const BoardView = () => {
           >
             <ThreeBattleStage
               boardSize={BOARD_SIZE}
+              boardCols={BOARD_COLS}
               units={activeUnits}
               hitCells={hitCells}
               hitEvents={hitEvents}
@@ -743,15 +845,29 @@ const BoardView = () => {
         </div>
       </div>
       {battleState === 'idle' && armyControls}
+      {battleState === 'idle' && (
+        <div className="supply-status" role="status" aria-live="polite">
+          <div className="supply-meter">Supply: {totalSupplyUsed} / {MAX_SUPPLY}</div>
+          <div className={`supply-remaining ${isSupplyCapReached ? 'cap' : ''}`}>
+            {isSupplyCapReached ? 'Cap reached' : `${remainingSupply} remaining`}
+          </div>
+          {supplyError && (
+            <div className="supply-error" role="alert">
+              {supplyError}
+            </div>
+          )}
+        </div>
+      )}
       {multiplayerPanel}
 
       {battleState === 'idle' ? (
         <div className="board-view-content">
           <div className="board-wrapper planning">
             <div className="board-grid">
-              {Array.from({ length: BOARD_SIZE }, (_, row) =>
-                Array.from({ length: BOARD_SIZE }, (_, col) => renderCell(row, col))
-              )}
+              {Array.from({ length: PLAYER_ROWS }, (_, i) => {
+                const row = i + PLAYER_ZONE_START;
+                return Array.from({ length: BOARD_COLS }, (_, col) => renderCell(row, col));
+              })}
             </div>
           </div>
 
@@ -788,6 +904,10 @@ const BoardView = () => {
                         <span>🎯 Range:</span>
                         <span>{selectedUnit.range}</span>
                       </div>
+                      <div className="stat-row">
+                        <span>📦 Supply:</span>
+                        <span>{resolveSupplyCost(selectedUnit.id, selectedUnit)}</span>
+                      </div>
                     </div>
                     {selectedUnit.team === 'player' && (
                       <button
@@ -822,7 +942,7 @@ const BoardView = () => {
                     <span className="token-icon">{unit.icon}</span>
                     <div>
                       <p>{unit.name}</p>
-                      <span>{unit.cost} supply</span>
+                      <span>{resolveSupplyCost(unit.id, unit)} supply</span>
                     </div>
                   </div>
                 ))}
@@ -835,7 +955,7 @@ const BoardView = () => {
           <div className="board-wrapper battle">
             <div className="board-grid battle">
               {Array.from({ length: BOARD_SIZE }, (_, row) =>
-                Array.from({ length: BOARD_SIZE }, (_, col) => renderCell(row, col))
+                Array.from({ length: BOARD_COLS }, (_, col) => renderCell(row, col))
               )}
             </div>
             <div className="battle-overlay">

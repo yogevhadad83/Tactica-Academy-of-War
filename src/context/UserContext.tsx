@@ -1,16 +1,26 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useAuth } from './AuthContext';
 import { units } from '../data/units';
-import type {
-  ArmyUnitInstance,
-  AuthResult,
-  BoardPlacements,
-  StrategyBook,
-  StrategyRule,
-  UserProfile
-} from '../types';
+import type { ArmyUnitInstance, BoardPlacements, StrategyBook, StrategyRule } from '../types';
 
-const USERS_KEY = 'tactica_users';
-const CURRENT_USER_KEY = 'tactica_current_user';
+export interface PlayerProfile {
+  id: string;
+  username: string;
+  army: ArmyUnitInstance[];
+  strategies: StrategyBook;
+  boardPlacements: BoardPlacements;
+}
+
+interface UserContextValue {
+  currentUser: PlayerProfile | null;
+  updateArmy: (army: ArmyUnitInstance[]) => void;
+  updateStrategies: (strategies: StrategyBook) => void;
+  addStrategyRule: (unitId: string, rule: StrategyRule) => void;
+  removeStrategyRule: (unitId: string, ruleId: string) => void;
+  updateBoardPlacements: (placements: BoardPlacements) => void;
+}
+
+const PLAYER_PROFILES_KEY = 'tactica_player_profiles';
 
 const createId = () => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
 
@@ -32,9 +42,9 @@ const cloneUnit = (unitId: string): ArmyUnitInstance => {
   };
 };
 
-const createDefaultUsers = (): UserProfile[] => {
-  const userOneStrategies = buildStrategyBook();
-  userOneStrategies.archer = [
+const createDefaultProfile = (id: string, username: string): PlayerProfile => {
+  const strategyBook = buildStrategyBook();
+  strategyBook.archer = [
     {
       id: createId(),
       unitId: 'archer',
@@ -43,249 +53,138 @@ const createDefaultUsers = (): UserProfile[] => {
     }
   ];
 
-  const userTwoStrategies = buildStrategyBook();
-  userTwoStrategies.horseman = [
-    {
-      id: createId(),
-      unitId: 'horseman',
-      condition: 'Path blocked',
-      action: 'Move sideways'
-    }
-  ];
-
-  return [
-    {
-      id: 'commander-nova',
-      username: 'CommanderNova',
-      password: 'nova123',
-      gold: 1500,
-      level: 6,
-      army: [cloneUnit('knight'), cloneUnit('archer'), cloneUnit('horseman'), cloneUnit('dragon')],
-      strategies: userOneStrategies,
-      boardPlacements: {}
-    },
-    {
-      id: 'general-orion',
-      username: 'GeneralOrion',
-      password: 'orion123',
-      gold: 980,
-      level: 4,
-      army: [cloneUnit('knight'), cloneUnit('knight'), cloneUnit('beast')],
-      strategies: userTwoStrategies,
-      boardPlacements: {}
-    }
-  ];
-};
-
-const normalizeUser = (user: UserProfile): UserProfile => {
-  // Migrate old unit IDs to current ones
-  const unitIdMigrations: Record<string, string> = {
-    soldier: 'knight', // old 'soldier' was renamed to 'knight'
-  };
-  
-  const migratedArmy = user.army.map((unit) => {
-    const newId = unitIdMigrations[unit.id];
-    if (newId) {
-      // Find the current template for this unit
-      const template = units.find((u) => u.id === newId);
-      if (template) {
-        return {
-          ...template,
-          instanceId: unit.instanceId,
-        };
-      }
-    }
-    return unit;
-  });
-
   return {
-    ...user,
-    army: migratedArmy,
-    strategies: user.strategies ?? buildStrategyBook(),
-    boardPlacements: user.boardPlacements ?? {}
+    id,
+    username,
+    army: [cloneUnit('knight'), cloneUnit('archer'), cloneUnit('horseman')],
+    strategies: strategyBook,
+    boardPlacements: {}
   };
 };
 
-const readStoredUsers = (): UserProfile[] => {
-  if (typeof window === 'undefined') {
-    return createDefaultUsers();
-  }
-  const raw = window.localStorage.getItem(USERS_KEY);
-  if (!raw) {
-    return createDefaultUsers();
-  }
+const readProfiles = (): Record<string, PlayerProfile> => {
+  if (typeof window === 'undefined') return {};
+  const raw = window.localStorage.getItem(PLAYER_PROFILES_KEY);
+  if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw) as UserProfile[];
-    return parsed.map(normalizeUser);
+    return JSON.parse(raw) as Record<string, PlayerProfile>;
   } catch (error) {
-    console.warn('Failed to parse stored users, resetting to defaults.', error);
-    return createDefaultUsers();
+    console.warn('Failed to parse stored profiles, resetting.', error);
+    return {};
   }
 };
 
-const readStoredCurrentUserId = (): string | null => {
-  if (typeof window === 'undefined') {
-    return null;
-  }
-  return window.localStorage.getItem(CURRENT_USER_KEY);
+const persistProfiles = (profiles: Record<string, PlayerProfile>) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PLAYER_PROFILES_KEY, JSON.stringify(profiles));
 };
-
-export interface UserContextValue {
-  users: UserProfile[];
-  currentUser: UserProfile | null;
-  login: (username: string, password: string) => AuthResult;
-  register: (username: string, password: string) => AuthResult;
-  logout: () => void;
-  switchUser: (userId: string) => void;
-  updateArmy: (army: ArmyUnitInstance[]) => void;
-  updateStrategies: (strategies: StrategyBook) => void;
-  addStrategyRule: (unitId: string, rule: StrategyRule) => void;
-  removeStrategyRule: (unitId: string, ruleId: string) => void;
-  updateBoardPlacements: (placements: BoardPlacements) => void;
-}
 
 const UserContext = createContext<UserContextValue | undefined>(undefined);
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
-  const [users, setUsers] = useState<UserProfile[]>(() => readStoredUsers());
-  const [currentUserId, setCurrentUserId] = useState<string | null>(() => readStoredCurrentUserId());
+  const { user: authUser } = useAuth();
+  const [profiles, setProfiles] = useState<Record<string, PlayerProfile>>(() => readProfiles());
+  const [currentUser, setCurrentUser] = useState<PlayerProfile | null>(null);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  }, [users]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (currentUserId) {
-      window.localStorage.setItem(CURRENT_USER_KEY, currentUserId);
-    } else {
-      window.localStorage.removeItem(CURRENT_USER_KEY);
+    if (!authUser) {
+      setCurrentUser(null);
+      return;
     }
-  }, [currentUserId]);
 
-  const currentUser = useMemo(() => {
-    if (!currentUserId) return null;
-    return users.find((user) => user.id === currentUserId) ?? null;
-  }, [currentUserId, users]);
+    setProfiles((prev) => {
+      const existing = prev[authUser.id];
+      const username = authUser.email?.split('@')[0] ?? 'Commander';
+      const profile = existing ?? createDefaultProfile(authUser.id, username);
+      const next = existing ? prev : { ...prev, [authUser.id]: profile };
+      setCurrentUser(profile);
+      persistProfiles(next);
+      return next;
+    });
+  }, [authUser]);
 
-  const login = useCallback(
-    (username: string, password: string): AuthResult => {
-      const matched = users.find((user) => user.username.toLowerCase() === username.toLowerCase());
-      if (!matched) {
-        return { success: false, message: 'User not found' };
-      }
-      if (matched.password !== password) {
-        return { success: false, message: 'Incorrect password' };
-      }
-      setCurrentUserId(matched.id);
-      return { success: true };
-    },
-    [users]
-  );
+  useEffect(() => {
+    persistProfiles(profiles);
+  }, [profiles]);
 
-  const register = useCallback(
-    (username: string, password: string): AuthResult => {
-      const exists = users.some((user) => user.username.toLowerCase() === username.toLowerCase());
-      if (exists) {
-        return { success: false, message: 'Username already taken' };
-      }
-      const newUser: UserProfile = {
-        id: createId(),
-        username,
-        password,
-        gold: 500,
-        level: 1,
-        army: [],
-        strategies: buildStrategyBook(),
-        boardPlacements: {}
-      };
-      setUsers((prev) => [...prev, newUser]);
-      setCurrentUserId(newUser.id);
-      return { success: true };
-    },
-    [users]
-  );
+  const currentUserId = authUser?.id ?? null;
 
-  const logout = useCallback(() => {
-    setCurrentUserId(null);
-  }, []);
-
-  const switchUser = useCallback((userId: string) => {
-    setCurrentUserId(userId);
-  }, []);
-
-  const updateUser = useCallback(
-    (updater: (user: UserProfile) => UserProfile) => {
+  const updateProfile = useCallback(
+    (updater: (profile: PlayerProfile) => PlayerProfile) => {
       if (!currentUserId) return;
-      setUsers((prev) => prev.map((user) => (user.id === currentUserId ? updater(user) : user)));
+      setProfiles((prev) => {
+        const existing = prev[currentUserId];
+        if (!existing) return prev;
+        const updated = updater(existing);
+        const next = { ...prev, [currentUserId]: updated };
+        setCurrentUser(updated);
+        return next;
+      });
     },
     [currentUserId]
   );
 
   const updateArmy = useCallback(
     (army: ArmyUnitInstance[]) => {
-      updateUser((user) => ({ ...user, army }));
+      updateProfile((profile) => ({ ...profile, army }));
     },
-    [updateUser]
+    [updateProfile]
   );
 
   const updateStrategies = useCallback(
     (strategies: StrategyBook) => {
-      updateUser((user) => ({ ...user, strategies }));
+      updateProfile((profile) => ({ ...profile, strategies }));
     },
-    [updateUser]
+    [updateProfile]
   );
 
   const addStrategyRule = useCallback(
     (unitId: string, rule: StrategyRule) => {
-      updateUser((user) => {
-        const current = user.strategies[unitId] ?? [];
+      updateProfile((profile) => {
+        const current = profile.strategies[unitId] ?? [];
         return {
-          ...user,
+          ...profile,
           strategies: {
-            ...user.strategies,
+            ...profile.strategies,
             [unitId]: [...current, rule]
           }
         };
       });
     },
-    [updateUser]
+    [updateProfile]
   );
 
   const removeStrategyRule = useCallback(
     (unitId: string, ruleId: string) => {
-      updateUser((user) => ({
-        ...user,
+      updateProfile((profile) => ({
+        ...profile,
         strategies: {
-          ...user.strategies,
-          [unitId]: (user.strategies[unitId] ?? []).filter((rule) => rule.id !== ruleId)
+          ...profile.strategies,
+          [unitId]: (profile.strategies[unitId] ?? []).filter((rule) => rule.id !== ruleId)
         }
       }));
     },
-    [updateUser]
+    [updateProfile]
   );
 
   const updateBoardPlacements = useCallback(
     (placements: BoardPlacements) => {
-      updateUser((user) => ({ ...user, boardPlacements: placements }));
+      updateProfile((profile) => ({ ...profile, boardPlacements: placements }));
     },
-    [updateUser]
+    [updateProfile]
   );
 
-  const value: UserContextValue = {
-    users,
-    currentUser,
-    login,
-    register,
-    logout,
-    switchUser,
-    updateArmy,
-    updateStrategies,
-    addStrategyRule,
-    removeStrategyRule,
-    updateBoardPlacements
-  };
+  const value: UserContextValue = useMemo(
+    () => ({
+      currentUser,
+      updateArmy,
+      updateStrategies,
+      addStrategyRule,
+      removeStrategyRule,
+      updateBoardPlacements,
+    }),
+    [currentUser, updateArmy, updateStrategies, addStrategyRule, removeStrategyRule, updateBoardPlacements]
+  );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
 };

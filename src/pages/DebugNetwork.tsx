@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { units } from '../data/units';
+import { useAuth } from '../context/AuthContext';
 import { useMultiplayer } from '../context/MultiplayerContext';
 import { useUser } from '../context/UserContext';
 import type { ArmyConfig, BattleResult } from '../hooks/useGameServer';
@@ -27,7 +28,8 @@ const buildDemoArmy = (): ArmyConfig => {
 };
 
 export default function DebugNetwork() {
-  const { currentUser, logout } = useUser();
+  const { user, signOut } = useAuth();
+  const { currentUser } = useUser();
   const [displayedResult, setDisplayedResult] = useState<BattleResult | null>(null);
   const demoArmy = useMemo(() => buildDemoArmy(), []);
 
@@ -42,7 +44,7 @@ export default function DebugNetwork() {
     respondToChallenge,
   } = useMultiplayer();
 
-  const activeUsername = currentUser?.username ?? null;
+  const activeUsername = currentUser?.username ?? user?.email ?? null;
 
   // Update displayed result when lastResult changes
   if (lastResult && lastResult !== displayedResult) {
@@ -90,10 +92,10 @@ export default function DebugNetwork() {
           </span>
         </div>
 
-        {currentUser ? (
+        {user ? (
           <div>
             <p>
-              <strong>Commander:</strong> {currentUser.username}
+              <strong>Commander:</strong> {currentUser?.username ?? user.email}
             </p>
             {userId && (
               <p>
@@ -112,7 +114,7 @@ export default function DebugNetwork() {
               >
                 Use Demo Army
               </button>
-              <button onClick={logout} style={{ padding: '5px 15px' }}>
+              <button onClick={signOut} style={{ padding: '5px 15px' }}>
                 Logout
               </button>
             </div>

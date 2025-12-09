@@ -1,25 +1,22 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useMemo } from 'react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
 import './Layout.css';
 
 const Layout = () => {
   const location = useLocation();
-  const { currentUser, logout, users, switchUser } = useUser();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const { currentUser } = useUser();
 
   const isActive = (path: string) => {
     return location.pathname === path ? 'active' : '';
   };
 
-  const armyStrength = useMemo(() => {
-    if (!currentUser) return 0;
-    return currentUser.army.reduce((sum, unit) => sum + unit.damage + unit.defense, 0);
-  }, [currentUser]);
-
-  const armySupply = useMemo(() => {
-    if (!currentUser) return 0;
-    return currentUser.army.reduce((sum, unit) => sum + unit.cost, 0);
-  }, [currentUser]);
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <div className="layout">
@@ -42,32 +39,11 @@ const Layout = () => {
           </Link>
         </div>
         <div className="nav-user-area">
-          {currentUser ? (
+          {user ? (
             <>
               <div className="user-pill">
-                <div>
-                  <div className="user-name">{currentUser.username}</div>
-                  <div className="user-stats">
-                    <span>⭐ Lvl {currentUser.level}</span>
-                    <span>💰 {currentUser.gold}</span>
-                    <span>⚔️ {armyStrength}</span>
-                    <span>🪙 {armySupply}/650</span>
-                  </div>
-                </div>
-                {users.length > 1 && (
-                  <select
-                    aria-label="Switch user"
-                    value={currentUser.id}
-                    onChange={(event) => switchUser(event.target.value)}
-                  >
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.username}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button type="button" className="logout-btn" onClick={logout}>
+                <div className="user-name">{currentUser?.username ?? user.email}</div>
+                <button type="button" className="logout-btn" onClick={handleLogout}>
                   Logout
                 </button>
               </div>
@@ -77,8 +53,8 @@ const Layout = () => {
               <Link to="/login" className="nav-link ghost">
                 Login
               </Link>
-              <Link to="/register" className="nav-link solid">
-                Register
+              <Link to="/signup" className="nav-link solid">
+                Sign up
               </Link>
             </div>
           )}

@@ -63,4 +63,6 @@ export interface BattleEngineModule {
   advanceBattleTick: (units: PlacedUnit[], currentTeam: Team, turnNumber: number) => BattleTickResult;
   initializeBattle: (units: PlacedUnit[]) => BattleState;
   BOARD_SIZE: number;
+  BOARD_COLS: number;
+  PLAYER_ROWS: number;
 }

@@ -7,8 +7,13 @@ export interface Unit {
   hp: number;
   damage: number;
   defense: number;
+  shield?: number;
+  creditCost?: number;
+  supplyCost?: number;
+  reviveCost?: number;
   speed: number; // ticks per action
   range: number;
+  description?: string;
   behaviorOptions: string[];
   upgradeOptions: string[];
 }
@@ -52,20 +57,4 @@ export interface StrategyBook {
 
 export interface BoardPlacements {
   [instanceId: string]: Position;
-}
-
-export interface UserProfile {
-  id: string;
-  username: string;
-  password: string;
-  gold: number;
-  level: number;
-  army: ArmyUnitInstance[];
-  strategies: StrategyBook;
-  boardPlacements: BoardPlacements;
-}
-
-export interface AuthResult {
-  success: boolean;
-  message?: string;
 }

@@ -178,7 +178,9 @@ const getModelDefinition = (modelKey: ModelKey): ModelDefinition => {
   const override = MODEL_OVERRIDES[modelKey] ?? {};
   return {
     key: modelKey,
-    path: override.path ?? `/models/${modelKey}.glb`,
+    // Use absolute root so GLTFLoader works from any routed page (avoids /board/models/... 404)
+    // Model files are lowercase, so normalize the key
+    path: override.path ?? `/models/${modelKey.toLowerCase()}.glb`,
     targetHeight: override.targetHeight ?? DEFAULT_MODEL_TARGET_HEIGHT,
     animations: override.animations ?? DEFAULT_ANIMATIONS
   };
@@ -278,8 +280,8 @@ const drawRoundedRect = (
   ctx.closePath();
 };
 
-const toWorldVector = (position: Position, boardSize: number, height: number) => {
-  const { x, z } = cellToWorld(position.row, position.col, boardSize);
+const toWorldVector = (position: Position, boardRows: number, boardCols: number, height: number) => {
+  const { x, z } = cellToWorld(position.row, position.col, boardRows, boardCols);
   return new THREE.Vector3(x, height, z);
 };
 
@@ -968,7 +970,7 @@ export const useUnitLayer = (
   );
 
   const syncUnits = useCallback(
-    (units: PlacedUnit[], boardSize: number) => {
+    (units: PlacedUnit[], boardRows: number, boardCols: number) => {
       if (!unitRootRef.current || typeof window === 'undefined') return;
       const unitRoot = unitRootRef.current;
       const activeIds = new Set(units.map((unit) => unit.instanceId));
@@ -981,7 +983,7 @@ export const useUnitLayer = (
       });
 
       units.forEach((unit, index) => {
-        const { x, z } = cellToWorld(unit.position.row, unit.position.col, boardSize);
+        const { x, z } = cellToWorld(unit.position.row, unit.position.col, boardRows, boardCols);
         let visual = unitVisualsRef.current.get(unit.instanceId);
         const modelKey = getModelKeyForUnit(unit.id);
         const modelAsset = modelAssetsRef.current[modelKey];
@@ -1221,7 +1223,8 @@ export const useUnitLayer = (
       marchCells,
       units,
       demoState,
-      boardSize
+      boardSize,
+      boardCols
     }: {
       hitCells: string[];
       hitEvents?: HitEvent[];
@@ -1230,6 +1233,7 @@ export const useUnitLayer = (
       units: PlacedUnit[];
       demoState: DemoState;
       boardSize: number;
+      boardCols?: number;
     }) => {
       const hitSet = new Set(hitCells);
       const moveSet = new Set(moveCells);
@@ -1346,11 +1350,12 @@ export const useUnitLayer = (
         if (!attacker || attacker.id !== ARCHER_UNIT_ID) {
           return;
         }
+        const cols = boardCols ?? boardSize;
         const startPosition = attackerVisual
           ? attackerVisual.group.position.clone()
-          : toWorldVector(event.attackerPosition, boardSize, 0);
+          : toWorldVector(event.attackerPosition, boardSize, cols, 0);
         startPosition.y = ARROW_LAUNCH_HEIGHT;
-        const endPosition = toWorldVector(event.targetPosition, boardSize, ARROW_IMPACT_HEIGHT);
+        const endPosition = toWorldVector(event.targetPosition, boardSize, cols, ARROW_IMPACT_HEIGHT);
         const direction = endPosition.clone().sub(startPosition).normalize();
         startPosition.add(direction.clone().multiplyScalar(ARROW_FORWARD_OFFSET));
         const arrowMesh = createArrowMesh();

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { KeyboardEvent, ReactNode } from 'react';
-import { units } from '../data/units';
 import type { ArmyUnitInstance, Unit } from '../types';
-import { useUser } from '../context/UserContext';
+import { useAuth } from '../context/AuthContext';
 import './ArmyBuilder.css';
 import UnitPreviewCanvas from '../components/UnitPreviewCanvas';
+import { useUnitCatalog } from '../hooks/useUnitCatalog';
+import { usePlayerArmy } from '../hooks/usePlayerArmy';
 
-const maxBudget = 650;
 const maxUnits = 20;
 
 type BoardVector = { row: number; col: number };
@@ -50,6 +50,46 @@ const MOVEMENT_BLUEPRINTS: Record<string, MovementBlueprint> = {
     description: {
       movement: 'Beasts lumber forward and can lean into flanks.',
       attack: 'Crushing blow lands on the path directly ahead.'
+    }
+  },
+  mage: {
+    moves: [{ row: -1, col: 0 }],
+    attacks: [
+      { row: -1, col: 0 },
+      { row: -1, col: -1 },
+      { row: -1, col: 1 }
+    ],
+    description: {
+      movement: 'Mages advance cautiously while keeping distance.',
+      attack: 'Casts a short arc of spells in front.'
+    }
+  },
+  giant: {
+    moves: [
+      { row: -1, col: 0 },
+      { row: -1, col: -1 },
+      { row: -1, col: 1 }
+    ],
+    attacks: [{ row: -1, col: 0 }],
+    description: {
+      movement: 'Giants stride forward and threaten nearby tiles.',
+      attack: 'Massive swings crush foes directly ahead.'
+    }
+  },
+  zombie: {
+    moves: [{ row: -1, col: 0 }],
+    attacks: [{ row: -1, col: 0 }],
+    description: {
+      movement: 'Shambling advance with relentless pace.',
+      attack: 'Claws at the nearest enemy in reach.'
+    }
+  },
+  recruit: {
+    moves: [{ row: -1, col: 0 }],
+    attacks: [{ row: -1, col: 0 }],
+    description: {
+      movement: 'New recruits step forward to hold the line.',
+      attack: 'Strikes the closest foe straight ahead.'
     }
   },
   archer: {
@@ -163,21 +203,54 @@ const CollapsibleSection = ({ title, description, children, defaultOpen = false 
 };
 
 const ArmyBuilder = () => {
-  const { currentUser, updateArmy } = useUser();
-  const [selectedUnits, setSelectedUnits] = useState<ArmyUnitInstance[]>(currentUser?.army ?? []);
-  const [activeUnitId, setActiveUnitId] = useState<string>(() => units[0]?.id ?? '');
-  const activeUnit = useMemo(
-    () => units.find((unit) => unit.id === activeUnitId) ?? units[0] ?? null,
-    [activeUnitId]
+  const { user } = useAuth();
+  const { units: catalogUnits, loading: unitsLoading, error: unitsError } = useUnitCatalog();
+  const {
+    loading: armyLoading,
+    error: armyError,
+    armyId,
+    units: armyUnits,
+    addUnit,
+    removeUnit,
+    clearArmy
+  } = usePlayerArmy();
+  const [activeUnitId, setActiveUnitId] = useState<string>('');
+  const catalogById = useMemo(() => new Map(catalogUnits.map((unit) => [unit.id, unit])), [catalogUnits]);
+
+  const armyUnitsWithMeta = useMemo(
+    () =>
+      armyUnits
+        .map((armyUnit) => {
+          const meta = catalogById.get(armyUnit.unitTypeId);
+          if (!meta) return null;
+          return {
+            ...meta,
+            instanceId: armyUnit.id,
+            slotIndex: armyUnit.slotIndex
+          } as ArmyUnitInstance & { slotIndex: number };
+        })
+        .filter(Boolean) as (ArmyUnitInstance & { slotIndex: number })[],
+    [armyUnits, catalogById]
   );
+
+  useEffect(() => {
+    if (!catalogUnits.length) return;
+    setActiveUnitId((prev) => (prev ? prev : catalogUnits[0].id));
+  }, [catalogUnits]);
+
+  const activeUnit = useMemo(
+    () => catalogUnits.find((unit) => unit.id === activeUnitId) ?? catalogUnits[0] ?? null,
+    [activeUnitId, catalogUnits]
+  );
+
   const statCards = useMemo(
     () => [
       {
-        id: 'attack',
-        label: 'Attack',
-        value: activeUnit ? activeUnit.damage : '—',
+        id: 'hp',
+        label: 'HP',
+        value: activeUnit ? activeUnit.hp : '—',
         suffix: '',
-        icon: '⚔️'
+        icon: '❤️'
       },
       {
         id: 'defense',
@@ -187,142 +260,50 @@ const ArmyBuilder = () => {
         icon: '🛡️'
       },
       {
-        id: 'speed',
-        label: 'Speed',
-        value: activeUnit ? activeUnit.speed : '—',
-        suffix: activeUnit ? ' ticks' : '',
-        icon: '⚡'
+        id: 'shield',
+        label: 'Shield',
+        value: activeUnit ? activeUnit.shield ?? 0 : '—',
+        suffix: '',
+        icon: '🧊'
       },
       {
-        id: 'range',
-        label: 'Range',
-        value: activeUnit ? activeUnit.range : '—',
+        id: 'damage',
+        label: 'Damage',
+        value: activeUnit ? activeUnit.damage : '—',
         suffix: '',
-        icon: '🎯'
+        icon: '⚔️'
+      },
+      {
+        id: 'creditCost',
+        label: 'Cost',
+        value: activeUnit ? `${activeUnit.creditCost} credits` : '—',
+        suffix: '',
+        icon: '💰'
+      },
+      {
+        id: 'supplyCost',
+        label: 'Supply',
+        value: activeUnit ? activeUnit.supplyCost : '—',
+        suffix: '',
+        icon: '📦'
       }
     ],
     [activeUnit]
   );
 
-  const currentUserId = currentUser?.id ?? null;
-
-  useEffect(() => {
-    setSelectedUnits(currentUser?.army ?? []);
-  }, [currentUserId]);
-
-  useEffect(() => {
-    if (!currentUserId) return;
-    updateArmy(selectedUnits);
-  }, [selectedUnits, currentUserId, updateArmy]);
-
-  const totalCost = selectedUnits.reduce((sum, unit) => sum + unit.cost, 0);
-  const remainingBudget = maxBudget - totalCost;
-  const unitLimitReached = selectedUnits.length >= maxUnits;
-  const canModify = Boolean(currentUser);
-
-  const addUnitToArmy = (unit: Unit) => {
-    if (!canModify) return;
-    setSelectedUnits((prev) => {
-      if (prev.length >= maxUnits) return prev;
-      const costSoFar = prev.reduce((sum, entry) => sum + entry.cost, 0);
-      if (costSoFar + unit.cost > maxBudget) return prev;
-
-      const instance: ArmyUnitInstance = {
-        ...unit,
-        instanceId: crypto.randomUUID()
-      };
-
-      return [...prev, instance];
-    });
-  };
+  const unitLimitReached = armyUnits.length >= maxUnits;
+  const canModify = Boolean(user && armyId);
 
   const addActiveUnit = () => {
     if (!activeUnit) return;
-    addUnitToArmy(activeUnit);
-  };
-
-  const removeUnit = (instanceId: string) => {
-    if (!canModify) return;
-    setSelectedUnits((prev) => prev.filter((unit) => unit.instanceId !== instanceId));
-  };
-
-  const clearArmy = () => {
-    if (!canModify) return;
-    setSelectedUnits([]);
+    addUnit(activeUnit.id);
   };
 
   const addDisabled =
     !canModify ||
     !activeUnit ||
     unitLimitReached ||
-    totalCost + (activeUnit?.cost ?? 0) > maxBudget;
-
-  const attackScore = selectedUnits.reduce((sum, unit) => sum + unit.damage, 0);
-
-  const rosterSummary = useMemo(() => {
-    const summaryMap = new Map<
-      string,
-      {
-        unit: ArmyUnitInstance;
-        count: number;
-        instanceIds: string[];
-      }
-    >();
-
-    selectedUnits.forEach((unit) => {
-      const current = summaryMap.get(unit.id);
-      if (current) {
-        current.count += 1;
-        current.instanceIds.push(unit.instanceId);
-      } else {
-        summaryMap.set(unit.id, {
-          unit,
-          count: 1,
-          instanceIds: [unit.instanceId]
-        });
-      }
-    });
-
-    return Array.from(summaryMap.values()).map((entry) => ({
-      id: entry.unit.id,
-      unit: entry.unit,
-      count: entry.count,
-      instanceIds: entry.instanceIds,
-      supplyPerUnit: entry.unit.cost,
-      totalSupply: entry.count * entry.unit.cost
-    }));
-  }, [selectedUnits]);
-
-  const resourceSummary = [
-    {
-      id: 'coins',
-      label: 'Coins',
-      value: `${currentUser?.gold ?? 0}`,
-      hint: 'Spend wisely',
-      icon: '🪙'
-    },
-    {
-      id: 'supply',
-      label: 'Supply',
-      value: `${totalCost} / ${maxBudget}`,
-      hint: `${remainingBudget} remaining`,
-      icon: '📦'
-    },
-    {
-      id: 'attack',
-      label: 'Attack score',
-      value: attackScore,
-      hint: `${selectedUnits.length} units`,
-      icon: '⚔️'
-    },
-    {
-      id: 'level',
-      label: 'Commander level',
-      value: currentUser?.level ?? 1,
-      hint: 'Progress to next tier',
-      icon: '⭐'
-    }
-  ];
+    armyLoading;
 
   const handleCardKey = (event: KeyboardEvent<HTMLElement>, unitId: string) => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -331,18 +312,46 @@ const ArmyBuilder = () => {
     }
   };
 
-  const getRecruitState = (unit: Unit) => {
+  const getRecruitState = () => {
     if (!canModify) {
-      return { disabled: true, reason: 'Login to recruit' };
+      return { disabled: true, reason: 'Login to add units' };
     }
-    if (selectedUnits.length >= maxUnits) {
+    if (armyUnits.length >= maxUnits) {
       return { disabled: true, reason: 'Unit cap reached' };
     }
-    if (totalCost + unit.cost > maxBudget) {
-      return { disabled: true, reason: 'Not enough supply' };
+    if (armyLoading) {
+      return { disabled: true, reason: 'Loading army' };
     }
     return { disabled: false, reason: '' };
   };
+
+  if (unitsLoading) {
+    return (
+      <div className="army-builder-dashboard">
+        <header className="builder-header">
+          <div className="builder-header__intro">
+            <p className="eyebrow">Command console</p>
+            <h1>Army Builder</h1>
+            <p>Loading unit catalog…</p>
+          </div>
+        </header>
+      </div>
+    );
+  }
+
+  if (unitsError) {
+    return (
+      <div className="army-builder-dashboard">
+        <header className="builder-header">
+          <div className="builder-header__intro">
+            <p className="eyebrow">Command console</p>
+            <h1>Army Builder</h1>
+            <p className="auth-error">Failed to load units: {unitsError}</p>
+          </div>
+        </header>
+      </div>
+    );
+  }
 
   return (
     <div className="army-builder-dashboard">
@@ -352,20 +361,6 @@ const ArmyBuilder = () => {
           <h1>Army Builder</h1>
           <p>Create a focused strike force before deployment.</p>
         </div>
-        <div className="resource-bar" role="list">
-          {resourceSummary.map((resource) => (
-            <div key={resource.id} className="resource-pill" role="listitem">
-              <span className="resource-icon" aria-hidden="true">
-                {resource.icon}
-              </span>
-              <div>
-                <p>{resource.label}</p>
-                <strong>{resource.value}</strong>
-                <small>{resource.hint}</small>
-              </div>
-            </div>
-          ))}
-        </div>
       </header>
 
       <div className="dashboard-layout">
@@ -373,50 +368,57 @@ const ArmyBuilder = () => {
           <div className="panel-header">
             <div>
               <p className="eyebrow">Current army</p>
-              <h2>{selectedUnits.length ? `${selectedUnits.length} / ${maxUnits} units` : 'No units selected'}</h2>
+              <h2>{armyUnits.length ? `${armyUnits.length} / ${maxUnits} units` : 'No units selected'}</h2>
             </div>
-            {selectedUnits.length > 0 && canModify && (
+            {armyUnits.length > 0 && canModify && (
               <button className="btn btn-secondary" type="button" onClick={clearArmy}>
                 Clear army
               </button>
             )}
           </div>
-          <p className="panel-subtitle">{remainingBudget} supply available · {maxBudget} cap</p>
+          <p className="panel-subtitle">{armyUnits.length ? `${armyUnits.length} / ${maxUnits} units` : 'No units selected'}</p>
+          {armyError && <p className="auth-error">{armyError}</p>}
 
           <div className="roster-list">
-            {rosterSummary.length === 0 && (
+            {armyLoading && (
               <div className="empty-state">
-                <p>Recruit units from the right to see them here.</p>
+                <p>Loading army…</p>
               </div>
             )}
 
-            {rosterSummary.map((entry) => (
-              <div key={entry.id} className="roster-item">
-                <div className="roster-item__meta">
-                  <span className="unit-icon" aria-hidden="true">
-                    {entry.unit.icon || entry.unit.name.charAt(0)}
-                  </span>
-                  <div>
-                    <p>{entry.unit.name}</p>
-                    <small>
-                      {entry.count} unit{entry.count > 1 ? 's' : ''} · {entry.supplyPerUnit} supply each
-                    </small>
+            {!armyLoading && armyUnitsWithMeta.length === 0 && (
+              <div className="empty-state">
+                <p>Add units from the right to see them here.</p>
+              </div>
+            )}
+
+            {!armyLoading &&
+              armyUnitsWithMeta.map((unit) => (
+                <div key={unit.instanceId} className="roster-item">
+                  <div className="roster-item__meta">
+                    <span className="unit-icon" aria-hidden="true">
+                      {unit.icon || unit.name.charAt(0)}
+                    </span>
+                    <div>
+                      <p>{unit.name}</p>
+                      <small className="muted">Supply: {unit.supplyCost ?? unit.cost}</small>
+                      <small>Slot {unit.slotIndex + 1}</small>
+                    </div>
+                  </div>
+                  <div className="roster-item__actions">
+                    <span className="supply-chip">{unit.creditCost ?? 0} credits</span>
+                    {canModify && (
+                      <button
+                        className="btn btn-ghost"
+                        type="button"
+                        onClick={() => removeUnit(unit.instanceId)}
+                      >
+                        Remove
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="roster-item__actions">
-                  <span className="supply-chip">{entry.totalSupply} 🪙</span>
-                  {canModify && (
-                    <button
-                      className="btn btn-ghost"
-                      type="button"
-                      onClick={() => removeUnit(entry.instanceIds[0])}
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </aside>
 
@@ -425,14 +427,14 @@ const ArmyBuilder = () => {
             <div className="panel-header">
               <div>
                 <p className="eyebrow">Unit catalog</p>
-                <h2>Recruit reinforcements</h2>
+                <h2>Unit reinforcements</h2>
               </div>
-              <p className="panel-subtitle">Tap a card for intel, then recruit with available supply.</p>
+              <p className="panel-subtitle">Tap a card for intel, then add units to your army.</p>
             </div>
 
             <div className="catalog-grid">
-              {units.map((unit) => {
-                const { disabled, reason } = getRecruitState(unit);
+              {catalogUnits.map((unit) => {
+                const { disabled, reason } = getRecruitState();
                 return (
                   <article
                     key={unit.id}
@@ -452,7 +454,8 @@ const ArmyBuilder = () => {
                       <div className="unit-card__info">
                         <div>
                           <h3>{unit.name}</h3>
-                          <p>{unit.cost} supply</p>
+                          <p>Cost: {unit.creditCost} credits</p>
+                          <small className="muted">Supply: {unit.supplyCost}</small>
                         </div>
                         <div className="unit-card__stats">
                           <span>
@@ -462,10 +465,10 @@ const ArmyBuilder = () => {
                             🛡️ {unit.defense}
                           </span>
                           <span>
-                            ⚡ {unit.speed}
+                            🧊 {unit.shield ?? 0}
                           </span>
                           <span>
-                            🎯 {unit.range}
+                            ❤️ {unit.hp}
                           </span>
                         </div>
                       </div>
@@ -478,10 +481,10 @@ const ArmyBuilder = () => {
                         onClick={(event) => {
                           event.stopPropagation();
                           setActiveUnitId(unit.id);
-                          addUnitToArmy(unit);
+                          addUnit(unit.id);
                         }}
                       >
-                        Recruit – {unit.cost} 🪙
+                        Add to army
                       </button>
                       {disabled && reason && <small className="unit-card__hint">{reason}</small>}
                     </div>
@@ -509,16 +512,20 @@ const ArmyBuilder = () => {
                     onClick={addActiveUnit}
                     disabled={addDisabled}
                   >
-                    {canModify ? `Recruit – ${activeUnit?.cost ?? 0} 🪙` : 'Login to recruit'}
+                    {canModify ? 'Add to army' : 'Login to add units'}
                   </button>
-                  <span className="available-supply">{remainingBudget} supply remaining</span>
                 </div>
               </div>
               <div className="spotlight__stats">
                 <div className="spotlight__header">
                   <p className="eyebrow">Currently viewing</p>
                   <h2>{activeUnit?.name ?? 'Select a unit'}</h2>
-                  {activeUnit && <p className="spotlight__cost">{activeUnit.cost} supply</p>}
+                  {activeUnit && (
+                    <>
+                      <p className="spotlight__cost">Cost: {activeUnit.creditCost} credits</p>
+                      <p className="spotlight__cost">Supply: {activeUnit.supplyCost}</p>
+                    </>
+                  )}
                 </div>
                 <div className="stat-grid" role="list">
                   {statCards.map((stat) => (

@@ -272,6 +272,42 @@
   border-radius: 16px;
 }
 
+.supply-status {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1.25rem;
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
+  border-radius: 12px;
+  flex-wrap: wrap;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.18);
+}
+
+.supply-meter {
+  font-weight: 700;
+  color: var(--tactica-foreground, #e2e8f0);
+}
+
+.supply-remaining {
+  color: var(--tactica-muted, #94a3b8);
+  font-size: 0.95rem;
+}
+
+.supply-remaining.cap {
+  color: #f97316;
+  font-weight: 700;
+}
+
+.supply-error {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+}
+
 .army-controls .army-note {
   margin: 0;
   color: var(--tactica-muted);
@@ -615,7 +651,7 @@
 
 .board-grid {
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 1px;
   background: #cbd5f5;
   border: 1px solid var(--tactica-border);
