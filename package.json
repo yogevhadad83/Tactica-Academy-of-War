@@ -8,7 +8,7 @@
     "build": "npm run extract-animations && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "tsx tests/attackResolution.test.ts",
+    "test": "tsx --test \"tests/**/*.test.ts\"",
     "extract-animations": "tsx scripts/extract-animation-metadata.ts"
   },
   "dependencies": {

@@ -1,43 +1,13 @@
-import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
-
-interface PlayerRow {
-  id: string;
-  display_name: string | null;
-}
+import { usePlayerContext } from '../context/PlayerContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { currentUser } = useUser();
-  const [player, setPlayer] = useState<PlayerRow | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const loadPlayer = async () => {
-      if (!user) return;
-      setLoading(true);
-      const { data, error: fetchError } = await supabase
-        .from('players')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-
-      if (fetchError) {
-        setError(fetchError.message);
-      } else {
-        setPlayer(data as PlayerRow);
-        setError(null);
-      }
-      setLoading(false);
-    };
-
-    loadPlayer();
-  }, [user]);
+  const { player, loading, error } = usePlayerContext();
 
   const handleSignOut = async () => {
     await signOut();
@@ -54,13 +24,17 @@ const Dashboard = () => {
       <p>Signed in as {user.email}</p>
 
       {loading && <p>Loading player data…</p>}
-      {error && <p className="auth-error">{error}</p>}
+      {error && <p className="auth-error">{error.message}</p>}
 
       {player && !loading && (
         <div className="dashboard-grid">
           <div className="dashboard-card">
             <h3>Display Name</h3>
             <p>{player.display_name ?? 'Unknown'}</p>
+          </div>
+          <div className="dashboard-card">
+            <h3>Credits</h3>
+            <p>💰 {player.current_credits}</p>
           </div>
         </div>
       )}

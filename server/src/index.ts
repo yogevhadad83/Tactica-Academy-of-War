@@ -224,6 +224,7 @@ wss.on('connection', (socket: WebSocket) => {
             type: 'battle_result',
             matchId,
             winner,
+            battleType: 'demo',
             timeline,
           });
           break;
@@ -308,12 +309,14 @@ wss.on('connection', (socket: WebSocket) => {
             type: 'battle_result',
             matchId,
             winner,
+            battleType: 'pvp',
             timeline,
           };
           const battleResultB: ServerToClient = {
             type: 'battle_result',
             matchId,
             winner,
+            battleType: 'pvp',
             timeline: mirrorTimelineForPlayerB(timeline),
           };
 

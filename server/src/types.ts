@@ -26,5 +26,6 @@ export type ServerToClient =
       type: 'battle_result';
       matchId: string;
       winner: 'A' | 'B' | 'draw';
+      battleType?: 'demo' | 'pvp';
       timeline?: BattleTickResult[];
     };

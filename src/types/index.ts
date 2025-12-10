@@ -59,3 +59,10 @@ export interface StrategyBook {
 export interface BoardPlacements {
   [instanceId: string]: Position;
 }
+
+// Player data from public.players table
+export interface Player {
+  id: string;
+  display_name: string | null;
+  current_credits: number;
+}

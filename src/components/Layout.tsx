@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
+import { usePlayerContext } from '../context/PlayerContext';
 import './Layout.css';
 
 const Layout = () => {
@@ -8,6 +9,7 @@ const Layout = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { currentUser } = useUser();
+  const { player } = usePlayerContext();
 
   const isActive = (path: string) => {
     return location.pathname === path ? 'active' : '';
@@ -42,7 +44,10 @@ const Layout = () => {
           {user ? (
             <>
               <div className="user-pill">
-                <div className="user-name">{currentUser?.username ?? user.email}</div>
+                <div className="user-name">
+                  {player?.display_name || currentUser?.username || user.email}
+                  {player?.current_credits !== undefined && ` (💰 ${player.current_credits})`}
+                </div>
                 <button type="button" className="logout-btn" onClick={handleLogout}>
                   Logout
                 </button>

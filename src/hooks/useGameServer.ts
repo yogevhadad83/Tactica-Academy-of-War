@@ -2,9 +2,12 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import type { PlacedUnit } from '../types';
 import type { BattleTickResult } from '../engine/battleEngine';
 import { buildWsUrl } from '../config/api';
+import { useAuth } from '../context/AuthContext';
+import { applyBattleRewards } from '../utils/credits';
 
 // Types duplicated from server - will be unified later
 export type ArmyConfig = PlacedUnit[];
+export type BattleType = 'demo' | 'pvp';
 
 type ClientToServer =
   | { type: 'hello'; name: string }
@@ -31,6 +34,7 @@ type ServerToClient =
       type: 'battle_result';
       matchId: string;
       winner: 'A' | 'B' | 'draw';
+      battleType?: BattleType;
       timeline?: BattleTickResult[];
     };
 
@@ -39,10 +43,13 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 export interface BattleResult {
   matchId: string;
   winner: 'A' | 'B' | 'draw';
+  battleType?: BattleType;
+  role?: MatchRole | null;
   timeline?: BattleTickResult[];
 }
 
 export function useGameServer(username: string | null) {
+  const { user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const [users, setUsers] = useState<string[]>([]);
@@ -51,6 +58,7 @@ export function useGameServer(username: string | null) {
   const [userId, setUserId] = useState<string | null>(null);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<MatchRole | null>(null);
+  const rewardedMatchesRef = useRef<Set<string>>(new Set());
 
   // Send message helper
   const sendMessage = useCallback((message: ClientToServer) => {
@@ -189,8 +197,19 @@ export function useGameServer(username: string | null) {
 
             case 'battle_result':
               console.log('Battle result:', message);
-              setLastResult(message);
               setCurrentMatchId(message.matchId);
+              setLastResult({ ...message, battleType: message.battleType ?? 'pvp', role: currentRole });
+
+              if (user?.id && currentRole && message.winner === currentRole) {
+                const battleType = message.battleType ?? 'pvp';
+                const alreadyRewarded = rewardedMatchesRef.current.has(message.matchId);
+                if (battleType !== 'demo' && !alreadyRewarded) {
+                  rewardedMatchesRef.current.add(message.matchId);
+                  applyBattleRewards(user.id, { ...message, battleType, role: currentRole }).catch((error) => {
+                    console.error('Failed to apply battle rewards', error);
+                  });
+                }
+              }
               break;
 
             default:

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { calculateArmyCost, getUnitCost } from '../utils/credits';
 
 export type PlayerArmyUnit = {
   id: string;
@@ -13,19 +14,26 @@ export type UsePlayerArmyResult = {
   error: string | null;
   armyId: string | null;
   units: PlayerArmyUnit[];
+  totalCreditCost: number;
   addUnit: (unitTypeId: string) => Promise<void>;
   removeUnit: (unitInstanceId: string) => Promise<void>;
   clearArmy: () => Promise<void>;
 };
 
-export function usePlayerArmy(): UsePlayerArmyResult {
+type UsePlayerArmyOptions = {
+  availableCredits?: number | null;
+};
+
+export function usePlayerArmy(options: UsePlayerArmyOptions = {}): UsePlayerArmyResult {
   const { user } = useAuth();
   const [armyId, setArmyId] = useState<string | null>(null);
   const [units, setUnits] = useState<PlayerArmyUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshIndex, setRefreshIndex] = useState(0);
 
   const usedSlots = useMemo(() => new Set(units.map((u) => u.slotIndex)), [units]);
+  const totalCreditCost = useMemo(() => calculateArmyCost(units), [units]);
 
   useEffect(() => {
     let isMounted = true;
@@ -115,7 +123,7 @@ export function usePlayerArmy(): UsePlayerArmyResult {
     return () => {
       isMounted = false;
     };
-  }, [user]);
+  }, [user, refreshIndex]);
 
   const addUnit = async (unitTypeId: string) => {
     if (!armyId || !user) return;
@@ -124,6 +132,47 @@ export function usePlayerArmy(): UsePlayerArmyResult {
     let slotIndex = 0;
     while (usedSlots.has(slotIndex) && slotIndex < 20) slotIndex += 1;
     if (slotIndex >= 20) return;
+
+    const unitCost = getUnitCost(unitTypeId);
+    const creditBudget = options.availableCredits;
+
+    // Early client-side guard using the latest known credits
+    if (typeof creditBudget === 'number' && unitCost > creditBudget) {
+      setError('Not enough credits for this unit');
+      return;
+    }
+
+    // Server-side guarded deduction: ensure the wallet has enough before charging
+    const { data: playerRow, error: fetchCreditsError } = await supabase
+      .from('players')
+      .select('current_credits')
+      .eq('id', user.id)
+      .single();
+
+    if (fetchCreditsError) {
+      setError(fetchCreditsError.message);
+      return;
+    }
+
+    const currentCredits = playerRow?.current_credits ?? 0;
+    if (currentCredits < unitCost) {
+      setError('Not enough credits for this unit');
+      return;
+    }
+
+    const nextCredits = currentCredits - unitCost;
+    const { data: debitRows, error: updateCreditsError } = await supabase
+      .from('players')
+      .update({ current_credits: nextCredits })
+      .eq('id', user.id)
+      .gte('current_credits', unitCost)
+      .select('current_credits')
+      .maybeSingle();
+
+    if (updateCreditsError || !debitRows) {
+      setError(updateCreditsError?.message ?? 'Not enough credits for this unit');
+      return;
+    }
 
     const { data, error: insertError } = await supabase
       .from('player_army_units')
@@ -138,9 +187,18 @@ export function usePlayerArmy(): UsePlayerArmyResult {
       .single();
 
     if (insertError || !data) {
+      // Refund credits if the insert fails
+      await supabase
+        .from('players')
+        .update({ current_credits: currentCredits })
+        .eq('id', user.id);
+
       setError(insertError?.message ?? 'Failed to add unit');
       return;
     }
+
+    // Clear any previous errors on success
+    setError(null);
 
     setUnits((prev) => [
       ...prev,
@@ -182,5 +240,9 @@ export function usePlayerArmy(): UsePlayerArmyResult {
     setUnits([]);
   };
 
-  return { loading, error, armyId, units, addUnit, removeUnit, clearArmy };
+  const refreshArmy = useCallback(() => {
+    setRefreshIndex((index) => index + 1);
+  }, []);
+
+  return { loading, error, armyId, units, totalCreditCost, addUnit, removeUnit, clearArmy, refreshArmy };
 }
