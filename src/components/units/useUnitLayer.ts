@@ -61,9 +61,13 @@ export interface UnitVisual {
   displayHp: number; // Currently displayed HP (animates towards targetHp)
   targetHp: number; // Target HP to animate towards
   maxHp: number; // Maximum HP for this unit
+  displayShield: number; // Currently displayed shield (animates with HP)
+  targetShield: number; // Target shield value
+  maxShield: number; // Base shield capacity for sizing the bar
   team: 'player' | 'enemy'; // Team for HP bar color
   hpAnimationStartTime?: number; // When HP animation started
   hpAnimationStartValue?: number; // HP value when animation started
+  shieldAnimationStartValue?: number; // Shield value when animation started
   showHpDetails: boolean; // Whether to show heart icon and HP number
 }
 
@@ -303,7 +307,10 @@ const createHpCanvas = (unit: PlacedUnit, showHpDetails: boolean = false) => {
   const canvas = document.createElement('canvas');
   // render at device pixel ratio for a crisp, non-blurry HUD
   const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-  const totalSegments = Math.max(1, Math.ceil(unit.hp));
+  const maxShield = unit.shield ?? 0;
+  const shieldSegments = Math.max(0, Math.ceil(maxShield));
+  const hpSegments = Math.max(1, Math.ceil(unit.hp));
+  const totalSegments = Math.max(1, shieldSegments + hpSegments);
   const numberArea = showHpDetails ? 56 : 0;
   const canvasWidth = HP_CANVAS_PADDING + totalSegments * HP_SEGMENT_WIDTH + (totalSegments - 1) * HP_SEGMENT_GAP + numberArea;
   canvas.width = Math.round(canvasWidth * dpr);
@@ -326,7 +333,8 @@ const createHpCanvas = (unit: PlacedUnit, showHpDetails: boolean = false) => {
   texture.magFilter = THREE.LinearFilter;
   texture.minFilter = THREE.LinearFilter;
   const currentHp = unit.currentHp ?? unit.hp;
-  updateHpCanvas(canvas, texture, currentHp, unit.hp, unit.team, showHpDetails);
+  const currentShield = unit.currentShield ?? maxShield;
+  updateHpCanvas(canvas, texture, currentHp, unit.hp, unit.team, showHpDetails, currentShield, maxShield);
   return { canvas, texture, plane };
 };
 
@@ -336,16 +344,22 @@ const updateHpCanvas = (
   displayHp: number,
   maxHp: number,
   team: 'player' | 'enemy',
-  showHpDetails: boolean = false
+  showHpDetails: boolean = false,
+  displayShield: number = 0,
+  maxShield: number = 0
 ) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  const hpValue = displayHp;
   // adapt coordinates for DPR scaled canvas
   const logicalWidth = (canvas as any).__logicalWidth || canvas.width;
   const dpr = canvas.width / logicalWidth;
+
+  const shieldCapacity = Math.max(0, Math.ceil(maxShield));
+  const hpCapacity = Math.max(1, Math.ceil(maxHp));
+  const totalSegments = Math.max(1, shieldCapacity + hpCapacity);
+  const filledShield = clamp(displayShield, 0, maxShield);
+  const filledHp = clamp(displayHp, 0, maxHp);
 
   // Outer ghosted pill container
   const containerX = Math.round(12 * dpr);
@@ -374,10 +388,6 @@ const updateHpCanvas = (
   const trackHeight = Math.round(HP_BAR_HEIGHT * dpr);
 
   // Individual HP segments (blue for player, red for enemy)
-  const totalSegments = Math.max(1, Math.ceil(maxHp));
-  const filledAmount = clamp(displayHp, 0, maxHp);
-  const fullSegments = Math.floor(filledAmount);
-  const partialSegmentFill = filledAmount - fullSegments;
   const segmentGap = Math.round(HP_SEGMENT_GAP * dpr);
   const segmentWidth = Math.round(HP_SEGMENT_WIDTH * dpr);
   const segmentRadius = Math.min(Math.round(segmentWidth / 2), Math.round(trackHeight / 2));
@@ -385,6 +395,7 @@ const updateHpCanvas = (
   const emptyBorder = 'rgba(15,23,42,0.35)';
   const playerGradient = ['#60a5fa', '#1d4ed8'];
   const enemyGradient = ['#f87171', '#b91c1c'];
+  const shieldGradient = ['#fcd34d', '#d97706']; // gold tint for shield
 
   for (let index = 0; index < totalSegments; index += 1) {
     const x = trackX + index * (segmentWidth + segmentGap);
@@ -399,15 +410,35 @@ const updateHpCanvas = (
     drawRoundedRect(ctx, x, y, segmentWidth, trackHeight, segmentRadius);
     ctx.stroke();
 
-    const isFull = index < fullSegments;
-    const isPartial = !isFull && index === fullSegments && partialSegmentFill > 0;
-    if (!isFull && !isPartial) {
+    // Determine how much of this segment is filled by shield or HP
+    let fillAmount = 0;
+    let fillType: 'shield' | 'hp' | null = null;
+
+    // First render HP on the left, then shield on the far right
+    if (index < hpCapacity) {
+      fillAmount = clamp(filledHp - index, 0, 1);
+      if (fillAmount > 0) {
+        fillType = 'hp';
+      }
+    } else {
+      const shieldIndex = index - hpCapacity;
+      fillAmount = clamp(filledShield - shieldIndex, 0, 1);
+      if (fillAmount > 0) {
+        fillType = 'shield';
+      }
+    }
+
+    if (!fillType || fillAmount <= 0) {
       continue;
     }
 
-    const fillWidth = isFull ? segmentWidth : segmentWidth * partialSegmentFill;
+    const fillWidth = segmentWidth * fillAmount;
     const gradient = ctx.createLinearGradient(x, y, x, y + trackHeight);
-    const [startColor, endColor] = team === 'player' ? playerGradient : enemyGradient;
+    const [startColor, endColor] = fillType === 'shield'
+      ? shieldGradient
+      : team === 'player'
+        ? playerGradient
+        : enemyGradient;
     gradient.addColorStop(0, startColor);
     gradient.addColorStop(1, endColor);
     ctx.fillStyle = gradient;
@@ -436,8 +467,11 @@ const updateHpCanvas = (
     // subtle thin stroke for contrast
     ctx.lineWidth = Math.max(0.9, 0.9 * dpr);
     ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-    ctx.strokeText(String(Math.round(hpValue)), numberX, numberY + 0.75);
-    ctx.fillText(String(Math.round(hpValue)), numberX, numberY + 0.75);
+    const hpText = Math.max(0, Math.round(displayHp));
+    const shieldText = maxShield > 0 ? Math.max(0, Math.round(displayShield)) : null;
+    const valueText = shieldText !== null ? `${hpText} HP / ${shieldText} SH` : `${hpText} HP`;
+    ctx.strokeText(valueText, numberX, numberY + 0.75);
+    ctx.fillText(valueText, numberX, numberY + 0.75);
   }
 
   texture.needsUpdate = true;
@@ -831,9 +865,13 @@ const createVisual = (
     displayHp: unit.currentHp ?? unit.hp,
     targetHp: unit.currentHp ?? unit.hp,
     maxHp: unit.hp,
+    displayShield: unit.currentShield ?? unit.shield ?? 0,
+    targetShield: unit.currentShield ?? unit.shield ?? 0,
+    maxShield: unit.shield ?? 0,
     team: unit.team,
     hpAnimationStartTime: undefined,
     hpAnimationStartValue: undefined,
+    shieldAnimationStartValue: undefined,
     showHpDetails
   };
 };
@@ -1061,16 +1099,19 @@ export const useUnitLayer = (
           });
         }
 
-        // Update maxHp in case it changed, but don't update displayHp or targetHp here
-        // HP changes are triggered by impact animations or death events
+        // Update max values in case templates changed, but don't update display values here
+        // HP/shield changes are triggered by impact animations or death events
         visual.maxHp = unit.hp;
+        visual.maxShield = unit.shield ?? 0;
         
         if (isUnitDead(unit)) {
-          // When unit dies, immediately set target HP to 0 to trigger HP bar animation
-          if (visual.targetHp > 0) {
+          // When unit dies, immediately set target HP/shield to 0 to trigger HP bar animation
+          if (visual.targetHp > 0 || visual.targetShield > 0) {
             visual.targetHp = 0;
+            visual.targetShield = 0;
             visual.hpAnimationStartTime = performance.now();
             visual.hpAnimationStartValue = visual.displayHp;
+            visual.shieldAnimationStartValue = visual.displayShield;
           }
           enterDeathState(visual);
         } else {
@@ -1203,21 +1244,44 @@ export const useUnitLayer = (
       const progress = clamp(elapsed / HP_ANIMATION_DURATION_MS, 0, 1);
       const eased = easeOutCubic(progress);
       
-      const startValue = visual.hpAnimationStartValue ?? visual.displayHp;
-      const newDisplayHp = startValue + (visual.targetHp - startValue) * eased;
+      const startHp = visual.hpAnimationStartValue ?? visual.displayHp;
+      const startShield = visual.shieldAnimationStartValue ?? visual.displayShield;
+      const newDisplayHp = startHp + (visual.targetHp - startHp) * eased;
+      const newDisplayShield = startShield + (visual.targetShield - startShield) * eased;
       
       // Only update canvas if value changed significantly (optimization)
-      if (Math.abs(newDisplayHp - visual.displayHp) > 0.1) {
+      if (Math.abs(newDisplayHp - visual.displayHp) > 0.1 || Math.abs(newDisplayShield - visual.displayShield) > 0.1) {
         visual.displayHp = newDisplayHp;
-        updateHpCanvas(visual.hpCanvas, visual.hpTexture, visual.displayHp, visual.maxHp, visual.team, visual.showHpDetails);
+        visual.displayShield = newDisplayShield;
+        updateHpCanvas(
+          visual.hpCanvas,
+          visual.hpTexture,
+          visual.displayHp,
+          visual.maxHp,
+          visual.team,
+          visual.showHpDetails,
+          visual.displayShield,
+          visual.maxShield
+        );
       }
       
       // Animation complete
       if (progress >= 1) {
         visual.displayHp = visual.targetHp;
+        visual.displayShield = visual.targetShield;
         visual.hpAnimationStartTime = undefined;
         visual.hpAnimationStartValue = undefined;
-        updateHpCanvas(visual.hpCanvas, visual.hpTexture, visual.displayHp, visual.maxHp, visual.team, visual.showHpDetails);
+        visual.shieldAnimationStartValue = undefined;
+        updateHpCanvas(
+          visual.hpCanvas,
+          visual.hpTexture,
+          visual.displayHp,
+          visual.maxHp,
+          visual.team,
+          visual.showHpDetails,
+          visual.displayShield,
+          visual.maxShield
+        );
       }
     });
   }, []);
@@ -1281,17 +1345,33 @@ export const useUnitLayer = (
             return;
           }
           const desiredHp = unit.currentHp ?? unit.hp;
+          const desiredShield = unit.currentShield ?? unit.shield ?? 0;
           if (desiredHp > 0) {
             exitDeathState(visual);
           }
           const needsHpSync =
-            Math.abs(desiredHp - visual.displayHp) > 0.1 || Math.abs(desiredHp - visual.targetHp) > 0.1;
+            Math.abs(desiredHp - visual.displayHp) > 0.1 ||
+            Math.abs(desiredHp - visual.targetHp) > 0.1 ||
+            Math.abs(desiredShield - visual.displayShield) > 0.1 ||
+            Math.abs(desiredShield - visual.targetShield) > 0.1;
           if (needsHpSync) {
             visual.targetHp = desiredHp;
             visual.displayHp = desiredHp;
+            visual.targetShield = desiredShield;
+            visual.displayShield = desiredShield;
             visual.hpAnimationStartTime = undefined;
             visual.hpAnimationStartValue = undefined;
-            updateHpCanvas(visual.hpCanvas, visual.hpTexture, desiredHp, visual.maxHp, visual.team, visual.showHpDetails);
+            visual.shieldAnimationStartValue = undefined;
+            updateHpCanvas(
+              visual.hpCanvas,
+              visual.hpTexture,
+              desiredHp,
+              visual.maxHp,
+              visual.team,
+              visual.showHpDetails,
+              desiredShield,
+              visual.maxShield
+            );
           }
         });
       }
@@ -1328,9 +1408,12 @@ export const useUnitLayer = (
               // The targetUnit has the new HP value (after damage was applied)
               if (targetUnit) {
                 const newHp = targetUnit.currentHp ?? targetUnit.hp;
-                if (newHp !== targetVisual.targetHp) {
+                const newShield = targetUnit.currentShield ?? targetUnit.shield ?? 0;
+                if (newHp !== targetVisual.targetHp || newShield !== targetVisual.targetShield) {
                   targetVisual.hpAnimationStartValue = targetVisual.displayHp;
+                  targetVisual.shieldAnimationStartValue = targetVisual.displayShield;
                   targetVisual.targetHp = newHp;
+                  targetVisual.targetShield = newShield;
                   targetVisual.hpAnimationStartTime = performance.now();
                 }
               }
