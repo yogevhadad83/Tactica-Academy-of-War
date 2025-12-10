@@ -69,10 +69,11 @@ export interface UnitVisual {
 
 const playerColor = new THREE.Color(0x5ea3ff);
 const enemyColor = new THREE.Color(0xf87171);
-const HP_CANVAS_WIDTH = 340;
+const HP_SEGMENT_WIDTH = 28; // Fixed width per HP point
+const HP_SEGMENT_GAP = 4; // Gap between segments
+const HP_CANVAS_PADDING = 40; // Left + right padding
 const HP_CANVAS_HEIGHT = 64;
 const HP_BAR_HEIGHT = 20;
-const HP_PLANE_WIDTH = 1.6;
 const HP_PLANE_HEIGHT = 0.22;
 const HP_PLANE_BASE_HEIGHT = 2.05;
 const HP_PLANE_BOB_AMPLITUDE = 0.05;
@@ -302,17 +303,22 @@ const createHpCanvas = (unit: PlacedUnit, showHpDetails: boolean = false) => {
   const canvas = document.createElement('canvas');
   // render at device pixel ratio for a crisp, non-blurry HUD
   const dpr = typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-  canvas.width = Math.round(HP_CANVAS_WIDTH * dpr);
+  const totalSegments = Math.max(1, Math.ceil(unit.hp));
+  const numberArea = showHpDetails ? 56 : 0;
+  const canvasWidth = HP_CANVAS_PADDING + totalSegments * HP_SEGMENT_WIDTH + (totalSegments - 1) * HP_SEGMENT_GAP + numberArea;
+  canvas.width = Math.round(canvasWidth * dpr);
   canvas.height = Math.round(HP_CANVAS_HEIGHT * dpr);
   // store logical size for drawing calculations on the canvas
-  (canvas as any).__logicalWidth = HP_CANVAS_WIDTH;
+  (canvas as any).__logicalWidth = canvasWidth;
   (canvas as any).__logicalHeight = HP_CANVAS_HEIGHT;
   const texture = new THREE.CanvasTexture(canvas);
   texture.anisotropy = 4;
   texture.needsUpdate = true;
   texture.colorSpace = THREE.SRGBColorSpace;
   const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false });
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(HP_PLANE_WIDTH, HP_PLANE_HEIGHT), material);
+  // Scale plane width based on number of HP segments so all segments appear same size
+  const planeWidth = HP_PLANE_HEIGHT * (canvasWidth / HP_CANVAS_HEIGHT);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(planeWidth, HP_PLANE_HEIGHT), material);
   plane.renderOrder = 5;
   // plane size is in world units and independent of canvas resolution
   plane.position.y = HP_PLANE_BASE_HEIGHT;
@@ -336,10 +342,10 @@ const updateHpCanvas = (
   if (!ctx) return;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  const ratio = clamp(displayHp / maxHp, 0, 1);
   const hpValue = displayHp;
   // adapt coordinates for DPR scaled canvas
-  const dpr = canvas.width / ((canvas as any).__logicalWidth || HP_CANVAS_WIDTH);
+  const logicalWidth = (canvas as any).__logicalWidth || canvas.width;
+  const dpr = canvas.width / logicalWidth;
 
   // Outer ghosted pill container
   const containerX = Math.round(12 * dpr);
@@ -362,37 +368,59 @@ const updateHpCanvas = (
   ctx.stroke();
 
   // Inner track (inset area for HP bar)
-  // When showing details, leave room on the right for the numeric HP label (no icon)
   const numberArea = showHpDetails ? Math.round(56 * dpr) : 0;
   const trackX = Math.round(20 * dpr);
-  const trackWidth = Math.max(0, Math.round(canvas.width - trackX * 2 - numberArea));
   const trackY = Math.round((canvas.height - HP_BAR_HEIGHT * dpr) / 2);
-  const cornerRadius = Math.round((HP_BAR_HEIGHT * dpr) / 2);
+  const trackHeight = Math.round(HP_BAR_HEIGHT * dpr);
 
-  // Inset base
-  const insetGrad = ctx.createLinearGradient(trackX, trackY - 4, trackX, trackY + HP_BAR_HEIGHT + 4);
-  insetGrad.addColorStop(0, 'rgba(15,23,42,0.95)');
-  insetGrad.addColorStop(1, 'rgba(15,23,42,0.7)');
-  ctx.fillStyle = insetGrad;
-  drawRoundedRect(ctx, trackX, trackY, trackWidth, Math.round(HP_BAR_HEIGHT * dpr), cornerRadius);
-  ctx.fill();
+  // Individual HP segments (blue for player, red for enemy)
+  const totalSegments = Math.max(1, Math.ceil(maxHp));
+  const filledAmount = clamp(displayHp, 0, maxHp);
+  const fullSegments = Math.floor(filledAmount);
+  const partialSegmentFill = filledAmount - fullSegments;
+  const segmentGap = Math.round(HP_SEGMENT_GAP * dpr);
+  const segmentWidth = Math.round(HP_SEGMENT_WIDTH * dpr);
+  const segmentRadius = Math.min(Math.round(segmentWidth / 2), Math.round(trackHeight / 2));
+  const baseSegmentColor = 'rgba(148,163,184,0.28)';
+  const emptyBorder = 'rgba(15,23,42,0.35)';
+  const playerGradient = ['#60a5fa', '#1d4ed8'];
+  const enemyGradient = ['#f87171', '#b91c1c'];
 
-  // HP fill with gradient
-  if (ratio > 0) {
-    const gradient = ctx.createLinearGradient(trackX, trackY, trackX + trackWidth, trackY + Math.round(HP_BAR_HEIGHT * dpr));
-    gradient.addColorStop(0, team === 'player' ? '#38bdf8' : '#fb7185');
-    gradient.addColorStop(1, team === 'player' ? '#22c55e' : '#fb923c');
+  for (let index = 0; index < totalSegments; index += 1) {
+    const x = trackX + index * (segmentWidth + segmentGap);
+    const y = trackY;
+
+    // Base empty segment
+    ctx.fillStyle = baseSegmentColor;
+    drawRoundedRect(ctx, x, y, segmentWidth, trackHeight, segmentRadius);
+    ctx.fill();
+    ctx.strokeStyle = emptyBorder;
+    ctx.lineWidth = Math.max(0.75, dpr * 0.75);
+    drawRoundedRect(ctx, x, y, segmentWidth, trackHeight, segmentRadius);
+    ctx.stroke();
+
+    const isFull = index < fullSegments;
+    const isPartial = !isFull && index === fullSegments && partialSegmentFill > 0;
+    if (!isFull && !isPartial) {
+      continue;
+    }
+
+    const fillWidth = isFull ? segmentWidth : segmentWidth * partialSegmentFill;
+    const gradient = ctx.createLinearGradient(x, y, x, y + trackHeight);
+    const [startColor, endColor] = team === 'player' ? playerGradient : enemyGradient;
+    gradient.addColorStop(0, startColor);
+    gradient.addColorStop(1, endColor);
     ctx.fillStyle = gradient;
-    drawRoundedRect(ctx, trackX, trackY, Math.round(trackWidth * ratio), Math.round(HP_BAR_HEIGHT * dpr), cornerRadius);
+    drawRoundedRect(ctx, x, y, fillWidth, trackHeight, segmentRadius);
     ctx.fill();
 
-    // Subtle top highlight
-    const highlightGrad = ctx.createLinearGradient(trackX, trackY, trackX, trackY + Math.round(HP_BAR_HEIGHT * dpr));
-    highlightGrad.addColorStop(0, 'rgba(255,255,255,0.25)');
-    highlightGrad.addColorStop(0.4, 'rgba(255,255,255,0.05)');
+    // Highlight for filled segments
+    const highlightGrad = ctx.createLinearGradient(x, y, x, y + trackHeight);
+    highlightGrad.addColorStop(0, 'rgba(255,255,255,0.35)');
+    highlightGrad.addColorStop(0.45, 'rgba(255,255,255,0.05)');
     highlightGrad.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = highlightGrad;
-    drawRoundedRect(ctx, trackX, trackY, Math.round(trackWidth * ratio), Math.round(HP_BAR_HEIGHT * dpr), cornerRadius);
+    drawRoundedRect(ctx, x, y, fillWidth, trackHeight, segmentRadius);
     ctx.fill();
   }
 

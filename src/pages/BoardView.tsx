@@ -369,6 +369,16 @@ const BoardView = () => {
     const allowPlacement = battleState === 'idle';
     const isPlayerUnit = unit?.team === 'player';
     const canDragUnit = allowPlacement && isPlayerUnit;
+    const healthSegments = (() => {
+      if (!unit) return null;
+      const maxHp = Math.max(1, Math.ceil(unit.hp));
+      const currentHp = Math.max(0, Math.min(maxHp, Math.round(unit.currentHp ?? unit.hp)));
+      return Array.from({ length: maxHp }, (_, index) => {
+        const filled = index < currentHp;
+        const segmentClass = filled ? `health-segment filled ${unit.team}` : 'health-segment empty';
+        return <span key={`${unit.instanceId}-hp-${index}`} className={segmentClass} />;
+      });
+    })();
 
     return (
       <div
@@ -387,10 +397,7 @@ const BoardView = () => {
           >
             <div className="unit-icon-board">{unit.icon}</div>
             <div className="unit-health-bar">
-              <div
-                className="health-fill"
-                style={{ width: `${(((unit.currentHp ?? unit.hp) / unit.hp) * 100).toFixed(0)}%` }}
-              ></div>
+              {healthSegments}
             </div>
           </div>
         )}
