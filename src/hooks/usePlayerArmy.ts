@@ -18,6 +18,7 @@ export type UsePlayerArmyResult = {
   addUnit: (unitTypeId: string) => Promise<void>;
   removeUnit: (unitInstanceId: string) => Promise<void>;
   clearArmy: () => Promise<void>;
+  refreshArmy: () => void;
 };
 
 type UsePlayerArmyOptions = {
