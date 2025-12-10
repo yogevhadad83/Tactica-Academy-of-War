@@ -179,8 +179,8 @@ wss.on('connection', (socket: WebSocket) => {
           const fakeEnemyArmy: ArmyConfig = [];
           const knightTemplate = buildGddUnit('knight');
 
-          // Board is 12 rows x 8 cols, with player zones being rows 6-11 (6 rows)
-          const BOARD_COLS = 8;
+          // Board is 12 rows x 6 cols, with player zones being rows 6-11 (6 rows)
+          const BOARD_COLS = 6;
           const PLAYER_ROWS = 6;
           const PLAYER_ZONE_START = 12 - PLAYER_ROWS; // = 6
 
@@ -189,7 +189,7 @@ wss.on('connection', (socket: WebSocket) => {
             // Find an unoccupied position in "player zone" (rows 6-11) from fake Player B's perspective
             do {
               row = Math.floor(Math.random() * PLAYER_ROWS) + PLAYER_ZONE_START; // rows 6-11
-              col = Math.floor(Math.random() * BOARD_COLS); // cols 0-7 (8 columns total)
+              col = Math.floor(Math.random() * BOARD_COLS); // cols 0-5 (6 columns total)
               posKey = `${row}-${col}`;
             } while (usedPositions.has(posKey));
             usedPositions.add(posKey);

@@ -9,11 +9,11 @@ export type { PlacedUnit } from '../types';
  * 
  * These constants define the battle board dimensions:
  * - BOARD_SIZE: Total rows (12) - full vertical height of the board
- * - BOARD_COLS: Total columns (8) - full horizontal width of the board
+ * - BOARD_COLS: Total columns (6) - full horizontal width of the board
  * - PLAYER_ROWS: Rows available for each player's deployment zone (6)
  * - PLAYER_ZONE_START: Starting row for player's deployment zone (6)
  * 
- * The board is 12 rows x 8 columns:
+ * The board is 12 rows x 6 columns:
  * - Rows 0-5: Enemy deployment zone (from player perspective)
  * - Rows 6-11: Player deployment zone
  * 
@@ -22,18 +22,18 @@ export type { PlacedUnit } from '../types';
  * - All client components that need board dimensions
  */
 export const BOARD_SIZE = 12;
-export const BOARD_COLS = 8;
+export const BOARD_COLS = 6;
 export const PLAYER_ROWS = 6;
 export const PLAYER_ZONE_START = BOARD_SIZE - PLAYER_ROWS;
 
 export const DEFAULT_ENEMY_FORMATION: Position[] = [
-  { row: 0, col: 2 },
-  { row: 0, col: 4 },
-  { row: 0, col: 6 },
-  { row: 1, col: 3 },
-  { row: 1, col: 5 },
-  { row: 2, col: 2 },
-  { row: 2, col: 6 }
+  { row: 0, col: 1 },
+  { row: 0, col: 3 },
+  { row: 0, col: 5 },
+  { row: 1, col: 2 },
+  { row: 1, col: 4 },
+  { row: 2, col: 1 },
+  { row: 2, col: 5 }
 ];
 
 export type Team = 'player' | 'enemy';
