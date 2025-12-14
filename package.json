@@ -5,11 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run extract-animations && tsc -b && vite build",
+    "build": "npm run build:engine && npm run extract-animations && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "tsx --test \"tests/**/*.test.ts\"",
-    "extract-animations": "tsx scripts/extract-animation-metadata.ts"
+    "extract-animations": "tsx scripts/extract-animation-metadata.ts",
+    "build:engine": "node scripts/build-engine.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.87.0",
@@ -36,6 +37,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "esbuild": "^0.24.0",
     "tsx": "^4.20.6",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.3",

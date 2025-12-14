@@ -15,11 +15,11 @@ npm start        # Start production server
 
 The server imports shared code from multiple locations in the monorepo:
 - `../shared/*` - Shared code and definitions (e.g., unit definitions)
-- `../src/engine/battleEngine.cjs` - Battle engine logic
+- `../dist/engine/battleEngine.cjs` - Generated battle engine bundle (falls back to TS source in dev)
 
 The `tsconfig.json` is configured with:
 - `rootDir: ".."` - Allows importing from parent directories
-- `include: ["src/**/*", "../shared/**/*", "../src/engine/battleEngine.cjs"]` - Includes all necessary source files
+- `include: ["src/**/*", "../shared/**/*", "../src/engine/**/*.ts"]` - Includes all necessary source files
 - `outDir: "dist"` - Output maintains the directory structure
 
 **Important**: Do NOT change `rootDir` back to `"src"` as this will cause build failures when importing from `../shared` or `../src`.

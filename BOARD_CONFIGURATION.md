@@ -23,13 +23,13 @@ Each player gets 6 rows × 8 columns = 48 possible unit placement positions.
 
 ### Client Side
 1. **`src/engine/battleEngine.ts`** - Main battle engine (SOURCE OF TRUTH)
-2. **`src/engine/battleEngine.cjs`** - CommonJS build used by server
+2. **`dist/engine/battleEngine.cjs`** - Generated CommonJS bundle used by server
 3. **`src/engine/demoBattle.ts`** - Demo/training battle logic
 4. **`src/pages/BoardView.tsx`** - Imports from battleEngine
 5. **`src/components/createTacticalBoard.ts`** - Receives dimensions as parameters
 
 ### Server Side
-1. **`server/src/runBattle.ts`** - Imports BOARD_SIZE, BOARD_COLS, PLAYER_ROWS from battleEngine.cjs
+1. **`server/src/runBattle.ts`** - Imports BOARD_SIZE, BOARD_COLS, PLAYER_ROWS from built battleEngine bundle (with TS fallback in dev)
 2. **`server/src/index.ts`** - Uses local constants for demo battle (derived from battleEngine values)
 3. **`server/src/battleTypes.ts`** - TypeScript interface defines what's exported from battleEngine
 
@@ -44,9 +44,9 @@ To change the board dimensions:
    export const PLAYER_ROWS = <new_player_rows>;
    ```
 
-2. **Rebuild battleEngine.cjs**:
+2. **Rebuild the engine bundle**:
    ```bash
-   npm run build  # or whatever build script compiles TS to CJS
+   npm run build  # runs build:engine before the rest of the build pipeline
    ```
 
 3. **Update matching constants in `src/engine/demoBattle.ts`** if they exist
@@ -66,6 +66,6 @@ To change the board dimensions:
 
 ## Notes
 
-- The server imports board constants from the compiled `battleEngine.cjs` file
+- The server imports board constants from the compiled `dist/engine/battleEngine.cjs` file (generated via `npm run build:engine`)
 - Demo battles in `server/src/index.ts` now correctly use BOARD_COLS (8) instead of hardcoded 12
 - All unit positions must be within bounds: `0 <= row < BOARD_SIZE` and `0 <= col < BOARD_COLS`

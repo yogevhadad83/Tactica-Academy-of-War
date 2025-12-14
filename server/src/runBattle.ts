@@ -1,12 +1,22 @@
 import type { PlacedUnit, Team, BattleEngineModule } from './battleTypes';
 
+// Prefer the built CJS bundle; fall back to TS source in dev if not built yet.
+const loadEngine = (): BattleEngineModule => {
+  try {
+    return require('../../dist/engine/battleEngine.cjs') as BattleEngineModule;
+  } catch (err) {
+    // Explicitly load the TS source to avoid picking up the ESM JS build
+    return require('../../src/engine/battleEngine.ts') as BattleEngineModule;
+  }
+};
+
 const {
   advanceBattleTick,
   initializeBattle,
   BOARD_SIZE,
   BOARD_COLS,
   PLAYER_ROWS,
-} = require('../../src/engine/battleEngine.cjs') as BattleEngineModule;
+} = loadEngine();
 import type { ArmyConfig, BattleTickResult } from './types';
 
 type Position = { row: number; col: number };

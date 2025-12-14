@@ -35,6 +35,7 @@ export interface PlacedUnit extends ArmyUnitInstance {
   team: 'player' | 'enemy';
   currentHp?: number;
   currentShield?: number;
+  selectedBehaviors?: string[]; // Selected behaviors/logic for this specific instance (supports multiple)
 }
 
 // Strategy rule saved per unit type
@@ -58,6 +59,10 @@ export interface StrategyBook {
 
 export interface BoardPlacements {
   [instanceId: string]: Position;
+}
+
+export interface UnitLogic {
+  [instanceId: string]: string[] | undefined; // instanceId -> selectedBehaviors array
 }
 
 // Player data from public.players table

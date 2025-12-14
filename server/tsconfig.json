@@ -12,6 +12,6 @@
     "types": ["node"],
     "allowJs": true
   },
-  "include": ["src/**/*", "../shared/**/*", "../src/engine/battleEngine.cjs"],
+  "include": ["src/**/*", "../shared/**/*", "../src/engine/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

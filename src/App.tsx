@@ -7,7 +7,6 @@ import { MultiplayerProvider } from './context/MultiplayerContext';
 
 const Home = lazy(() => import('./pages/Home'));
 const ArmyBuilder = lazy(() => import('./pages/ArmyBuilder'));
-const StrategyEditor = lazy(() => import('./pages/StrategyEditor'));
 const BoardView = lazy(() => import('./pages/BoardView'));
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
@@ -34,7 +33,6 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<RouteLoader><Home /></RouteLoader>} />
             <Route path="army-builder" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
-            <Route path="strategy" element={<RouteLoader><StrategyEditor /></RouteLoader>} />
             <Route path="board" element={<RouteLoader><BoardView /></RouteLoader>} />
             <Route path="login" element={<RouteLoader><Login /></RouteLoader>} />
             <Route path="signup" element={<RouteLoader><Signup /></RouteLoader>} />

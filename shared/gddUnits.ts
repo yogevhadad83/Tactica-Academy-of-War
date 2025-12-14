@@ -94,7 +94,7 @@ export const GDD_UNIT_DEFS: Record<GddUnitId, GddUnitDefinition> = {
     supplyCost: 2,
     creditCost: 25,
     reviveCost: 6,
-    behaviorOptions: ['Target weakest enemy', 'Target strongest enemy', 'Prioritize shooting', 'Prioritize advancing'],
+    behaviorOptions: ['Target Preference: Weakest', 'Target Preference: Strongest', 'Priority: Shooting', 'Priority: Advancing'],
     description: 'Ranged unit with a 3x3 forward volley and weak melee swipe.'
   },
   giant: {

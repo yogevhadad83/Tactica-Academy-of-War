@@ -497,6 +497,17 @@
   color: var(--tactica-muted);
 }
 
+.tile-unit-behavior {
+  margin: 0.35rem 0 0;
+  color: #00d4ff;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.tile-unit-behaviors {
+  margin-top: 0.5rem;
+}
+
 .tile-empty {
   margin: 0.25rem 0;
   color: var(--tactica-muted);

@@ -33,9 +33,6 @@ const Layout = () => {
           <Link to="/army-builder" className={`nav-link ${isActive('/army-builder')}`}>
             🏰 Army Builder
           </Link>
-          <Link to="/strategy" className={`nav-link ${isActive('/strategy')}`}>
-            📋 Strategy
-          </Link>
           <Link to="/board" className={`nav-link ${isActive('/board')}`}>
             🎮 Board
           </Link>

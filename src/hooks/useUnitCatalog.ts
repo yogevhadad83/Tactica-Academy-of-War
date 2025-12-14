@@ -116,11 +116,12 @@ export const useUnitCatalog = () => {
 
       const mapped = (data ?? []).map((row) => {
         const dbUnit = mapRowToUnit(row);
-        const base = gddById.get(dbUnit.id) ?? null;
+        const normalizedId = dbUnit.id.toLowerCase();
+        const base = gddById.get(normalizedId) ?? null;
         // Preserve GDD stats as the single source of truth; prefer DB description when present.
         return base
-          ? { ...base, description: dbUnit.description ?? base.description }
-          : dbUnit;
+          ? { ...base, id: normalizedId, description: dbUnit.description ?? base.description }
+          : { ...dbUnit, id: normalizedId };
       });
 
       setUnits(mapped.length ? mapped : gddUnits);

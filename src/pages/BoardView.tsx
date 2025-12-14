@@ -2,12 +2,13 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { BOARD_SIZE, BOARD_COLS, PLAYER_ZONE_START } from '../engine/battleEngine';
 import type { Team, BattleTickResult } from '../engine/battleEngine';
-import type { ArmyUnitInstance, BoardPlacements, PlacedUnit } from '../types';
+import type { ArmyUnitInstance, BoardPlacements, PlacedUnit, UnitLogic } from '../types';
 import type { TileOccupant } from '../components/createTacticalBoard';
 import { useUser } from '../context/UserContext';
 import { useMultiplayer } from '../context/MultiplayerContext';
 import { placementToArmyConfig } from '../utils/placementToArmyConfig';
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
+const UnitLogicPanel = lazy(() => import('../components/UnitLogicPanel'));
 import { calculateTickDuration } from '../components/units/useUnitLayer';
 import type { DemoState, HitEvent } from '../types/battle';
 import { useUnitCatalog } from '../hooks/useUnitCatalog';
@@ -81,13 +82,15 @@ const BoardView = () => {
   const [marchCells, setMarchCells] = useState<string[]>([]);
   const [winner, setWinner] = useState<'player' | 'enemy' | 'draw' | null>(null);
   const [currentTeam, setCurrentTeam] = useState<Team>('player');
-  const [turnNumber, setTurnNumber] = useState(1);
+  const [_turnNumber, setTurnNumber] = useState(1);
   const [startingTeam, setStartingTeam] = useState<Team | null>(null);
   const [countdownValue, setCountdownValue] = useState<string | number | null>(null);
   const [hoveredTile, setHoveredTile] = useState<{ row: number; col: number; occupied: boolean } | null>(null);
   const [draggingUnit, setDraggingUnit] = useState<{ unit: ArmyUnitInstance } | null>(null);
   const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
   const [tileMenu, setTileMenu] = useState<{ row: number; col: number; unit: PlacedUnit } | null>(null);
+  const [unitLogic, setUnitLogic] = useState<UnitLogic>({});
+  const [logicPanelUnit, setLogicPanelUnit] = useState<PlacedUnit | null>(null);
   const countdownTimeoutRef = useRef<number | null>(null);
   const previousBattleStateRef = useRef<DemoState>('idle');
   const timelineTimeoutRef = useRef<number | null>(null);
@@ -111,7 +114,7 @@ const BoardView = () => {
   const armyInstances = useMemo(() => {
     return armyUnits
       .map((armyUnit) => {
-        const meta = catalogById.get(armyUnit.unitTypeId);
+        const meta = catalogById.get(armyUnit.unitTypeId.toLowerCase());
         if (!meta) return null;
         return { ...meta, instanceId: armyUnit.id } as ArmyUnitInstance;
       })
@@ -147,11 +150,12 @@ const BoardView = () => {
           ...unit,
           position,
           team: 'player' as const,
-          currentHp: unit.hp
+          currentHp: unit.hp,
+          selectedBehaviors: unitLogic[unit.instanceId]
         };
       })
       .filter(Boolean) as PlacedUnit[];
-  }, [armyInstances, placements]);
+  }, [armyInstances, placements, unitLogic]);
 
   const queueUnits = useMemo(() => {
     return armyInstances.filter((unit) => !placements[unit.instanceId]);
@@ -444,6 +448,43 @@ const BoardView = () => {
     },
     [removePlacement, unitByInstanceId]
   );
+
+  const openLogicPanel = useCallback((unit: PlacedUnit) => {
+    setLogicPanelUnit(unit);
+    setTileMenu(null);
+  }, []);
+
+  // Keep logicPanelUnit in sync with placedUnits as behaviors are updated
+  const syncedLogicPanelUnit = useMemo(() => {
+    if (!logicPanelUnit) return null;
+    const updated = placedUnits.find(u => u.instanceId === logicPanelUnit.instanceId);
+    return updated || logicPanelUnit;
+  }, [logicPanelUnit, placedUnits]);
+
+  const closeLogicPanel = useCallback(() => {
+    setLogicPanelUnit(null);
+  }, []);
+
+  const handleBehaviorSelect = useCallback((instanceId: string, behavior: string, categoryKey?: string) => {
+    setUnitLogic((prev) => {
+      const currentBehaviors = prev[instanceId] ?? [];
+      
+      if (categoryKey) {
+        // For categorized behaviors (like Archer), toggle within category
+        const newBehaviors = currentBehaviors.filter(b => !b.startsWith(categoryKey));
+        return {
+          ...prev,
+          [instanceId]: [...newBehaviors, behavior]
+        };
+      }
+      
+      // For simple behaviors, replace entirely
+      return {
+        ...prev,
+        [instanceId]: [behavior]
+      };
+    });
+  }, []);
 
   const handlePointerMove = useCallback(
     (event: PointerEvent) => {
@@ -1006,6 +1047,13 @@ const BoardView = () => {
                         <div>
                           <h3>{hoveredUnit.name}</h3>
                           <p className="tile-unit-meta">Supply {resolveSupplyCost(hoveredUnit.id, hoveredUnit)}</p>
+                          {hoveredUnit.selectedBehaviors && hoveredUnit.selectedBehaviors.length > 0 && (
+                            <div className="tile-unit-behaviors">
+                              {hoveredUnit.selectedBehaviors.map((behavior, idx) => (
+                                <p key={idx} className="tile-unit-behavior">⚙️ {behavior}</p>
+                              ))}
+                            </div>
+                          )}
                           <button
                             type="button"
                             className="tile-menu-btn"
@@ -1122,8 +1170,12 @@ const BoardView = () => {
               >
                 Move unit
               </button>
-              <button type="button" className="tile-menu-btn" disabled>
-                Modify Logic (coming soon)
+              <button
+                type="button"
+                className="tile-menu-btn"
+                onClick={() => openLogicPanel(tileMenu.unit)}
+              >
+                Configure Logic
               </button>
               <button
                 type="button"
@@ -1138,6 +1190,16 @@ const BoardView = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {syncedLogicPanelUnit && (
+        <Suspense fallback={<div>Loading logic panel…</div>}>
+          <UnitLogicPanel
+            unit={syncedLogicPanelUnit}
+            onBehaviorSelect={(behavior, categoryKey) => handleBehaviorSelect(syncedLogicPanelUnit.instanceId, behavior, categoryKey)}
+            onClose={closeLogicPanel}
+          />
+        </Suspense>
       )}
     </div>
   );

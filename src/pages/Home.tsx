@@ -13,10 +13,6 @@ const Home = () => {
         <span>⚔️ Build Army</span>
         <p>Assemble elite squads without leaving the browser.</p>
       </Link>
-      <Link to="/strategy" className="quick-link-card">
-        <span>🧠 Strategy</span>
-        <p>Author IF → THEN behaviors per unit.</p>
-      </Link>
       <Link to="/board" className="quick-link-card">
         <span>🎯 Board</span>
         <p>Place units on the 12×8 battlefield.</p>
@@ -69,12 +65,6 @@ const Home = () => {
           <p>Assemble your front line of Recruits, Knights, Archers, Beasts, Mages, Zombies, and Giants.</p>
         </Link>
 
-        <Link to="/strategy" className="menu-card">
-          <div className="menu-icon">📋</div>
-          <h2>Strategy Editor</h2>
-          <p>Define battle instincts and contingency plans.</p>
-        </Link>
-
         <Link to="/board" className="menu-card">
           <div className="menu-icon">🎮</div>
           <h2>Battle Board</h2>
@@ -86,7 +76,7 @@ const Home = () => {
         <h3>How to Play</h3>
         <ol>
           <li><strong>Build your army:</strong> Choose Recruits, Knights, Archers, Beasts, Mages, Zombies, and Giants to fill your formation.</li>
-          <li><strong>Set behaviors:</strong> Craft IF/THEN rules that tell units how to react mid-fight.</li>
+          <li><strong>Place units on board:</strong> Position your units on the 12×8 battlefield.</li>
           <li><strong>Watch auto-battles:</strong> Drop your formation on the board and let Tactica resolve the clash.</li>
         </ol>
       </div>

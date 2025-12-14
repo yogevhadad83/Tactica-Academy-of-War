@@ -290,7 +290,7 @@ const ArmyBuilder = () => {
     () =>
       draftUnits
         .map((armyUnit) => {
-          const meta = catalogById.get(armyUnit.unitTypeId);
+          const meta = catalogById.get(armyUnit.unitTypeId.toLowerCase());
           if (!meta) return null;
           return {
             ...meta,
