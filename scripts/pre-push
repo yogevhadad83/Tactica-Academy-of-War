@@ -7,8 +7,19 @@ echo "Running pre-push checks..."
 
 # Run TypeScript build check (tsc -b)
 echo "Checking TypeScript compilation..."
-npm run build:engine > /dev/null 2>&1
-npm run extract-animations > /dev/null 2>&1
+
+# Run build prerequisites
+if ! npm run build:engine > /dev/null 2>&1; then
+  echo "❌ Engine build failed!"
+  echo "Run 'npm run build:engine' to see the errors."
+  exit 1
+fi
+
+if ! npm run extract-animations > /dev/null 2>&1; then
+  echo "❌ Animation extraction failed!"
+  echo "Run 'npm run extract-animations' to see the errors."
+  exit 1
+fi
 
 if ! npx tsc -b; then
   echo "❌ TypeScript compilation failed!"
