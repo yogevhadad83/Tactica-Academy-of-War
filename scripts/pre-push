@@ -5,10 +5,9 @@
 
 echo "Running pre-push checks..."
 
-# Run TypeScript build check (tsc -b)
-echo "Checking TypeScript compilation..."
+# Run build prerequisites quietly (they're usually fast and noisy)
+echo "Checking build prerequisites..."
 
-# Run build prerequisites
 if ! npm run build:engine > /dev/null 2>&1; then
   echo "❌ Engine build failed!"
   echo "Run 'npm run build:engine' to see the errors."
@@ -21,10 +20,12 @@ if ! npm run extract-animations > /dev/null 2>&1; then
   exit 1
 fi
 
-if ! npx tsc -b; then
+# Run TypeScript compilation (show output for better debugging)
+echo "Checking TypeScript compilation..."
+if ! npx tsc -b 2>&1; then
+  echo ""
   echo "❌ TypeScript compilation failed!"
-  echo "Please fix the TypeScript errors before pushing."
-  echo "Run 'npm run build' to see the errors."
+  echo "Please fix the TypeScript errors above before pushing."
   exit 1
 fi
 
