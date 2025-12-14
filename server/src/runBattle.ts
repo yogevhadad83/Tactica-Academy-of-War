@@ -1,12 +1,12 @@
 import type { PlacedUnit, Team, BattleEngineModule } from './battleTypes';
 
-// Prefer the built CJS bundle; fall back to TS source in dev if not built yet.
+// Prefer the built CJS bundle; fall back to compiled JS in dist if not built yet.
 const loadEngine = (): BattleEngineModule => {
   try {
-    return require('../../dist/engine/battleEngine.cjs') as BattleEngineModule;
+    return require('../../../../dist/engine/battleEngine.cjs') as BattleEngineModule;
   } catch (err) {
-    // Explicitly load the TS source to avoid picking up the ESM JS build
-    return require('../../src/engine/battleEngine.ts') as BattleEngineModule;
+    // Fall back to the compiled JS version in server/dist
+    return require('../../src/engine/battleEngine.js') as BattleEngineModule;
   }
 };
 
