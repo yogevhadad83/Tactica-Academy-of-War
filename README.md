@@ -10,8 +10,11 @@ The UI connects to a remote production server by default, so you don't need to r
 
 ```bash
 npm install
+./scripts/install-hooks.sh  # Install git hooks (recommended)
 npm run dev
 ```
+
+**Note**: The `install-hooks.sh` script sets up a pre-push hook that runs TypeScript compilation checks before allowing code to be pushed. This helps prevent pushing code with build errors to the repository.
 
 ### Using a Local Server (Optional)
 

@@ -1,0 +1,33 @@
+#!/bin/bash
+
+# Pre-push hook to verify the build passes before pushing
+# This prevents pushing code with TypeScript errors
+
+echo "Running pre-push checks..."
+
+# Run build prerequisites quietly (they're usually fast and noisy)
+echo "Checking build prerequisites..."
+
+if ! npm run build:engine > /dev/null 2>&1; then
+  echo "❌ Engine build failed!"
+  echo "Run 'npm run build:engine' to see the errors."
+  exit 1
+fi
+
+if ! npm run extract-animations > /dev/null 2>&1; then
+  echo "❌ Animation extraction failed!"
+  echo "Run 'npm run extract-animations' to see the errors."
+  exit 1
+fi
+
+# Run TypeScript compilation (show output for better debugging)
+echo "Checking TypeScript compilation..."
+if ! npx tsc -b; then
+  echo ""
+  echo "❌ TypeScript compilation failed!"
+  echo "Please fix the TypeScript errors above before pushing."
+  exit 1
+fi
+
+echo "✅ All pre-push checks passed!"
+exit 0
