@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
  * 
  * Animation metadata extracted from GLB model files.
- * Generated: 2025-12-14T01:24:39.750Z
+ * Generated: 2025-12-14T05:45:40.714Z
  * 
  * To regenerate, run: npx tsx scripts/extract-animation-metadata.ts
  */
@@ -80,6 +80,8 @@ export const RAW_ANIMATION_DATA: Record<string, Record<string, AnimationMetadata
     'Idle_0': { name: 'Idle_0', durationMs: 2000 },
     'Idle_1': { name: 'Idle_1', durationMs: 3000 },
     'Impact_0': { name: 'Impact_0', durationMs: 1367 },
+    'Step_0': { name: 'Step_0', durationMs: 733 },
+    'Step_1': { name: 'Step_1', durationMs: 733 },
     'Walk_0': { name: 'Walk_0', durationMs: 867 },
   },
 };

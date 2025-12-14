@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useUser } from '../context/UserContext';
 import { usePlayerContext } from '../context/PlayerContext';
+import { useAudio } from '../context/AudioContext';
 import './Layout.css';
 
 const Layout = () => {
@@ -10,6 +11,7 @@ const Layout = () => {
   const { user, signOut } = useAuth();
   const { currentUser } = useUser();
   const { player } = usePlayerContext();
+  const { isMuted, toggleMute } = useAudio();
 
   const isActive = (path: string) => {
     return location.pathname === path ? 'active' : '';
@@ -38,6 +40,22 @@ const Layout = () => {
           </Link>
         </div>
         <div className="nav-user-area">
+          <button 
+            type="button" 
+            className="mute-btn" 
+            onClick={toggleMute}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              padding: '0 12px',
+              color: '#fff'
+            }}
+            title={isMuted ? 'Unmute' : 'Mute'}
+          >
+            {isMuted ? '🔇' : '🔊'}
+          </button>
           {user ? (
             <>
               <div className="user-pill">
