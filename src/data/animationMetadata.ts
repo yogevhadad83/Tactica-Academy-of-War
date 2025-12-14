@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
  * 
  * Animation metadata extracted from GLB model files.
- * Generated: 2025-12-10T07:00:33.626Z
+ * Generated: 2025-12-13T22:50:22.612Z
  * 
  * To regenerate, run: npx tsx scripts/extract-animation-metadata.ts
  */
@@ -65,6 +65,22 @@ export const RAW_ANIMATION_DATA: Record<string, Record<string, AnimationMetadata
     'Long_0': { name: 'Long_0', durationMs: 2367 },
     'Walk_0': { name: 'Walk_0', durationMs: 767 },
     'Walk_1': { name: 'Walk_1', durationMs: 667 },
+  },
+  'recruit': {
+    'Armature.001|Armature|Fight_1': { name: 'Armature.001|Armature|Fight_1', durationMs: 2533 },
+    'Armature.001|Armature|Flight_0': { name: 'Armature.001|Armature|Flight_0', durationMs: 2200 },
+    'Armature.001|Armature|Idle_0': { name: 'Armature.001|Armature|Idle_0', durationMs: 2000 },
+    'Armature.001|Armature|Idle_1': { name: 'Armature.001|Armature|Idle_1', durationMs: 3000 },
+    'Armature.001|Armature|Impact_0': { name: 'Armature.001|Armature|Impact_0', durationMs: 1367 },
+    'Armature.001|Armature|Walk_0': { name: 'Armature.001|Armature|Walk_0', durationMs: 867 },
+    'Armature|mixamo.com|Layer0': { name: 'Armature|mixamo.com|Layer0', durationMs: 67 },
+    'Death_0': { name: 'Death_0', durationMs: 4633 },
+    'Fight_1': { name: 'Fight_1', durationMs: 2533 },
+    'Flight_0': { name: 'Flight_0', durationMs: 2200 },
+    'Idle_0': { name: 'Idle_0', durationMs: 2000 },
+    'Idle_1': { name: 'Idle_1', durationMs: 3000 },
+    'Impact_0': { name: 'Impact_0', durationMs: 1367 },
+    'Walk_0': { name: 'Walk_0', durationMs: 867 },
   },
 };
 
@@ -142,5 +158,12 @@ export const COMPUTED_ANIMATION_DURATIONS: Partial<Record<ModelKey, Partial<Reco
     idle: 2767,
     impact: 733,
     walk: 767,
+  },
+  'recruit': {
+    death: 4633,
+    fight: 2533,
+    idle: 2000,
+    impact: 1367,
+    walk: 867,
   },
 };

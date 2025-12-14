@@ -27,6 +27,7 @@
 .flight-mode .immersive-stage-panel {
   flex: 1;
   margin: 0;
+  padding: 0 0 0.5rem;
   display: flex;
   align-items: stretch;
 }
@@ -43,13 +44,13 @@
 }
 
 .flight-mode .three-stage-canvas {
-  width: min(1400px, 100vw);
-  height: min(900px, 100vh);
-  min-height: min(900px, 100vh);
+  width: min(1800px, 100vw);
+  height: min(1200px, calc(100vh - 120px));
+  min-height: min(800px, calc(100vh - 120px));
   margin: 0 auto;
   flex: 0 1 auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 
@@ -63,7 +64,7 @@
   left: 50%;
   right: auto;
   transform: translateX(-50%);
-  bottom: 1rem;
+  bottom: 2rem;
   width: min(520px, 90vw);
 }
 
@@ -108,6 +109,23 @@
   margin: 2rem 0 2.5rem 0;
 }
 
+.immersive-stage-panel.with-side {
+  margin-bottom: 1.5rem;
+}
+
+.planning-stage-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 380px;
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.stage-side-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 .immersive-stage-card {
   position: relative;
   border-radius: 24px;
@@ -129,6 +147,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.immersive-stage-panel.with-side .immersive-stage-card {
+  height: 100%;
+}
+
+.immersive-stage-panel.with-side .three-stage-canvas {
+  min-height: 620px;
 }
 
 .stage-loading {
@@ -322,6 +348,236 @@
   border: 1px solid rgba(248, 113, 113, 0.35);
   padding: 0.4rem 0.75rem;
   border-radius: 8px;
+}
+
+.planning-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.unit-stack-panel,
+.tile-inspector-card,
+.battle-summary-card {
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
+}
+
+.tile-inspector-card {
+  /* Fix inspector height so it never shrinks or grows with content */
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  overflow: hidden;
+}
+
+.tile-readout,
+.tile-empty {
+  /* Main content region inside fixed-height inspector */
+  flex: 1 1 auto;
+}
+
+.panel-heading h2,
+.tile-inspector-card h2 {
+  margin: 0 0 0.35rem 0;
+}
+
+.panel-heading p,
+.panel-footer-note {
+  margin: 0.15rem 0 0;
+  color: var(--tactica-muted);
+  font-size: 0.95rem;
+}
+
+.unit-stack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.unit-stack-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.6);
+  color: inherit;
+  cursor: grab;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.unit-stack-card:active {
+  cursor: grabbing;
+}
+
+.unit-stack-card:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+  transform: translateY(-1px);
+}
+
+.stack-icon {
+  font-size: 1.4rem;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  background: rgba(59, 130, 246, 0.15);
+  border-radius: 12px;
+}
+
+.stack-body {
+  text-align: left;
+}
+
+.stack-title {
+  font-weight: 700;
+  margin-bottom: 0.2rem;
+}
+
+.stack-meta {
+  color: var(--tactica-muted);
+  font-size: 0.9rem;
+}
+
+.stack-count-badge {
+  min-width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  color: #bfdbfe;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+}
+
+.stack-empty {
+  margin: 0;
+  color: var(--tactica-muted);
+}
+
+.tile-readout {
+  padding: 0.85rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.tile-coords-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #bfdbfe;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.tile-unit-details {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.tile-unit-meta {
+  margin: 0.35rem 0 0;
+  color: var(--tactica-muted);
+}
+
+.tile-empty {
+  margin: 0.25rem 0;
+  color: var(--tactica-muted);
+}
+
+.tile-menu-btn {
+  margin-top: 0.4rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(15, 23, 42, 0.6);
+  color: inherit;
+  cursor: pointer;
+}
+
+.tile-menu-btn.destructive {
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fecdd3;
+}
+
+.drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  padding: 0.6rem 0.9rem;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  color: #e2e8f0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.35);
+  z-index: 40;
+}
+
+.ghost-icon {
+  font-size: 1.25rem;
+}
+
+.tile-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.7);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  z-index: 30;
+}
+
+.tile-menu-card {
+  background: #0b1221;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 16px;
+  padding: 1.25rem;
+  width: min(420px, 90vw);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
+}
+
+.tile-menu-header h3 {
+  margin: 0 0 0.2rem 0;
+}
+
+.tile-menu-header p {
+  margin: 0;
+  color: var(--tactica-muted);
+}
+
+.tile-menu-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.battle-summary-card {
+  margin-top: 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
 }
 
 .army-controls .army-note {

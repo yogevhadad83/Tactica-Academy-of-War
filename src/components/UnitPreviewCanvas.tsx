@@ -143,7 +143,7 @@ const UnitPreviewCanvas = ({ unit }: UnitPreviewCanvasProps) => {
       updateUnitMovement();
       updateDeathFades();
       updateMixers(delta);
-      updateRandomIdles();
+      updateRandomIdles(previewUnits);
       updateHpFacing(camera);
       renderer.render(scene, camera);
     };

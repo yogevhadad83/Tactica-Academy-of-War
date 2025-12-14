@@ -6,29 +6,31 @@ import type { DemoState, HitEvent } from '../types/battle';
 import type { PlacedUnit } from '../types';
 import { useUnitLayer } from './units/useUnitLayer';
 import { createTacticalBoard } from './createTacticalBoard';
-import type { TileEffect, TileOwner, TacticalBoard } from './createTacticalBoard';
+import type { TileEffect, TileOwner, TacticalBoard, TileOccupant } from './createTacticalBoard';
 
-const ORBIT_RADIUS = 32;
-const BASE_CAMERA_HEIGHT = 24;
-const LOCKED_CAMERA_DISTANCE = ORBIT_RADIUS * 0.55;
-const LOCKED_CAMERA_HEIGHT = BASE_CAMERA_HEIGHT + 1.5;
+const PLANNING_CAMERA_FOV = 38;
+const BATTLE_CAMERA_FOV = 54; // wider angle for cinematic battle view
+const ORBIT_RADIUS = 18;
+const BASE_CAMERA_HEIGHT = 20;
+const LOCKED_CAMERA_DISTANCE = ORBIT_RADIUS * 1.25;
+const LOCKED_CAMERA_HEIGHT = BASE_CAMERA_HEIGHT + 8;
 const CAMERA_CLOSE_DISTANCE_FACTOR = 0.52;
 const CAMERA_CLOSE_HEIGHT_FACTOR = 0.74;
 const PLANNING_CAMERA_DISTANCE_FACTOR = 0.96;
-const PLANNING_CAMERA_HEIGHT_FACTOR = 1.05;
 const CAMERA_LERP_FACTOR = 0.12;
 const CAMERA_APPROACH_DURATION = 900;
 
-const LOCKED_DISTANCE_FACTOR = 1.55;
-const LOCKED_HEIGHT_FACTOR = 1.15;
-const LOCKED_MIN_DISTANCE = 18;
-const LOCKED_MIN_HEIGHT = 12;
-const LOCKED_TARGET_Z_FACTOR = 0.18;
-const LOCKED_TARGET_Z_OFFSET = CELL_SIZE * 1.6;
-const LOCKED_LOOK_HEIGHT_FACTOR = 0.065;
-const LOCKED_LOOK_MIN = 2.6;
-const LOCKED_LOOK_DOWN_OFFSET = -0.2;
-const LOCKED_CAMERA_X_OFFSET = 3.5;
+// Legacy tuning constants kept for reference (no longer used in planning view)
+// const LOCKED_DISTANCE_FACTOR = 1.55;
+// const LOCKED_HEIGHT_FACTOR = 1.15;
+// const LOCKED_MIN_DISTANCE = 14;
+// const LOCKED_MIN_HEIGHT = 12;
+// const LOCKED_TARGET_Z_FACTOR = 0.18;
+// const LOCKED_TARGET_Z_OFFSET = CELL_SIZE * 1.6;
+// const LOCKED_LOOK_HEIGHT_FACTOR = 0.065;
+// const LOCKED_LOOK_MIN = 2.6;
+// const LOCKED_LOOK_DOWN_OFFSET = -0.2;
+// const LOCKED_CAMERA_X_OFFSET = 3.5;
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -42,9 +44,30 @@ interface ThreeBattleStageProps {
   moveCells: string[];
   marchCells: string[];
   demoState: DemoState;
+  interactionMode?: 'planning' | 'battle';
+  dragActive?: boolean;
+  onTileHover?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
+  onTileDrop?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
+  onTileClick?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
+  forceOwner?: TileOwner;
 }
 
-const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, moveCells, marchCells, demoState }: ThreeBattleStageProps) => {
+const ThreeBattleStage = ({
+  boardSize,
+  boardCols,
+  units,
+  hitCells,
+  hitEvents,
+  moveCells,
+  marchCells,
+  demoState,
+  interactionMode = 'battle',
+  dragActive = false,
+  onTileHover,
+  onTileDrop,
+  onTileClick,
+  forceOwner
+}: ThreeBattleStageProps) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -72,7 +95,7 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
   const cameraApproachRef = useRef({ active: false, start: 0, progress: 0 });
   const pendingApproachRef = useRef(false);
   const planningCameraPositionRef = useRef(
-    new THREE.Vector3(0, BASE_CAMERA_HEIGHT * 0.9, ORBIT_RADIUS * 0.8)
+    new THREE.Vector3(0, BASE_CAMERA_HEIGHT * 1, ORBIT_RADIUS * PLANNING_CAMERA_DISTANCE_FACTOR)
   );
   const idleCameraLerpRef = useRef(new THREE.Vector3());
   const {
@@ -101,46 +124,66 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
     };
     pendingApproachRef.current = false;
   };
-  const lockedCameraTargetRef = useRef(new THREE.Vector3(0, 2, -CELL_SIZE * 0.8));
+  const lockedCameraTargetRef = useRef(new THREE.Vector3(0, 0, -CELL_SIZE * 2));
   const zoomPressedRef = useRef(false);
   const zoomFactorRef = useRef(0);
   const ZOOM_LERP_SPEED = 0.12;
   const zoomCameraPositionRef = useRef(
-    new THREE.Vector3(0, LOCKED_CAMERA_HEIGHT * 0.5, LOCKED_CAMERA_DISTANCE * 0.35)
+    new THREE.Vector3(0, LOCKED_CAMERA_HEIGHT * 0.7, LOCKED_CAMERA_DISTANCE)
   );
-  const zoomTargetRef = useRef(new THREE.Vector3(0, 1.5, 0));
+  const zoomTargetRef = useRef(new THREE.Vector3(0, 0, -15));
   const zoomLookAtRef = useRef(new THREE.Vector3());
   const raycasterRef = useRef(new THREE.Raycaster());
   const pointerRef = useRef(new THREE.Vector2());
   const groundPlaneRef = useRef(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0));
+  const tileMeshesRef = useRef<THREE.Object3D[]>([]);
+  const hoveredTileKeyRef = useRef<string | null>(null);
+  const dragActiveRef = useRef(false);
+  const onTileDropRef = useRef(onTileDrop);
+  const onTileHoverRef = useRef(onTileHover);
+  const onTileClickRef = useRef(onTileClick);
+
+  // Keep refs in sync with current prop values
+  useEffect(() => {
+    dragActiveRef.current = dragActive;
+  }, [dragActive]);
+
+  useEffect(() => {
+    onTileDropRef.current = onTileDrop;
+    onTileHoverRef.current = onTileHover;
+    onTileClickRef.current = onTileClick;
+  }, [onTileDrop, onTileHover, onTileClick]);
 
   useEffect(() => {
     const rows = boardSize;
     const cols = boardCols ?? boardSize;
     const extentX = cols * CELL_SIZE;
     const extentZ = rows * CELL_SIZE;
-    const boardExtent = Math.max(extentX, extentZ);
-    const lockedDistance = Math.max(LOCKED_MIN_DISTANCE, boardExtent * LOCKED_DISTANCE_FACTOR);
-    const lockedHeight = Math.max(LOCKED_MIN_HEIGHT, boardExtent * LOCKED_HEIGHT_FACTOR);
-    lockedCameraBasePositionRef.current.set(LOCKED_CAMERA_X_OFFSET, lockedHeight, lockedDistance);
-    const closeDistance = Math.max(8, lockedDistance * CAMERA_CLOSE_DISTANCE_FACTOR);
-    const closeHeight = Math.max(7, lockedHeight * CAMERA_CLOSE_HEIGHT_FACTOR);
-    lockedCameraClosePositionRef.current.set(LOCKED_CAMERA_X_OFFSET, closeHeight, closeDistance);
+    const boardSpan = Math.max(extentX, extentZ);
+    const boardCenterZ = -15; // from tacticalBoard.group.position.z
+
+    if (interactionMode === 'planning') {
+      const topDownHeight = Math.max(12, boardSpan * 0.42);
+      const topDownDistance = Math.max(6, boardSpan * 0.14);
+      lockedCameraTargetRef.current.set(0, 0, boardCenterZ);
+      planningCameraPositionRef.current.set(0, topDownHeight, boardCenterZ + topDownDistance);
+      lockedCameraBasePositionRef.current.copy(planningCameraPositionRef.current);
+      lockedCameraClosePositionRef.current.set(0, topDownHeight * 0.88, boardCenterZ + topDownDistance * 0.65);
+      zoomCameraPositionRef.current.set(1.8, topDownHeight * 0.68, boardCenterZ + topDownDistance * 0.42);
+    } else {
+      const sideOffset = Math.max(boardSpan * 0.5, 12); // Right side view (Blue Left, Red Right)
+      const battleDistance = Math.max(16, boardSpan * 0.35); // Closer
+      const battleHeight = Math.max(18, boardSpan * 0.35); // Lower
+      lockedCameraTargetRef.current.set(0, -6, boardCenterZ); // Centered target
+      planningCameraPositionRef.current.set(sideOffset * 0.72, battleHeight * 0.88, boardCenterZ + battleDistance * 0.75);
+      lockedCameraBasePositionRef.current.set(sideOffset, battleHeight, boardCenterZ + battleDistance);
+      lockedCameraClosePositionRef.current.set(sideOffset * 0.82, battleHeight * 0.72, boardCenterZ + battleDistance * 0.55);
+      zoomCameraPositionRef.current.set(sideOffset * 0.48, battleHeight * 0.52, boardCenterZ + battleDistance * 0.32);
+    }
+
     lockedCameraPositionRef.current.copy(lockedCameraBasePositionRef.current);
-    // Set zoom position for dramatic close-up from the side, looking slightly down at units
-    const zoomDistance = Math.max(3, lockedDistance * 0.15);
-    const zoomHeight = Math.max(2.5, lockedHeight * 0.18);
-    const zoomSideOffset = extentX * 0.4; // Offset to the side for dramatic angle
-    zoomCameraPositionRef.current.set(zoomSideOffset, zoomHeight, zoomDistance);
-    const planningDistance = Math.max(14, lockedDistance * PLANNING_CAMERA_DISTANCE_FACTOR);
-    const planningHeight = Math.max(12, lockedHeight * PLANNING_CAMERA_HEIGHT_FACTOR);
-    planningCameraPositionRef.current.set(0, planningHeight, planningDistance);
     cameraApproachRef.current = { active: false, start: 0, progress: 0 };
-    const baseLookHeight = Math.max(LOCKED_LOOK_MIN, boardExtent * LOCKED_LOOK_HEIGHT_FACTOR);
-    const lookHeight = baseLookHeight + LOCKED_LOOK_DOWN_OFFSET;
-    const targetZ = extentZ * LOCKED_TARGET_Z_FACTOR + LOCKED_TARGET_Z_OFFSET;
-    lockedCameraTargetRef.current.set(0, lookHeight, targetZ);
-  }, [boardSize, boardCols]);
+  }, [boardSize, boardCols, interactionMode]);
 
   useEffect(() => {
     ensureAssetsForUnits(units);
@@ -156,7 +199,8 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
     scene.background = new THREE.Color(voidHex);
     scene.fog = new THREE.FogExp2(voidHex, 0.018);
 
-    const camera = new THREE.PerspectiveCamera(56, mount.clientWidth / mount.clientHeight, 0.2, 1200);
+    const cameraFov = interactionMode === 'planning' ? PLANNING_CAMERA_FOV : BATTLE_CAMERA_FOV;
+    const camera = new THREE.PerspectiveCamera(cameraFov, mount.clientWidth / mount.clientHeight, 0.2, 1200);
     // Start the camera extremely far and high so the board feels tiny, then let it fall into place
     const rows = boardSize;
     const cols = boardCols ?? boardSize;
@@ -207,11 +251,14 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
     fillLight.position.set(28, 18, -26);
     scene.add(fillLight);
 
-    const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE });
+    const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE, forceOwner });
     tacticalBoardRef.current = tacticalBoard;
+    tileMeshesRef.current = Array.from(tacticalBoard.tiles.values()).map((tile) => tile.mesh);
+    tacticalBoard.group.position.set(0, 0, -15);
     scene.add(tacticalBoard.group);
 
     const unitRoot = new THREE.Group();
+    unitRoot.position.set(0, 0, -15);
     unitRootRef.current = unitRoot;
     scene.add(unitRoot);
 
@@ -231,7 +278,7 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
       advanceUnitMovement();
       fadeOutFallenUnits();
       updateHpAnimations();
-      updateRandomIdles();
+      updateRandomIdles(units);
       updateProjectiles();
       renderer.render(scene, camera);
     };
@@ -300,19 +347,37 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
       renderer.setSize(mount.clientWidth, mount.clientHeight);
     };
 
-    const handlePointerDown = (event: PointerEvent) => {
-      const camera = cameraRef.current;
+    const clearHover = () => {
+      const board = tacticalBoardRef.current;
+      board?.clearHoverStates();
+      hoveredTileKeyRef.current = null;
+      if (onTileHoverRef.current) {
+        onTileHoverRef.current({ row: -1, col: -1, occupied: null });
+      }
+    };
+
+    const updatePointer = (event: PointerEvent) => {
       const mount = mountRef.current;
-      if (!camera || !mount) return;
-      
-      // Only zoom during battle
-      if (cameraModeRef.current !== 'locked') return;
-      
-      // Calculate normalized device coordinates
+      if (!mount) return false;
       const rect = mount.getBoundingClientRect();
       pointerRef.current.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointerRef.current.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      
+      return true;
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const camera = cameraRef.current;
+      if (!camera) return;
+
+      if (interactionMode === 'planning') {
+        updatePointer(event);
+        return;
+      }
+
+      // Only zoom during battle
+      if (cameraModeRef.current !== 'locked') return;
+      if (!updatePointer(event)) return;
+
       // Raycast to find where on the ground plane the user clicked
       raycasterRef.current.setFromCamera(pointerRef.current, camera);
       const intersectPoint = new THREE.Vector3();
@@ -338,20 +403,118 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
       zoomPressedRef.current = true;
     };
 
-    const handlePointerUp = () => {
+    const handlePointerMove = (event: PointerEvent) => {
+      const camera = cameraRef.current;
+      const board = tacticalBoardRef.current;
+      if (!camera || !board) return;
+      if (!updatePointer(event)) return;
+      raycasterRef.current.setFromCamera(pointerRef.current, camera);
+      const intersections = raycasterRef.current.intersectObjects(tileMeshesRef.current, false);
+      if (intersections.length === 0) {
+        clearHover();
+        return;
+      }
+      const { key, row, col } = intersections[0].object.userData as { key?: string; row?: number; col?: number };
+      if (!key || row === undefined || col === undefined) {
+        clearHover();
+        return;
+      }
+      const tile = board.tiles.get(key);
+      const occupant = tile?.occupant ?? null;
+      const hoverState = dragActiveRef.current
+        ? occupant
+          ? 'blocked'
+          : 'valid'
+        : occupant
+          ? 'inspect'
+          : 'none';
+      board.clearHoverStates();
+      if (hoverState !== 'none') {
+        board.setTileHoverState(row, col, hoverState);
+      }
+      hoveredTileKeyRef.current = key;
+      if (onTileHoverRef.current) {
+        onTileHoverRef.current({ row, col, occupied: occupant });
+      }
+    };
+
+    const handlePointerUp = (event: PointerEvent) => {
+      console.log('[ThreeBattleStage] handlePointerUp, dragActiveRef.current:', dragActiveRef.current, 'interactionMode:', interactionMode);
       zoomPressedRef.current = false;
+      const camera = cameraRef.current;
+      const board = tacticalBoardRef.current;
+
+      // If in planning mode with drop handler and actively dragging, process drop
+      if (interactionMode === 'planning' && onTileDropRef.current && dragActiveRef.current) {
+        console.log('[ThreeBattleStage] Drag is active, processing drop...');
+        let foundTile = false;
+        if (camera && board && updatePointer(event)) {
+          raycasterRef.current.setFromCamera(pointerRef.current, camera);
+          const intersections = raycasterRef.current.intersectObjects(tileMeshesRef.current, false);
+          console.log('[ThreeBattleStage] Raycast intersections:', intersections.length);
+          if (intersections.length > 0) {
+            const { key, row, col } = intersections[0].object.userData as { key?: string; row?: number; col?: number };
+            console.log('[ThreeBattleStage] Hit tile:', { key, row, col });
+            if (key && row !== undefined && col !== undefined) {
+              const tile = board.tiles.get(key);
+              const occupant = tile?.occupant ?? null;
+              console.log('[ThreeBattleStage] Calling onTileDrop with:', { row, col, occupied: occupant });
+              onTileDropRef.current?.({ row, col, occupied: occupant });
+              foundTile = true;
+            }
+          }
+        }
+        if (!foundTile) {
+          console.log('[ThreeBattleStage] No tile found, signaling cancellation');
+          // Signal cancellation (no valid tile)
+          onTileDropRef.current?.({ row: -1, col: -1, occupied: null });
+        }
+        clearHover();
+        return;
+      }
+
+      if (!camera || !board) return;
+
+      // Re-run raycast for click detection
+      if (updatePointer(event)) {
+        raycasterRef.current.setFromCamera(pointerRef.current, camera);
+        const intersections = raycasterRef.current.intersectObjects(tileMeshesRef.current, false);
+        if (intersections.length > 0) {
+          const { key, row, col } = intersections[0].object.userData as { key?: string; row?: number; col?: number };
+          if (key && row !== undefined && col !== undefined) {
+            hoveredTileKeyRef.current = key;
+          }
+        }
+      }
+
+      if (!hoveredTileKeyRef.current) return;
+      const tile = board.tiles.get(hoveredTileKeyRef.current);
+      if (!tile) return;
+      const [row, col] = hoveredTileKeyRef.current.split('-').map(Number);
+      const occupant = tile.occupant ?? null;
+
+      if (interactionMode === 'planning' && occupant) {
+        onTileClickRef.current?.({ row, col, occupied: occupant });
+      }
+    };
+
+    const handlePointerLeave = () => {
+      zoomPressedRef.current = false;
+      clearHover();
     };
 
     window.addEventListener('resize', handleResize);
+    window.addEventListener('pointerup', handlePointerUp);
     renderer.domElement.addEventListener('pointerdown', handlePointerDown);
-    renderer.domElement.addEventListener('pointerup', handlePointerUp);
-    renderer.domElement.addEventListener('pointerleave', handlePointerUp);
+    renderer.domElement.addEventListener('pointermove', handlePointerMove);
+    renderer.domElement.addEventListener('pointerleave', handlePointerLeave);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      window.removeEventListener('pointerup', handlePointerUp);
       renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
-      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
-      renderer.domElement.removeEventListener('pointerleave', handlePointerUp);
+      renderer.domElement.removeEventListener('pointermove', handlePointerMove);
+      renderer.domElement.removeEventListener('pointerleave', handlePointerLeave);
       if (animationRef.current !== null) cancelAnimationFrame(animationRef.current);
       tacticalBoardRef.current = null;
       disposeAll();
@@ -362,12 +525,19 @@ const ThreeBattleStage = ({ boardSize, boardCols, units, hitCells, hitEvents, mo
       pmremRef.current = null;
       mount.removeChild(renderer.domElement);
     };
-  }, [boardSize, boardCols, disposeAll]);
+  }, [boardSize, boardCols, disposeAll, forceOwner, interactionMode]);
 
   useEffect(() => {
     const cols = boardCols ?? boardSize;
     syncUnits(units, boardSize, cols);
   }, [syncUnits, units, boardSize, boardCols, modelRevision]);
+
+  useEffect(() => {
+    if (!dragActive) {
+      tacticalBoardRef.current?.clearHoverStates();
+      hoveredTileKeyRef.current = null;
+    }
+  }, [dragActive]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

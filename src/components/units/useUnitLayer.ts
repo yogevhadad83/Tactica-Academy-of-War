@@ -49,6 +49,8 @@ export interface UnitVisual {
   nextIdleVariantTime?: number; // When to trigger the next random idle variant
   isCustomMesh?: boolean;
   modelKey?: ModelKey;
+  unitId?: string; // ID of the unit this visual represents
+  unitPosition?: Position; // Current board position of the unit
   targetPosition: THREE.Vector3;
   moveStartPosition: THREE.Vector3;
   moveStartTime?: number;
@@ -848,6 +850,8 @@ const createVisual = (
     actions,
     impactActions,
     idleActions,
+    unitId: unit.id,
+    unitPosition: unit.position,
     fightActions,
     currentIdleIndex: 0,
     nextIdleVariantTime: performance.now() + getRandomIdleDelay() + Math.random() * 3000, // Stagger initial timing
@@ -1188,8 +1192,38 @@ export const useUnitLayer = (
     });
   }, []);
 
+  // Determine the correct idle animation for recruit based on what's in front
+  const getRecruitIdleVariantIndex = (unit: PlacedUnit, units: PlacedUnit[]): number => {
+    // Recruit: use Idle_0 if ally or empty space in front, Idle_1 if enemy in front
+    const frontRow = unit.team === 'player' ? unit.position.row - 1 : unit.position.row + 1;
+    const frontCol = unit.position.col;
+    
+    // Check if front position is on the board
+    const onBoard = frontRow >= 0 && frontRow < 8;
+    if (!onBoard) {
+      // Front position is off the board (edge)
+      return 0; // Idle_0
+    }
+    
+    // Check if there's a unit at the front position
+    const unitInFront = units.find(u => u.position.row === frontRow && u.position.col === frontCol);
+    if (!unitInFront) {
+      // Empty space in front
+      return 0; // Idle_0
+    }
+    
+    // There's a unit in front - check if it's an ally or enemy
+    if (unitInFront.team === unit.team) {
+      // Ally in front
+      return 0; // Idle_0
+    } else {
+      // Enemy in front
+      return 1; // Idle_1
+    }
+  };
+
   // Update random idle animations - occasionally trigger different idle variants
-  const updateRandomIdles = useCallback(() => {
+  const updateRandomIdles = useCallback((units?: PlacedUnit[]) => {
     const now = performance.now();
     unitVisualsRef.current.forEach((visual) => {
       // Skip if not a custom mesh model, or if dead, or no idle actions available
@@ -1209,11 +1243,31 @@ export const useUnitLayer = (
         const idleActions = visual.idleActions;
         const currentIndex = visual.currentIdleIndex ?? 0;
         
-        // Pick a random different idle variant
-        let nextIndex = Math.floor(Math.random() * idleActions.length);
-        // If we picked the same one, pick a different one
-        if (nextIndex === currentIndex) {
-          nextIndex = (currentIndex + 1) % idleActions.length;
+        // Determine next idle variant index
+        let nextIndex: number;
+        
+        // Special handling for recruit
+        if (visual.unitId === 'recruit' && units) {
+          // For recruit, the idle variant is determined by what's in front
+          // But we still want to pick a random different one sometimes
+          const desiredIndex = getRecruitIdleVariantIndex({ id: visual.unitId, team: visual.team, position: visual.unitPosition || { row: 0, col: 0 } } as PlacedUnit, units);
+          
+          // If we're not already playing the desired variant, switch to it
+          if (currentIndex !== desiredIndex) {
+            nextIndex = desiredIndex;
+          } else {
+            // Already playing the desired variant, pick a random different one for animation variety
+            nextIndex = Math.floor(Math.random() * idleActions.length);
+            if (nextIndex === currentIndex) {
+              nextIndex = (currentIndex + 1) % idleActions.length;
+            }
+          }
+        } else {
+          // For other units, pick a random different idle variant
+          nextIndex = Math.floor(Math.random() * idleActions.length);
+          if (nextIndex === currentIndex) {
+            nextIndex = (currentIndex + 1) % idleActions.length;
+          }
         }
         
         // Crossfade to the new idle animation

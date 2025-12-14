@@ -3,12 +3,14 @@ import { boardKey, cellToWorld } from '../constants/board';
 
 export type TileOwner = 'blue' | 'red';
 export type TileOccupant = TileOwner | null;
-export type TileEffect = 'hit' | 'move' | 'march' | null;
+export type TileEffect = 'hit' | 'move' | 'march' | 'hover-valid' | 'hover-blocked' | 'hover-inspect' | null;
+export type TileHoverState = 'none' | 'valid' | 'blocked' | 'inspect';
 
 interface TacticalBoardOptions {
   boardRows: number;
   boardCols: number;
   cellSize: number;
+  forceOwner?: TileOwner;
 }
 
 interface SciFiTile {
@@ -19,6 +21,7 @@ interface SciFiTile {
   owner: TileOwner;
   occupant: TileOccupant;
   effect: TileEffect;
+  hoverState: TileHoverState;
 }
 
 export interface TacticalBoard {
@@ -29,6 +32,8 @@ export interface TacticalBoard {
   setTileEffect: (row: number, col: number, effect: TileEffect) => void;
   clearEffects: () => void;
   clearOccupants: () => void;
+  setTileHoverState: (row: number, col: number, state: TileHoverState) => void;
+  clearHoverStates: () => void;
 }
 
 const ownerPalettes: Record<TileOwner, { base: THREE.Color; emissive: THREE.Color; glow: THREE.Color; stroke: string }> = {
@@ -49,7 +54,10 @@ const ownerPalettes: Record<TileOwner, { base: THREE.Color; emissive: THREE.Colo
 const tileEffectPalette: Record<Exclude<TileEffect, null>, { color: THREE.Color; intensity: number }> = {
   hit: { color: new THREE.Color(0xff5f6d), intensity: 1.15 },
   move: { color: new THREE.Color(0x38bdf8), intensity: 0.85 },
-  march: { color: new THREE.Color(0xfcd34d), intensity: 0.75 }
+  march: { color: new THREE.Color(0xfcd34d), intensity: 0.75 },
+  'hover-valid': { color: new THREE.Color(0xfacc15), intensity: 0.95 },
+  'hover-blocked': { color: new THREE.Color(0xf87171), intensity: 1.05 },
+  'hover-inspect': { color: new THREE.Color(0x60a5fa), intensity: 0.9 }
 };
 
 const tileTextureCache = new Map<TileOwner, THREE.CanvasTexture>();
@@ -120,6 +128,20 @@ const refreshTileAppearance = (tile: SciFiTile) => {
     tile.glowMaterial.color.copy(effect.color);
     tile.glowMaterial.opacity = 0.85;
   }
+
+  if (tile.hoverState !== 'none') {
+    const hoverKey: TileEffect =
+      tile.hoverState === 'valid'
+        ? 'hover-valid'
+        : tile.hoverState === 'blocked'
+          ? 'hover-blocked'
+          : 'hover-inspect';
+    const hoverEffect = tileEffectPalette[hoverKey];
+    tile.material.emissive.copy(hoverEffect.color);
+    tile.material.emissiveIntensity = hoverEffect.intensity;
+    tile.glowMaterial.color.copy(hoverEffect.color);
+    tile.glowMaterial.opacity = 0.95;
+  }
 };
 
 const createTileMesh = (owner: TileOwner, tileSize: number, tileThickness: number) => {
@@ -159,7 +181,7 @@ const createTileMesh = (owner: TileOwner, tileSize: number, tileThickness: numbe
   return { tileGroup, mesh, material, glow, glowMaterial };
 };
 
-export const createTacticalBoard = ({ boardRows, boardCols, cellSize }: TacticalBoardOptions): TacticalBoard => {
+export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner }: TacticalBoardOptions): TacticalBoard => {
   const boardGroup = new THREE.Group();
   boardGroup.name = 'TacticalBoard';
 
@@ -219,12 +241,13 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize }: Tactical
 
   for (let row = 0; row < boardRows; row += 1) {
     for (let col = 0; col < boardCols; col += 1) {
-      const owner: TileOwner = row >= boardRows / 2 ? 'blue' : 'red';
+      const owner: TileOwner = forceOwner ?? (row >= boardRows / 2 ? 'blue' : 'red');
       const { tileGroup, mesh, material, glow, glowMaterial } = createTileMesh(owner, tileSize, tileThickness);
       const { x, z } = cellToWorld(row, col, boardRows, boardCols);
       tileGroup.position.set(x, tileY, z);
 
       const key = boardKey(row, col);
+      mesh.userData = { key, row, col };
       const sciFiTile: SciFiTile = {
         mesh,
         glow,
@@ -232,7 +255,8 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize }: Tactical
         glowMaterial,
         owner,
         occupant: null,
-        effect: null
+        effect: null,
+        hoverState: 'none'
       };
 
       tiles.set(key, sciFiTile);
@@ -261,9 +285,23 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize }: Tactical
     refreshTileAppearance(tile);
   };
 
+  const setTileHoverState = (row: number, col: number, state: TileHoverState) => {
+    const tile = tiles.get(boardKey(row, col));
+    if (!tile) return;
+    tile.hoverState = state;
+    refreshTileAppearance(tile);
+  };
+
   const clearEffects = () => {
     tiles.forEach((tile) => {
       tile.effect = null;
+      refreshTileAppearance(tile);
+    });
+  };
+
+  const clearHoverStates = () => {
+    tiles.forEach((tile) => {
+      tile.hoverState = 'none';
       refreshTileAppearance(tile);
     });
   };
@@ -282,6 +320,8 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize }: Tactical
     setTileOccupiedBy,
     setTileEffect,
     clearEffects,
-    clearOccupants
+    clearOccupants,
+    setTileHoverState,
+    clearHoverStates
   };
 };
