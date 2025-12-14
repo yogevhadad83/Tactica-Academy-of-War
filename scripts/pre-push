@@ -22,7 +22,7 @@ fi
 
 # Run TypeScript compilation (show output for better debugging)
 echo "Checking TypeScript compilation..."
-if ! npx tsc -b 2>&1; then
+if ! npx tsc -b; then
   echo ""
   echo "❌ TypeScript compilation failed!"
   echo "Please fix the TypeScript errors above before pushing."
