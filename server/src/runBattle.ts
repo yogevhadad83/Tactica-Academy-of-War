@@ -1,12 +1,13 @@
 import type { PlacedUnit, Team, BattleEngineModule } from './battleTypes';
+import { resolve } from 'path';
 
 // Prefer the built CJS bundle; fall back to compiled JS in dist if not built yet.
 const loadEngine = (): BattleEngineModule => {
   try {
-    return require('../../../../dist/engine/battleEngine.cjs') as BattleEngineModule;
+    return require(resolve(__dirname, '../../../../dist/engine/battleEngine.cjs')) as BattleEngineModule;
   } catch (err) {
     // Fall back to the compiled JS version in server/dist
-    return require('../../src/engine/battleEngine.js') as BattleEngineModule;
+    return require(resolve(__dirname, '../../src/engine/battleEngine.js')) as BattleEngineModule;
   }
 };
 
