@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# Pre-push hook to verify the build passes before pushing
+# This prevents pushing code with TypeScript errors
+
+echo "Running pre-push checks..."
+
+# Run TypeScript build check (tsc -b)
+echo "Checking TypeScript compilation..."
+npm run build:engine > /dev/null 2>&1
+npm run extract-animations > /dev/null 2>&1
+
+if ! npx tsc -b; then
+  echo "❌ TypeScript compilation failed!"
+  echo "Please fix the TypeScript errors before pushing."
+  echo "Run 'npm run build' to see the errors."
+  exit 1
+fi
+
+echo "✅ All pre-push checks passed!"
+exit 0
