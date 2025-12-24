@@ -6,7 +6,7 @@ const loadEngine = (): BattleEngineModule => {
   try {
     // Calculate workspace root from compiled location
     // This file compiles to: server/dist/server/src/runBattle.js
-    // Going up 4 levels: src/ -> server/ -> dist/ -> server/ -> workspace-root/
+    // Going up 4 levels (../../../..) traverses: src/ -> server/ -> dist/ -> server/
     const workspaceRoot = resolve(__dirname, '../../../..');
     const bundlePath = resolve(workspaceRoot, 'dist/engine/battleEngine.cjs');
     return require(bundlePath) as BattleEngineModule;
