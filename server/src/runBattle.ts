@@ -1,11 +1,13 @@
 import type { PlacedUnit, Team, BattleEngineModule } from './battleTypes';
-import { resolve } from 'path';
+import { resolve, dirname } from 'path';
 
 // Load the built CJS bundle from the workspace root dist directory
 const loadEngine = (): BattleEngineModule => {
   try {
-    // Use relative path from compiled location (server/dist/server/src/) to workspace root dist/engine/
-    const bundlePath = resolve(__dirname, '../../../../dist/engine/battleEngine.cjs');
+    // Calculate workspace root from compiled location (server/dist/server/src/)
+    // Go up 4 levels: src -> server -> dist -> server -> workspace-root
+    const workspaceRoot = resolve(__dirname, '../../../..');
+    const bundlePath = resolve(workspaceRoot, 'dist/engine/battleEngine.cjs');
     return require(bundlePath) as BattleEngineModule;
   } catch (err) {
     console.error('Failed to load battleEngine bundle:', err);
