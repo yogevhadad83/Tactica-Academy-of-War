@@ -92,7 +92,7 @@ const UnitLogicPanel = ({ unit, onBehaviorSelect, onClose }: UnitLogicPanelProps
             <>
               <div className="logic-description">
                 {hasMultipleCategories ? (
-                  <p>Configure {unit.name}'s tactics:</p>
+                  <p>Configure {unit.name}:</p>
                 ) : (
                   <p>Select a behavior for this {unit.name}:</p>
                 )}

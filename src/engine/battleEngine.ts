@@ -100,8 +100,54 @@ const forwardEnemyCount = (
 
 const ARCHER_ID = 'archer';
 const RECRUIT_ID = 'recruit';
-const ARCHER_FORWARD_RANGE = 5; // keep constant for now; future player configs can override
-const ARCHER_FORWARD_COLUMN_OFFSETS = [-1, 0, 1];
+// Archer ranged pattern ("forward volley")
+// - Excludes the tile directly in front (reserved for melee swipe)
+// - Includes the two immediate diagonals (step 1, col +/- 1)
+// - Includes a 3-wide lane for the next rows (steps 2..range+1, col -1/0/+1)
+// This matches the design intent that archers shoot "into" the lane, not the adjacent tile directly in front.
+const getArcherVolleyCells = (actor: PlacedUnit): Position[] => {
+  const direction = directionForTeam(actor.team);
+  const range = Math.max(1, actor.range);
+
+  const cells: Position[] = [];
+
+  // Step 1: diagonals only
+  for (const colOffset of [-1, 1]) {
+    const row = actor.position.row + direction * 1;
+    const col = actor.position.col + colOffset;
+    if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_COLS) {
+      cells.push({ row, col });
+    }
+  }
+
+  // Steps 2..range+1: 3-wide volley
+  for (let step = 2; step <= range + 1; step += 1) {
+    const row = actor.position.row + direction * step;
+    if (row < 0 || row >= BOARD_SIZE) break;
+    for (const colOffset of [-1, 0, 1]) {
+      const col = actor.position.col + colOffset;
+      if (col >= 0 && col < BOARD_COLS) {
+        cells.push({ row, col });
+      }
+    }
+  }
+
+  return cells;
+};
+
+const getArcherTargetBehavior = (actor: PlacedUnit): string => {
+  const behaviors = actor.selectedBehaviors ?? [];
+  return (
+    behaviors.find((b) => b.startsWith('Target:')) ??
+    behaviors.find((b) => b.startsWith('Target Preference:')) ??
+    ''
+  );
+};
+
+const getArcherPriority = (actor: PlacedUnit): 'Shooting' | 'Advancing' => {
+  const behaviors = actor.selectedBehaviors ?? [];
+  return behaviors.some((b) => b.includes('Priority: Advancing')) ? 'Advancing' : 'Shooting';
+};
 
 const findClosestTarget = (actor: PlacedUnit, candidates: PlacedUnit[], targetPreference?: string) => {
   const enemies = candidates.filter((unit) => unit.team !== actor.team && isAlive(unit));
@@ -111,37 +157,35 @@ const findClosestTarget = (actor: PlacedUnit, candidates: PlacedUnit[], targetPr
   const preferStrongest = targetPreference?.includes('Strongest') ?? false;
   const preferWeakest = targetPreference?.includes('Weakest') ?? true; // default to weakest
 
+  // Helper to calculate total effective health (HP + Shield)
+  const getTotalHealth = (unit: PlacedUnit) => {
+    const hp = unit.currentHp ?? unit.hp;
+    const shield = unit.currentShield ?? unit.shield ?? 0;
+    return hp + shield;
+  };
+
   if (preferStrongest) {
-    // Sort by HP descending (strongest first)
-    enemies.sort((a, b) => (b.currentHp ?? b.hp) - (a.currentHp ?? a.hp));
+    // Sort by total health (HP + Shield) descending (strongest first)
+    enemies.sort((a, b) => getTotalHealth(b) - getTotalHealth(a));
   } else if (preferWeakest) {
-    // Sort by HP ascending (weakest first)
-    enemies.sort((a, b) => (a.currentHp ?? a.hp) - (b.currentHp ?? b.hp));
+    // Sort by total health (HP + Shield) ascending (weakest first)
+    enemies.sort((a, b) => getTotalHealth(a) - getTotalHealth(b));
   }
 
   return enemies[0];
 };
 
 const findArcherForwardTarget = (actor: PlacedUnit, snapshot: PlacedUnit[]): PlacedUnit | undefined => {
-  const direction = directionForTeam(actor.team);
-  const validCols = ARCHER_FORWARD_COLUMN_OFFSETS.map((offset) => actor.position.col + offset).filter(
-    (col) => col >= 0 && col < BOARD_COLS
-  );
   const candidates: PlacedUnit[] = [];
-  for (let step = 1; step <= ARCHER_FORWARD_RANGE; step += 1) {
-    const row = actor.position.row + direction * step;
-    if (row < 0 || row >= BOARD_SIZE) {
-      break;
-    }
-    for (const col of validCols) {
-      const target = getOccupant(snapshot, row, col);
-      if (target) {
-        candidates.push(target);
-      }
+
+  for (const cell of getArcherVolleyCells(actor)) {
+    const target = getOccupant(snapshot, cell.row, cell.col);
+    if (target) {
+      candidates.push(target);
     }
   }
-  const targetPref = actor.selectedBehaviors?.find(b => b.includes('Target Preference:')) ?? '';
-  return findClosestTarget(actor, candidates, targetPref);
+
+  return findClosestTarget(actor, candidates, getArcherTargetBehavior(actor));
 };
 
 /** Collects all pending actions from a team's units without applying them yet */
@@ -174,15 +218,25 @@ const willAllyMoveForward = (
     return false;
   }
 
-  // Check for archer forward attack - if archer has a target, it won't move
+  const occupant = getOccupant(snapshot, nextRow, allyAtPosition.position.col);
+
+  // Archer: move-vs-shoot depends on Priority
   if (allyAtPosition.id === ARCHER_ID) {
     const forwardTarget = findArcherForwardTarget(allyAtPosition, snapshot);
-    if (forwardTarget) {
-      return false; // Archer will attack instead of move
+    const priority = getArcherPriority(allyAtPosition);
+
+    // Default (Shooting): if it can shoot, it won't move.
+    if (priority === 'Shooting' && forwardTarget) {
+      return false;
+    }
+
+    // Advancing: if it can advance, it will (even if it has a target in range).
+    if (priority === 'Advancing') {
+      if (!occupant) return true;
+      if (occupant.team !== allyAtPosition.team) return false;
+      return willAllyMoveForward(occupant, snapshot, checkedUnits);
     }
   }
-
-  const occupant = getOccupant(snapshot, nextRow, allyAtPosition.position.col);
 
   if (!occupant) {
     // No one in front, ally will move
@@ -260,27 +314,29 @@ const collectTeamActions = (
     // Check for archer forward attack first - but respect priority preference
     if (actor.id === ARCHER_ID) {
       const forwardTarget = findArcherForwardTarget(actor, snapshot);
-      const archerBehaviors = behaviors;
-      const prioritizeAdvancing = archerBehaviors.some(b => b.includes('Priority: Advancing'));
-      
-      // If prioritize advancing, only shoot if can't move forward
-      if (prioritizeAdvancing && forwardTarget) {
+      const priority = getArcherPriority(actor);
+
+      if (priority === 'Advancing' && forwardTarget) {
         const direction = directionForTeam(actor.team);
         const nextRow = actor.position.row + direction;
-        const canMoveForward = nextRow >= 0 && nextRow < BOARD_SIZE && !getOccupant(snapshot, nextRow, actor.position.col);
-        
-        if (canMoveForward) {
-          // Can move forward, so do that instead of shooting
-          actions.push({
-            actor,
-            type: 'move',
-            newPosition: { row: nextRow, col: actor.position.col }
-          });
-          continue;
+        if (nextRow >= 0 && nextRow < BOARD_SIZE) {
+          const occupant = getOccupant(snapshot, nextRow, actor.position.col);
+          const canAdvance =
+            !occupant ||
+            (occupant.team === actor.team && willAllyMoveForward(occupant, snapshot, new Set([actor.instanceId])));
+
+          if (canAdvance) {
+            actions.push({
+              actor,
+              type: 'move',
+              newPosition: { row: nextRow, col: actor.position.col }
+            });
+            continue;
+          }
         }
       }
-      
-      // Either prioritize shooting OR can't move forward
+
+      // Priority: Shooting (default), or can't advance.
       if (forwardTarget) {
         actions.push({
           actor,
@@ -333,9 +389,14 @@ const collectTeamActions = (
       }
     }
 
-    // If blocked by ally or edge, try to attack nearest enemy
-    const targetPref = actor.id === ARCHER_ID ? actor.selectedBehaviors?.find(b => b.includes('Target Preference:')) ?? '' : '';
-    const target = findClosestTarget(actor, snapshot, targetPref);
+    // If blocked by ally or edge, try to attack nearest enemy.
+    // IMPORTANT: Archers should not use generic Manhattan targeting; their ranged logic is fully defined
+    // by the forward-volley pattern (handled above). They still get a melee swipe handled earlier.
+    if (actor.id === ARCHER_ID) {
+      continue;
+    }
+
+    const target = findClosestTarget(actor, snapshot, '');
     if (target) {
       const distance = manhattan(actor.position, target.position);
       const range = Math.max(1, actor.range);

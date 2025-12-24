@@ -19,9 +19,12 @@ function getApiUrl(): string {
   const envUrl = import.meta.env.VITE_API_URL as string | undefined;
   if (envUrl) return envUrl;
 
-  // Priority 2: Explicit opt-in to local dev server
+  // Priority 2: Explicit opt-in/out toggle
+  // - `true`  => local server
+  // - `false` => production server
   const useLocal = import.meta.env.VITE_USE_LOCAL_SERVER as string | undefined;
   if (useLocal === 'true') return getLocalApiUrl();
+  if (useLocal === 'false') return PRODUCTION_API_URL;
 
   // Priority 3: Default to production server (no local server required)
   return PRODUCTION_API_URL;

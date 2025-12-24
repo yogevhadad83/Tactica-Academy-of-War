@@ -6,7 +6,7 @@ A browser-based PvP strategy game where players assemble an army, set behavior r
 
 ### Running the UI
 
-The UI connects to a remote production server by default, so you don't need to run the server locally for frontend development.
+`npm run dev` connects to the remote production server by default (no local backend required).
 
 ```bash
 npm install
@@ -14,34 +14,31 @@ npm install
 npm run dev
 ```
 
+To connect the UI to your local backend server instead:
+
+```bash
+npm run dev:local
+```
+
 **Note**: The `install-hooks.sh` script sets up a pre-push hook that runs TypeScript compilation checks before allowing code to be pushed. This helps prevent pushing code with build errors to the repository.
 
-### Using a Local Server (Optional)
+### Running the Local Server
 
-If you need to test with a local backend server (located in the `./server` directory):
+The backend server is located in the `./server` directory:
 
-1. Create a `.env` file in the project root directory:
-   ```bash
-   VITE_USE_LOCAL_SERVER=true
-   ```
+```bash
+cd server
+npm install
+npm run dev
+```
 
-2. Start the local server in a separate terminal:
-   ```bash
-   cd server
-   npm install
-   npm run dev
-   ```
-   The server will start on `http://localhost:4000`.
-
-3. Start the UI:
-   ```bash
-   npm run dev
-   ```
+The server will start on `http://localhost:4000`.
 
 ### Environment Variables
 
 - `VITE_PRODUCTION_API_URL=<url>` - Override the default production server URL
-- `VITE_USE_LOCAL_SERVER=true` - Connect to `http://localhost:4000` instead of production
+- `VITE_USE_LOCAL_SERVER=true` - Force connect to `http://localhost:4000`
+- `VITE_USE_LOCAL_SERVER=false` - Force connect to production
 - `VITE_API_URL=<url>` - Override with a custom API URL (takes precedence over all other settings)
 
 See `.env.example` for more details.
