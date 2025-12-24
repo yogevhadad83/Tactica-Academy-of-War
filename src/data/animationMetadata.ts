@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
  * 
  * Animation metadata extracted from GLB model files.
- * Generated: 2025-12-14T22:32:33.351Z
+ * Generated: 2025-12-24T05:47:45.761Z
  * 
  * To regenerate, run: npx tsx scripts/extract-animation-metadata.ts
  */
@@ -93,6 +93,7 @@ export const RAW_ANIMATION_DATA: Record<string, Record<string, AnimationMetadata
 const ANIMATION_STATE_TO_CLIP: Record<AnimationState, string[]> = {
   idle: ['Idle_0', 'Idle_1'],
   walk: ['Walk_0', 'Walk_1'],
+  step: ['Step_0', 'Step_1'],
   fight: ['Fight_0', 'Fight_1'],
   death: ['Death_0', 'Death_1'],
   impact: ['Impact_0', 'Impact_1'],
@@ -131,7 +132,7 @@ export function hasAnimationState(modelKey: ModelKey, state: AnimationState): bo
  * Get all available animation states for a model.
  */
 export function getAvailableAnimations(modelKey: ModelKey): AnimationState[] {
-  const states: AnimationState[] = ['idle', 'walk', 'fight', 'death', 'impact'];
+  const states: AnimationState[] = ['idle', 'walk', 'step', 'fight', 'death', 'impact'];
   return states.filter(state => hasAnimationState(modelKey, state));
 }
 
@@ -166,6 +167,7 @@ export const COMPUTED_ANIMATION_DURATIONS: Partial<Record<ModelKey, Partial<Reco
     fight: 2533,
     idle: 2000,
     impact: 1367,
+    step: 733,
     walk: 867,
   },
 };

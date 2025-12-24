@@ -118,6 +118,7 @@ export const RAW_ANIMATION_DATA: Record<string, Record<string, AnimationMetadata
 const ANIMATION_STATE_TO_CLIP: Record<AnimationState, string[]> = {
   idle: ['Idle_0', 'Idle_1'],
   walk: ['Walk_0', 'Walk_1'],
+  step: ['Step_0', 'Step_1'],
   fight: ['Fight_0', 'Fight_1'],
   death: ['Death_0', 'Death_1'],
   impact: ['Impact_0', 'Impact_1'],
@@ -156,7 +157,7 @@ export function hasAnimationState(modelKey: ModelKey, state: AnimationState): bo
  * Get all available animation states for a model.
  */
 export function getAvailableAnimations(modelKey: ModelKey): AnimationState[] {
-  const states: AnimationState[] = ['idle', 'walk', 'fight', 'death', 'impact'];
+  const states: AnimationState[] = ['idle', 'walk', 'step', 'fight', 'death', 'impact'];
   return states.filter(state => hasAnimationState(modelKey, state));
 }
 
@@ -172,10 +173,11 @@ export const COMPUTED_ANIMATION_DURATIONS: Partial<Record<ModelKey, Partial<Reco
     const states: Array<{ state: string; duration: number }> = [];
     
     // Map clip names to animation states
-    // Only include states that are defined in AnimationState type: 'idle' | 'walk' | 'fight' | 'death' | 'impact'
+    // Only include states that are defined in AnimationState type: 'idle' | 'walk' | 'step' | 'fight' | 'death' | 'impact'
     const stateMapping: Record<string, string> = {
       'Idle_0': 'idle', 'Idle_1': 'idle',
       'Walk_0': 'walk', 'Walk_1': 'walk',
+      'Step_0': 'step', 'Step_1': 'step',
       'Fight_0': 'fight', 'Fight_1': 'fight',
       'Death_0': 'death', 'Death_1': 'death',
       'Impact_0': 'impact', 'Impact_1': 'impact',
