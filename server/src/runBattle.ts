@@ -4,8 +4,8 @@ import { resolve } from 'path';
 // Load the built CJS bundle from the workspace root dist directory
 const loadEngine = (): BattleEngineModule => {
   try {
-    // Try absolute path first (works in both dev and production)
-    const bundlePath = '/workspaces/Armoria/dist/engine/battleEngine.cjs';
+    // Use relative path from compiled location (server/dist/server/src/) to workspace root dist/engine/
+    const bundlePath = resolve(__dirname, '../../../../dist/engine/battleEngine.cjs');
     return require(bundlePath) as BattleEngineModule;
   } catch (err) {
     console.error('Failed to load battleEngine bundle:', err);
