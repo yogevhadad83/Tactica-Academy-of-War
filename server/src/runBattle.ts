@@ -4,8 +4,9 @@ import { resolve, dirname } from 'path';
 // Load the built CJS bundle from the workspace root dist directory
 const loadEngine = (): BattleEngineModule => {
   try {
-    // Calculate workspace root from compiled location (server/dist/server/src/)
-    // Go up 4 levels: src -> server -> dist -> server -> workspace-root
+    // Calculate workspace root from compiled location
+    // This file compiles to: server/dist/server/src/runBattle.js
+    // Going up 4 levels: src/ -> server/ -> dist/ -> server/ -> workspace-root/
     const workspaceRoot = resolve(__dirname, '../../../..');
     const bundlePath = resolve(workspaceRoot, 'dist/engine/battleEngine.cjs');
     return require(bundlePath) as BattleEngineModule;
