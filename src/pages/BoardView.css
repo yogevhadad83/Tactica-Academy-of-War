@@ -184,6 +184,13 @@
   z-index: 3;
 }
 
+.battle-skip-overlay {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 4;
+}
+
 .countdown-overlay span {
   font-size: clamp(3rem, 12vw, 10rem);
   font-weight: 800;

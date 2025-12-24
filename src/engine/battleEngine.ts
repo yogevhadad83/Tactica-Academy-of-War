@@ -79,13 +79,23 @@ const directionForTeam = (team: PlacedUnit['team']) => (team === 'player' ? -1 :
 
 const targetRowForTeam = (team: PlacedUnit['team']) => (team === 'player' ? 0 : BOARD_SIZE - 1);
 
-const isLaneClear = (snapshot: PlacedUnit[], startRow: number, col: number, direction: number): boolean => {
+const forwardEnemyCount = (
+  snapshot: PlacedUnit[],
+  startRow: number,
+  col: number,
+  direction: number,
+  actorTeam: PlacedUnit['team']
+): number => {
+  // Counts ENEMIES (not allies) from the next step to the board edge in the given column.
+  // "Path" = the remaining tiles ahead until the unit reaches the end of the board.
+  let enemies = 0;
   for (let row = startRow + direction; row >= 0 && row < BOARD_SIZE; row += direction) {
-    if (getOccupant(snapshot, row, col)) {
-      return false;
+    const occupant = getOccupant(snapshot, row, col);
+    if (occupant && occupant.team !== actorTeam) {
+      enemies += 1;
     }
   }
-  return true;
+  return enemies;
 };
 
 const ARCHER_ID = 'archer';
@@ -96,11 +106,11 @@ const ARCHER_FORWARD_COLUMN_OFFSETS = [-1, 0, 1];
 const findClosestTarget = (actor: PlacedUnit, candidates: PlacedUnit[], targetPreference?: string) => {
   const enemies = candidates.filter((unit) => unit.team !== actor.team && isAlive(unit));
   if (enemies.length === 0) return undefined;
-  
+
   // Check if archer prefers strongest or weakest
   const preferStrongest = targetPreference?.includes('Strongest') ?? false;
   const preferWeakest = targetPreference?.includes('Weakest') ?? true; // default to weakest
-  
+
   if (preferStrongest) {
     // Sort by HP descending (strongest first)
     enemies.sort((a, b) => (b.currentHp ?? b.hp) - (a.currentHp ?? a.hp));
@@ -108,7 +118,7 @@ const findClosestTarget = (actor: PlacedUnit, candidates: PlacedUnit[], targetPr
     // Sort by HP ascending (weakest first)
     enemies.sort((a, b) => (a.currentHp ?? a.hp) - (b.currentHp ?? b.hp));
   }
-  
+
   return enemies[0];
 };
 
@@ -198,30 +208,53 @@ const collectTeamActions = (
   for (const actor of teamUnits) {
     const behaviors = actor.selectedBehaviors ?? [];
     const isRecruit = actor.id === RECRUIT_ID;
-    const isRunner = isRecruit && behaviors.some((b) => b.includes('Runner'));
-    const isOpportunistic = isRecruit && behaviors.some((b) => b.includes('Opportunistic'));
+    const recruitMode: 'Aggressive' | 'Runner' | 'Moderate' = !isRecruit
+      ? 'Moderate'
+      : behaviors.some((b) => b.includes('Runner'))
+        ? 'Runner'
+        : behaviors.some((b) => b.includes('Aggressive'))
+          ? 'Aggressive'
+          : 'Moderate';
 
-    if (isRunner) {
+    if (isRecruit && (recruitMode === 'Runner' || recruitMode === 'Aggressive')) {
+      // "Path" = remaining tiles ahead in the column until the unit reaches the board edge.
+      // Runner: choose the lane with the LEAST ENEMIES.
+      // Aggressive: choose the lane with the MOST ENEMIES.
+      // In both cases, only sidestep if a side lane is STRICTLY better than the current lane.
       const direction = directionForTeam(actor.team);
-      const sideDirs = [-1, 1];
-      let movedSideways = false;
-      for (const side of sideDirs) {
-        const sideCol = actor.position.col + side;
-        if (sideCol < 0 || sideCol >= BOARD_COLS) continue;
-        if (getOccupant(snapshot, actor.position.row, sideCol)) continue;
-        if (isLaneClear(snapshot, actor.position.row, sideCol, direction)) {
-          actions.push({
-            actor,
-            type: 'move',
-            newPosition: { row: actor.position.row, col: sideCol }
-          });
-          movedSideways = true;
-          break;
+      const currentCol = actor.position.col;
+      const currentEnemies = forwardEnemyCount(snapshot, actor.position.row, currentCol, direction, actor.team);
+
+      const getSide = (side: number): { col: number; enemies: number; canStep: boolean } | null => {
+        const col = currentCol + side;
+        if (col < 0 || col >= BOARD_COLS) return null;
+        const blocked = !!getOccupant(snapshot, actor.position.row, col);
+        const enemies = forwardEnemyCount(snapshot, actor.position.row, col, direction, actor.team);
+        return { col, enemies, canStep: !blocked };
+      };
+
+      const left = getSide(-1);
+      const right = getSide(1);
+      // Deterministic tie-break: prefer RIGHT lane over LEFT when enemy counts tie.
+      const sides = [right, left].filter(Boolean) as Array<{ col: number; enemies: number; canStep: boolean }>;
+      const candidates = sides.filter((s) => s.canStep);
+
+      if (candidates.length > 0) {
+        if (recruitMode === 'Runner') {
+          const best = candidates.reduce((acc, cur) => (cur.enemies < acc.enemies ? cur : acc), candidates[0]);
+          if (best.enemies < currentEnemies) {
+            actions.push({ actor, type: 'move', newPosition: { row: actor.position.row, col: best.col } });
+            continue;
+          }
+        } else {
+          const best = candidates.reduce((acc, cur) => (cur.enemies > acc.enemies ? cur : acc), candidates[0]);
+          if (best.enemies > currentEnemies) {
+            actions.push({ actor, type: 'move', newPosition: { row: actor.position.row, col: best.col } });
+            continue;
+          }
         }
       }
-      if (movedSideways) {
-        continue; // Runner sidestep executed; skip to next unit
-      }
+      // Otherwise fall through to normal behavior (move forward, fight, or idle)
     }
 
     // Check for archer forward attack first - but respect priority preference
@@ -290,26 +323,6 @@ const collectTeamActions = (
       }
 
       // Ally in front - check if ally will move forward, allowing this unit to follow
-      if (isOpportunistic) {
-        const sideDirs = [-1, 1];
-        let sidestepped = false;
-        for (const side of sideDirs) {
-          const sideCol = actor.position.col + side;
-          if (sideCol < 0 || sideCol >= BOARD_COLS) continue;
-          if (getOccupant(snapshot, actor.position.row, sideCol)) continue;
-          actions.push({
-            actor,
-            type: 'move',
-            newPosition: { row: actor.position.row, col: sideCol }
-          });
-          sidestepped = true;
-          break;
-        }
-        if (sidestepped) {
-          continue;
-        }
-      }
-
       if (willAllyMoveForward(occupant, snapshot, new Set([actor.instanceId]))) {
         actions.push({
           actor,

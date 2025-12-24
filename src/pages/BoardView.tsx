@@ -104,11 +104,6 @@ const BoardView = () => {
   const [battleTimeline, setBattleTimeline] = useState<BattleTickResult[]>([]);
   const [pendingWinner, setPendingWinner] = useState<'player' | 'enemy' | 'draw' | null>(null);
 
-  const debugMode = useMemo(() => {
-    if (typeof window === 'undefined') return false;
-    return new URLSearchParams(window.location.search).get('mode') === 'debug';
-  }, []);
-
   const catalogById = useMemo(() => new Map(catalogUnits.map((unit) => [unit.id, unit])), [catalogUnits]);
 
   const armyInstances = useMemo(() => {
@@ -838,7 +833,7 @@ const BoardView = () => {
     return (
       <div className="board-view-container">
         <div className="board-view-header">
-          <h1>🎮 Battle Board {debugMode && <span className="debug-badge">DEBUG</span>}</h1>
+          <h1>🎮 Battle Board</h1>
           <p className="header-subtitle">Login to plan your placements.</p>
         </div>
       </div>
@@ -849,7 +844,7 @@ const BoardView = () => {
     return (
       <div className="board-view-container">
         <div className="board-view-header">
-          <h1>🎮 Battle Board {debugMode && <span className="debug-badge">DEBUG</span>}</h1>
+          <h1>🎮 Battle Board</h1>
           <p className="header-subtitle">Loading your army…</p>
         </div>
       </div>
@@ -860,7 +855,7 @@ const BoardView = () => {
     return (
       <div className="board-view-container">
         <div className="board-view-header">
-          <h1>🎮 Battle Board {debugMode && <span className="debug-badge">DEBUG</span>}</h1>
+          <h1>🎮 Battle Board</h1>
           <p className="header-subtitle">You need units before launching a battle. Visit the Army Builder.</p>
         </div>
       </div>
@@ -957,7 +952,7 @@ const BoardView = () => {
   return (
     <div className={`board-view-container ${battleState !== 'idle' ? 'battle-mode' : ''} ${isFlightMode ? 'flight-mode' : ''}`}>
       <div className="board-view-header">
-        <h1>🎮 Battle Board {debugMode && <span className="debug-badge">DEBUG</span>}</h1>
+        <h1>🎮 Battle Board</h1>
         <p className="header-subtitle">{subtitle}</p>
       </div>
 
@@ -1097,6 +1092,13 @@ const BoardView = () => {
                 forceOwner={undefined}
               />
             </Suspense>
+            {isFlightMode && (
+              <div className="battle-skip-overlay">
+                <button type="button" className="flight-exit-btn" onClick={exitBattle}>
+                  Skip
+                </button>
+              </div>
+            )}
             {countdownValue !== null && (
               <div className={`countdown-overlay ${countdownValue === 'START' ? 'start' : ''}`}>
                 <span key={String(countdownValue)}>{countdownValue}</span>

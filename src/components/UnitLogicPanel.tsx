@@ -35,6 +35,15 @@ const UnitLogicPanel = ({ unit, onBehaviorSelect, onClose }: UnitLogicPanelProps
   // Set defaults for first-time selection
   const getDefaultsForUnit = () => {
     const defaults: string[] = [];
+
+    // For simple (non-categorized) behavior lists, default to the first option.
+    if (Object.keys(categories).length === 0) {
+      if (unit.behaviorOptions && unit.behaviorOptions.length > 0) {
+        defaults.push(unit.behaviorOptions[0]);
+      }
+      return defaults;
+    }
+
     Object.entries(categories).forEach(([_, catData]) => {
       if (catData.options.length > 0) {
         // Default to first option (or could be customized per unit)

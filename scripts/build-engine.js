@@ -1,14 +1,17 @@
 import { build } from 'esbuild';
 import { mkdir } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const outfile = 'dist/engine/battleEngine.cjs';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = resolve(__dirname, '..');
+const outfile = resolve(workspaceRoot, 'dist/engine/battleEngine.cjs');
 const outdir = dirname(outfile);
 
 await mkdir(outdir, { recursive: true });
 
 await build({
-  entryPoints: ['src/engine/battleEngine.ts'],
+  entryPoints: [resolve(workspaceRoot, 'src/engine/battleEngine.ts')],
   bundle: true,
   platform: 'node',
   format: 'cjs',

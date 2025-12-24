@@ -1,6 +1,8 @@
 import assert from 'node:assert';
 import test from 'node:test';
-import { buildGddUnit, GDD_UNIT_IDS, GDD_UNIT_DEFS } from '../shared/gddUnits';
+import gddUnits from '../shared/gddUnits';
+
+const { buildGddUnit, GDD_UNIT_IDS, GDD_UNIT_DEFS } = gddUnits as unknown as typeof import('../shared/gddUnits');
 
 test('all GDD unit ids resolve to a template', () => {
   for (const id of GDD_UNIT_IDS) {

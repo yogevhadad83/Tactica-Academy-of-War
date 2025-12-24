@@ -8,7 +8,7 @@ import type { AttackType, DemoState, HitEvent } from '../../types/battle';
 import { boardKey, cellToWorld } from '../../constants/board';
 import { COMPUTED_ANIMATION_DURATIONS } from '../../data/animationMetadata';
 
-export type AnimationState = 'idle' | 'walk' | 'fight' | 'death' | 'impact';
+export type AnimationState = 'idle' | 'walk' | 'step' | 'fight' | 'death' | 'impact';
 export type ModelKey = string;
 
 interface ModelDefinition {
@@ -40,6 +40,7 @@ export interface UnitVisual {
   impactActions?: THREE.AnimationAction[]; // Array of impact animation variants
   idleActions?: THREE.AnimationAction[]; // Array of idle animation variants (Idle_0, Idle_1, etc.)
   fightActions?: THREE.AnimationAction[]; // Array of fight animation variants (Fight_0, Fight_1, etc.)
+  stepActions?: THREE.AnimationAction[]; // Array of step animation variants (Step_0 for right, Step_1 for left)
   currentAnimation?: AnimationState;
   currentImpactIndex?: number; // Track which impact variant is currently playing
   currentIdleIndex?: number; // Track which idle variant is currently playing
@@ -54,6 +55,8 @@ export interface UnitVisual {
   targetPosition: THREE.Vector3;
   moveStartPosition: THREE.Vector3;
   moveStartTime?: number;
+  lastPosition?: { row: number; col: number };
+  currentStepIndex?: number;
   positionInitialized: boolean;
   fadeMaterials: THREE.Material[];
   fadeStartTime?: number;
@@ -144,6 +147,7 @@ const DEFAULT_MODEL_TARGET_HEIGHT = 1.9;
 const DEFAULT_ANIMATIONS: Record<AnimationState, string> = {
   idle: 'Idle_0',
   walk: 'Walk_0',
+  step: 'Step_0',
   fight: 'Fight_0',
   death: 'Death_0',
   impact: 'Impact_0'
@@ -204,6 +208,7 @@ const ANIMATION_DURATIONS = COMPUTED_ANIMATION_DURATIONS;
 const DEFAULT_ANIMATION_DURATIONS: Record<AnimationState, number> = {
   idle: 3000,
   walk: 1000,
+  step: 733,
   fight: 1500,
   death: 3000,
   impact: 1000
@@ -554,6 +559,25 @@ const setVisualAnimation = (visual: UnitVisual, state: AnimationState, attackTyp
     }
   }
   
+  // Handle step animation specially - use step actions based on direction
+  if (state === 'step') {
+    const stepActions = visual.stepActions;
+    if (stepActions && stepActions.length > 0) {
+      if (visual.currentAnimation) {
+        const current = visual.actions[visual.currentAnimation];
+        current?.fadeOut(0.1);
+      }
+      // Use currentStepIndex to choose between Step_0 (right) and Step_1 (left)
+      const stepIndex = visual.currentStepIndex ?? 0;
+      const stepAction = stepActions[stepIndex];
+      if (stepAction) {
+        stepAction.reset().fadeIn(0.1).play();
+        visual.currentAnimation = state;
+      }
+      return;
+    }
+  }
+  
   // Handle fight animation specially - use the fight actions array with random variant
   if (state === 'fight') {
     const fightActions = visual.fightActions;
@@ -693,6 +717,7 @@ const createVisual = (
   let impactActions: THREE.AnimationAction[] | undefined;
   let idleActions: THREE.AnimationAction[] | undefined;
   let fightActions: THREE.AnimationAction[] | undefined;
+  let stepActions: THREE.AnimationAction[] | undefined;
   const fadeMaterials = new Set<THREE.Material>();
   const registerFadableMaterial = (material?: THREE.Material | THREE.Material[]) => {
     if (!material) return;
@@ -745,6 +770,18 @@ const createVisual = (
         action.timeScale = override;
       }
       actions![state] = action;
+    });
+    
+    // Collect all step animation variants (Step_0 for right, Step_1 for left)
+    stepActions = [];
+    modelAsset.animations.forEach((clip) => {
+      if (clip.name.startsWith('Step_')) {
+        const action = mixer!.clipAction(clip);
+        action.reset();
+        action.clampWhenFinished = true;
+        action.setLoop(THREE.LoopOnce, 1);
+        stepActions!.push(action);
+      }
     });
     
     // Collect all impact animation variants (Impact_0, Impact_1, etc.)
@@ -850,6 +887,7 @@ const createVisual = (
     actions,
     impactActions,
     idleActions,
+    stepActions,
     unitId: unit.id,
     unitPosition: unit.position,
     fightActions,
@@ -1092,6 +1130,18 @@ export const useUnitLayer = (
             const unitBaseY = tileGroupY + glowPlaneOffset;
             visual.targetPosition.set(x, unitBaseY, z);
             visual.moveStartTime = performance.now();
+            
+            // Detect sidestep for recruit and set step direction
+            if (unit.id === 'recruit' && visual.lastPosition) {
+              const rowDiff = unit.position.row - visual.lastPosition.row;
+              const colDiff = unit.position.col - visual.lastPosition.col;
+              // Sidestep: same row, different column
+              if (rowDiff === 0 && colDiff !== 0) {
+                // colDiff > 0 means moving right (Step_0), colDiff < 0 means moving left (Step_1)
+                visual.currentStepIndex = colDiff > 0 ? 0 : 1;
+              }
+            }
+            visual.lastPosition = { row: unit.position.row, col: unit.position.col };
           }
         }
 
@@ -1382,7 +1432,18 @@ export const useUnitLayer = (
           targetOpacity = 1;
         } else if (moveSet.has(cell) || marchSet.has(cell)) {
           targetOpacity = 0.85;
-          targetAnimation = 'walk';
+          // For recruit units, check if it's a sidestep and use step animation
+          if (unit.id === 'recruit' && visual.lastPosition) {
+            const rowDiff = unit.position.row - visual.lastPosition.row;
+            if (rowDiff === 0) {
+              // Sidestep detected - use step animation
+              targetAnimation = 'step';
+            } else {
+              targetAnimation = 'walk';
+            }
+          } else {
+            targetAnimation = 'walk';
+          }
         }
 
         visual.glowMaterial.opacity = targetOpacity;

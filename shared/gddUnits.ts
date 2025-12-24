@@ -49,7 +49,7 @@ export const GDD_UNIT_DEFS: Record<GddUnitId, GddUnitDefinition> = {
     supplyCost: 1,
     creditCost: 0,
     reviveCost: 0,
-    behaviorOptions: ['Aggressive', 'Opportunistic', 'Runner'],
+    behaviorOptions: ['Moderate', 'Aggressive', 'Runner'],
     description: 'Basic filler unit with selectable lane logic.'
   },
   knight: {
