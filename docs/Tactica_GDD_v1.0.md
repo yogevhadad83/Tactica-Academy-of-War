@@ -254,14 +254,26 @@ Stats:
  Shield: 0
  Damage: 1
  Movement: 1
-Behavior Setting (Player chooses ONE):
-Aggressive – Always move forward; attack if possible.
+Behavior Setting (Player chooses ONE — default: Moderate):
+Moderate (Default) – Standard infantry behavior:
+ Move forward if the tile ahead is empty.
+ If an enemy blocks the tile ahead, attack it.
+ If an ally blocks the tile ahead and that ally will advance this turn, follow forward ("follow the line").
 
 
-Opportunistic – If blocked by an ally, attempts sidestep to open lanes.
+Runner – Lane-seeking, breach-focused behavior:
+ If a left/right adjacent tile is open, compare lanes and sidestep into a lane with fewer ENEMIES remaining on the path to the board edge.
+ Only sidestep if the side lane is strictly better than the current lane; otherwise behave like Moderate.
 
 
-Runner – Prioritizes lateral movement into lanes with least resistance to reach the back row. In other words: Side step only if the path is clear. 
+Aggressive – Lane-seeking, combat-focused behavior:
+ If a left/right adjacent tile is open, compare lanes and sidestep into a lane with more ENEMIES remaining on the path to the board edge.
+ Only sidestep if the side lane is strictly better than the current lane; otherwise behave like Moderate.
+
+
+Notes (Determinism):
+ Lane scoring counts enemies only (allies do not make a lane “worse”).
+ If left and right lanes tie, prefer the right lane.
 
 
 Supply Cost: 1
@@ -299,7 +311,7 @@ Blind diagonals at 1 tile
 
 
 Logic:
-Target weakest enemy or weakest by HP
+Target weakest enemy or strongest enemy (by HP)
 Prioritize shooting or prioritize advancing
 
 
