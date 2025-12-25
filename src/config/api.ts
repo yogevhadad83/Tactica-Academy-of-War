@@ -4,12 +4,22 @@ const PRODUCTION_API_URL =
   (import.meta.env.VITE_PRODUCTION_API_URL as string | undefined) || DEFAULT_PRODUCTION_URL;
 const LOCAL_API_URL = 'http://localhost:4000';
 
-// Resolve the correct local URL (supports Codespaces forwarded port)
+// Resolve the correct local URL (supports Codespaces forwarded ports)
 function getLocalApiUrl(): string {
-  if (typeof window !== 'undefined' && window.location.hostname.includes('.app.github.dev')) {
-    // Convert: xxx-5173.app.github.dev -> xxx-4000.app.github.dev
-    const hostname = window.location.hostname.replace(/-5173\./, '-4000.');
-    return `https://${hostname}`;
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname;
+
+    // Codespaces forwarded-port hostnames look like:
+    //   <codespace>-5173.app.github.dev
+    //   <codespace>-5173.preview.app.github.dev
+    // Use the same domain style (preview vs non-preview) that the frontend is using
+    const match = hostname.match(/^(.*)-(\d+)\.(preview\.)?app\.github\.dev$/);
+    if (match) {
+      const base = match[1];
+      const port = 4000;
+      const previewPrefix = match[3] || ''; // Keep same prefix as current page
+      return `https://${base}-${port}.${previewPrefix}app.github.dev`;
+    }
   }
   return LOCAL_API_URL;
 }

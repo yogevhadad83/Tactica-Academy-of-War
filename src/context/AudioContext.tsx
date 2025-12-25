@@ -10,12 +10,16 @@ const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
 export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const [isMuted, setIsMuted] = useState(false);
+  const isDebugFromUrl = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('debug');
+  const isDebugFromEnv = import.meta.env.VITE_FORCE_DEBUG === 'true';
+  const isDebug = isDebugFromUrl || isDebugFromEnv;
+  const [isMuted, setIsMuted] = useState<boolean>(isDebug);
 
   const toggleMute = () => {
     if (audioRef.current) {
-      audioRef.current.muted = !audioRef.current.muted;
-      setIsMuted(!isMuted);
+      const nextMuted = !audioRef.current.muted;
+      audioRef.current.muted = nextMuted;
+      setIsMuted(nextMuted);
     }
   };
 

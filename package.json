@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "cross-env VITE_USE_LOCAL_SERVER=false vite",
-    "dev:local": "cross-env VITE_USE_LOCAL_SERVER=true vite",
+    "dev:debug": "cross-env VITE_USE_LOCAL_SERVER=false VITE_FORCE_DEBUG=true vite --open",
+    "dev:local": "concurrently -k -n web,server -c green,blue \"cross-env VITE_USE_LOCAL_SERVER=true vite\" \"npm --prefix server run dev\"",
+    "dev:local:debug": "concurrently -k -n web,server -c green,blue \"cross-env VITE_USE_LOCAL_SERVER=true VITE_FORCE_DEBUG=true vite --open\" \"npm --prefix server run dev\"",
     "build": "npm run build:engine && npm run extract-animations && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -34,6 +36,7 @@
     "@types/react-dom": "^19.2.2",
     "@types/react-router-dom": "^5.3.3",
     "@vitejs/plugin-react": "^5.1.0",
+    "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",

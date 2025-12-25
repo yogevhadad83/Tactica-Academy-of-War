@@ -31,9 +31,26 @@ function AppContent() {
   const [showIntro, setShowIntro] = useState(true);
   const [showTitle, setShowTitle] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const { audioRef } = useAudio();
+  const { audioRef, isMuted } = useAudio();
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const isDebugFromEnv = import.meta.env.VITE_FORCE_DEBUG === 'true';
+    const isDebug = params.has('debug') || isDebugFromEnv;
+
+    // If debug is forced via env, ensure the URL contains ?debug
+    // (Vite's `--open` may not preserve query strings reliably across platforms.)
+    if (isDebugFromEnv && !params.has('debug')) {
+      const existing = params.toString();
+      const nextSearch = existing.length > 0 ? `?${existing}&debug` : '?debug';
+      window.history.replaceState(null, '', `${window.location.pathname}${nextSearch}${window.location.hash}`);
+    }
+
+    // If debug is enabled, skip intro entirely
+    if (isDebug) {
+      setShowIntro(false);
+    }
+
     const v = videoRef.current;
     if (!v) return;
     const onEnded = () => setShowIntro(false);
@@ -76,6 +93,7 @@ function AppContent() {
         ref={audioRef}
         preload="auto"
         src="/audio/opening.mp3"
+        muted={isMuted}
         loop
         style={{ display: 'none' }}
       />
