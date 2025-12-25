@@ -460,26 +460,71 @@ const BoardView = () => {
     setLogicPanelUnit(null);
   }, []);
 
-  const handleBehaviorSelect = useCallback((instanceId: string, behavior: string, categoryKey?: string) => {
-    setUnitLogic((prev) => {
-      const currentBehaviors = prev[instanceId] ?? [];
-      
-      if (categoryKey) {
-        // For categorized behaviors (like Archer), toggle within category
-        const newBehaviors = currentBehaviors.filter(b => !b.startsWith(categoryKey));
+  const getDefaultBehaviorsForUnit = useCallback((behaviorOptions: string[]): string[] => {
+    if (!behaviorOptions.length) return [];
+
+    const categories = new Map<string, string[]>();
+
+    for (const fullBehavior of behaviorOptions) {
+      const colonIndex = fullBehavior.indexOf(':');
+      if (colonIndex <= -1) continue;
+      const category = fullBehavior.slice(0, colonIndex).trim();
+      if (!category) continue;
+      const existing = categories.get(category) ?? [];
+      existing.push(fullBehavior);
+      categories.set(category, existing);
+    }
+
+    // Non-categorized behavior lists: default to first option.
+    if (categories.size === 0) {
+      return [behaviorOptions[0]];
+    }
+
+    // Categorized: default to first option in each category.
+    const defaults: string[] = [];
+    for (const [, options] of categories) {
+      if (options.length) defaults.push(options[0]);
+    }
+    return defaults;
+  }, []);
+
+  const handleBehaviorSelect = useCallback(
+    (instanceId: string, behavior: string, categoryKey?: string) => {
+      setUnitLogic((prev) => {
+        const currentBehaviors = prev[instanceId] ?? [];
+
+        if (categoryKey) {
+          // Ensure we keep one selection per category (so changing one category doesn't clear others).
+          const behaviorOptions = unitByInstanceId[instanceId]?.behaviorOptions ?? [];
+          const defaults = getDefaultBehaviorsForUnit(behaviorOptions);
+
+          const seededBehaviors = defaults.reduce((acc, def) => {
+            const colonIndex = def.indexOf(':');
+            if (colonIndex <= -1) return acc;
+            const category = def.slice(0, colonIndex).trim();
+            if (!category) return acc;
+
+            const hasCategory = acc.some((b) => b.startsWith(`${category}:`));
+            return hasCategory ? acc : [...acc, def];
+          }, currentBehaviors);
+
+          // Replace selection within the chosen category.
+          const withoutCategory = seededBehaviors.filter((b) => !b.startsWith(`${categoryKey}:`));
+          return {
+            ...prev,
+            [instanceId]: [...withoutCategory, behavior]
+          };
+        }
+
+        // For simple behaviors, replace entirely
         return {
           ...prev,
-          [instanceId]: [...newBehaviors, behavior]
+          [instanceId]: [behavior]
         };
-      }
-      
-      // For simple behaviors, replace entirely
-      return {
-        ...prev,
-        [instanceId]: [behavior]
-      };
-    });
-  }, []);
+      });
+    },
+    [getDefaultBehaviorsForUnit, unitByInstanceId]
+  );
 
   const handlePointerMove = useCallback(
     (event: PointerEvent) => {
