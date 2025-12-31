@@ -6,10 +6,12 @@ import { usePlayerContext } from '../context/PlayerContext';
 import './ArmyBuilder.css';
 import UnitPreviewCanvas from '../components/UnitPreviewCanvas';
 import { useUnitCatalog } from '../hooks/useUnitCatalog';
-import { usePlayerArmy } from '../hooks/usePlayerArmy';
 import { calculateArmyCost } from '../utils/credits';
 import { supabase } from '../lib/supabaseClient';
 import { applyOptimisticWallet, type WalletSyncHandle } from '../utils/walletSync';
+import { isKnownUnitType } from '../utils/unitTypeIds';
+import { usePlayerInventory } from '../hooks/usePlayerInventory';
+import { buyUnits } from '../lib/inventoryApi';
 
 const maxUnits = 20;
 
@@ -237,13 +239,14 @@ const ArmyBuilder = () => {
   const { player, loading: playerLoading, refresh: refreshPlayer, setPlayerCredits } = usePlayerContext();
   const { units: catalogUnits, loading: unitsLoading, error: unitsError } = useUnitCatalog();
   const {
-    loading: armyLoading,
-    error: armyError,
-    armyId,
-    units: armyUnits,
-    refreshArmy
-  } = usePlayerArmy();
-  const [draftUnits, setDraftUnits] = useState(armyUnits);
+    loading: inventoryLoading,
+    error: inventoryError,
+    units: inventoryUnits,
+    refreshInventory
+  } = usePlayerInventory();
+
+  type DraftUnit = { id: string; unitTypeId: string; baseBehaviorConfig?: unknown };
+  const [draftUnits, setDraftUnits] = useState<DraftUnit[]>([]);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [cartError, setCartError] = useState<string | null>(null);
   const [cartSuccess, setCartSuccess] = useState<string | null>(null);
@@ -257,9 +260,9 @@ const ArmyBuilder = () => {
     setToast(null);
   }, []);
   useEffect(() => {
-    setDraftUnits(armyUnits.map((unit) => ({ ...unit })));
+    setDraftUnits(inventoryUnits.map((unit) => ({ ...unit })));
     setHasUnsavedChanges(false);
-  }, [armyUnits]);
+  }, [inventoryUnits]);
 
   useEffect(() => {
     if (pendingCredits === null) return;
@@ -286,16 +289,18 @@ const ArmyBuilder = () => {
 
   const catalogById = useMemo(() => new Map(catalogUnits.map((unit) => [unit.id, unit])), [catalogUnits]);
 
+  const knownUnitIds = useMemo(() => new Set(catalogUnits.map((unit) => unit.id.toLowerCase())), [catalogUnits]);
+
   const armyUnitsWithMeta = useMemo(
     () =>
       draftUnits
-        .map((armyUnit) => {
+        .map((armyUnit, index) => {
           const meta = catalogById.get(armyUnit.unitTypeId.toLowerCase());
           if (!meta) return null;
           return {
             ...meta,
             instanceId: armyUnit.id,
-            slotIndex: armyUnit.slotIndex
+            slotIndex: index
           } as ArmyUnitInstance & { slotIndex: number };
         })
         .filter(Boolean) as (ArmyUnitInstance & { slotIndex: number })[],
@@ -361,53 +366,42 @@ const ArmyBuilder = () => {
   );
 
   const unitLimitReached = draftUnits.length >= maxUnits;
-  const canModify = Boolean(user && armyId);
+  const canModify = Boolean(user);
   const playerCredits = player?.current_credits ?? null;
 
   const pendingAdditions = useMemo(
-    () => draftUnits.filter((unit) => !armyUnits.some((base) => base.id === unit.id)),
-    [draftUnits, armyUnits]
-  );
-  const pendingRemovals = useMemo(
-    () => armyUnits.filter((unit) => !draftUnits.some((draft) => draft.id === unit.id)),
-    [draftUnits, armyUnits]
+    () => draftUnits.filter((unit) => !inventoryUnits.some((base) => base.id === unit.id)),
+    [draftUnits, inventoryUnits]
   );
   const creditsToSpend = useMemo(() => calculateArmyCost(pendingAdditions), [pendingAdditions]);
-  const creditsToRefund = useMemo(() => calculateArmyCost(pendingRemovals), [pendingRemovals]);
+  const creditsToRefund = 0;
   const netCreditChange = creditsToSpend - creditsToRefund;
   const projectedCredits = playerCredits !== null ? playerCredits - netCreditChange : null;
   const draftTotalCredits = useMemo(() => calculateArmyCost(draftUnits), [draftUnits]);
 
-  const getNextSlotIndex = useCallback(() => {
-    const occupied = new Set(draftUnits.map((unit) => unit.slotIndex));
-    let candidate = 0;
-    while (occupied.has(candidate) && candidate < maxUnits) {
-      candidate += 1;
-    }
-    return candidate;
-  }, [draftUnits]);
-
   const handleAddUnitToDraft = useCallback(
     (unitTypeId: string) => {
       if (!canModify) return;
-      const slotIndex = getNextSlotIndex();
-      if (slotIndex >= maxUnits) return;
+      if (draftUnits.length >= maxUnits) return;
       setDraftUnits((prev) => [
         ...prev,
         {
           id: createTempUnitId(),
-          slotIndex,
-          unitTypeId
+          unitTypeId,
+          baseBehaviorConfig: {}
         }
       ]);
       setHasUnsavedChanges(true);
       setCartError(null);
       setCartSuccess(null);
     },
-    [canModify, getNextSlotIndex]
+    [canModify, draftUnits.length]
   );
 
   const handleRemoveDraftUnit = useCallback((unitId: string) => {
+    // Quartermaster currently supports removing items from the purchase cart.
+    // Selling owned units is intentionally not supported here.
+    if (!unitId.startsWith('temp-')) return;
     setDraftUnits((prev) => prev.filter((unit) => unit.id !== unitId));
     setHasUnsavedChanges(true);
     setCartError(null);
@@ -415,22 +409,23 @@ const ArmyBuilder = () => {
   }, []);
 
   const handleClearDraft = useCallback(() => {
-    setDraftUnits([]);
+    // Keep owned inventory visible; only clear pending purchases.
+    setDraftUnits(inventoryUnits.map((unit) => ({ ...unit })));
     setHasUnsavedChanges(true);
     setCartError(null);
     setCartSuccess(null);
-  }, []);
+  }, [inventoryUnits]);
 
   const handleDiscardChanges = useCallback(() => {
-    setDraftUnits(armyUnits.map((unit) => ({ ...unit })));
+    setDraftUnits(inventoryUnits.map((unit) => ({ ...unit })));
     setHasUnsavedChanges(false);
     setCartError(null);
     setCartSuccess(null);
-  }, [armyUnits]);
+  }, [inventoryUnits]);
 
   const handleApplyChanges = useCallback(async () => {
-    if (!player || !armyId) {
-      setCartError('Login to save your army.');
+    if (!player || !user) {
+      setCartError('Login to complete this purchase.');
       return;
     }
     if (!hasUnsavedChanges) return;
@@ -438,6 +433,14 @@ const ArmyBuilder = () => {
     const currentCredits = player.current_credits ?? 0;
     if (netCreditChange > currentCredits) {
       setCartError('Not enough credits to finalize this purchase.');
+      return;
+    }
+
+    const unknownAddition = pendingAdditions.find((unit) => !isKnownUnitType(unit.unitTypeId, knownUnitIds));
+    if (unknownAddition) {
+      const message = `Unknown unit type: ${unknownAddition.unitTypeId}`;
+      console.error('[ArmyBuilder] Refusing to insert unknown unit type', unknownAddition.unitTypeId);
+      setCartError(message);
       return;
     }
 
@@ -460,31 +463,16 @@ const ArmyBuilder = () => {
     }
 
     try {
-      if (pendingRemovals.length) {
-        const { error: deleteError } = await supabase
-          .from('player_army_units')
-          .delete()
-          .in('id', pendingRemovals.map((unit) => unit.id));
-        if (deleteError) {
-          throw deleteError;
-        }
-      }
-
       if (pendingAdditions.length) {
-        const insertPayload = pendingAdditions.map((unit) => ({
-          player_army_id: armyId,
-          unit_type_id: unit.unitTypeId,
-          row: 0,
-          col: unit.slotIndex,
-          behavior_config: null
-        }));
+        // Ownership lives in public.player_units (not in player_army_units).
+        // Insert N owned units, one row per purchased unit.
+        const counts = pendingAdditions.reduce((acc, unit) => {
+          acc[unit.unitTypeId] = (acc[unit.unitTypeId] ?? 0) + 1;
+          return acc;
+        }, {} as Record<string, number>);
 
-        const { error: insertError } = await supabase
-          .from('player_army_units')
-          .insert(insertPayload);
-
-        if (insertError) {
-          throw insertError;
+        for (const [unitTypeId, count] of Object.entries(counts)) {
+          await buyUnits(user.id, unitTypeId, count);
         }
       }
 
@@ -499,7 +487,7 @@ const ArmyBuilder = () => {
         }
       }
 
-      refreshArmy();
+      refreshInventory();
       refreshPlayer();
       setHasUnsavedChanges(false);
 
@@ -530,24 +518,23 @@ const ArmyBuilder = () => {
         title: 'Army update failed',
         detail: message || 'Previous credits restored. Please try again.'
       });
-      refreshArmy();
       refreshPlayer();
     } finally {
       setIsApplying(false);
     }
   }, [
     player,
-    armyId,
     hasUnsavedChanges,
     netCreditChange,
-    pendingRemovals,
     pendingAdditions,
-    refreshArmy,
+    knownUnitIds,
+    refreshInventory,
     refreshPlayer,
     setPlayerCredits,
     setPendingCredits,
     setIsWalletSyncing,
-    setToast
+    setToast,
+    user
   ]);
 
   const addActiveUnit = () => {
@@ -559,7 +546,7 @@ const ArmyBuilder = () => {
     !canModify ||
     !activeUnit ||
     unitLimitReached ||
-    armyLoading ||
+    inventoryLoading ||
     playerLoading;
 
   const handleCardKey = (event: KeyboardEvent<HTMLElement>, unitId: string) => {
@@ -576,8 +563,8 @@ const ArmyBuilder = () => {
     if (unitLimitReached) {
       return { disabled: true, reason: 'Unit cap reached' };
     }
-    if (armyLoading) {
-      return { disabled: true, reason: 'Loading army' };
+    if (inventoryLoading) {
+      return { disabled: true, reason: 'Loading inventory' };
     }
     if (playerLoading) {
       return { disabled: true, reason: 'Loading profile' };
@@ -643,22 +630,22 @@ const ArmyBuilder = () => {
           <p className="panel-subtitle">{draftUnits.length ? `${draftUnits.length} / ${maxUnits} units` : 'No units selected'}</p>
           <p className="panel-subtitle">Army cost: {draftTotalCredits} credits</p>
           {playerCredits !== null && <p className="panel-subtitle">Wallet: {playerCredits} credits</p>}
-          {armyError && <p className="auth-error">{armyError}</p>}
+          {inventoryError && <p className="auth-error">{inventoryError}</p>}
 
           <div className="roster-list">
-            {armyLoading && (
+            {inventoryLoading && (
               <div className="empty-state">
                 <p>Loading army…</p>
               </div>
             )}
 
-            {!armyLoading && armyUnitsWithMeta.length === 0 && (
+            {!inventoryLoading && armyUnitsWithMeta.length === 0 && (
               <div className="empty-state">
                 <p>Add units from the right to see them here.</p>
               </div>
             )}
 
-            {!armyLoading &&
+            {!inventoryLoading &&
               armyUnitsWithMeta.map((unit) => (
                 <div key={unit.instanceId} className="roster-item">
                   <div className="roster-item__meta">
@@ -676,7 +663,7 @@ const ArmyBuilder = () => {
                   </div>
                   <div className="roster-item__actions">
                     <span className="supply-chip">{unit.creditCost ?? 0} credits</span>
-                    {canModify && (
+                      {canModify && pendingAdditions.some((pending) => pending.id === unit.instanceId) && (
                       <button
                         className="btn btn-ghost"
                         type="button"
@@ -728,7 +715,7 @@ const ArmyBuilder = () => {
                   !hasUnsavedChanges ||
                   !canModify ||
                   isApplying ||
-                  armyLoading ||
+                  inventoryLoading ||
                   playerLoading ||
                   (playerCredits !== null && netCreditChange > playerCredits)
                 }

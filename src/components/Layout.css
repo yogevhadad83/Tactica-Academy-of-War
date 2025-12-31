@@ -5,12 +5,13 @@
 }
 
 .navbar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--rule);
   padding: 1rem 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 1px 3px var(--shadow);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -19,13 +20,13 @@
 .nav-brand {
   font-size: 1.8rem;
   font-weight: bold;
-  color: white;
+  color: var(--ink);
   text-decoration: none;
   transition: opacity 0.3s ease;
 }
 
 .nav-brand:hover {
-  opacity: 0.9;
+  opacity: 0.7;
 }
 
 .nav-links {
@@ -34,32 +35,35 @@
 }
 
 .nav-link {
-  color: white;
+  color: var(--ink);
   text-decoration: none;
   padding: 0.75rem 1.25rem;
-  border-radius: 8px;
+  border-radius: 2px;
   font-weight: 500;
-  transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+  background: var(--surface);
+  border-bottom: 2px solid transparent;
 }
 
 .nav-link.ghost {
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--surface);
+  border: 1px solid var(--rule);
 }
 
 .nav-link.solid {
-  background: white;
-  color: #4c1d95;
+  background: var(--stamp-bg);
+  color: var(--stamp-text);
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateY(-2px);
+  background: var(--archive-card-hover);
+  border-bottom-color: var(--accent-brass);
 }
 
 .nav-link.active {
-  background: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  background: var(--surface-2);
+  border-bottom-color: var(--accent-seal);
+  box-shadow: none;
 }
 
 .nav-user-area {
@@ -68,15 +72,29 @@
   gap: 1rem;
 }
 
+.mute-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 12px;
+  color: var(--ink);
+  transition: opacity 0.2s ease;
+}
+
+.mute-btn:hover {
+  opacity: 0.6;
+}
+
 .user-pill {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.5rem 1rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: white;
+  border-radius: 2px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--ink);
 }
 
 .user-name {
@@ -94,21 +112,26 @@
 }
 
 .user-pill select {
-  border: none;
-  border-radius: 999px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
   padding: 0.25rem 0.75rem;
   font-size: 0.9rem;
-  background: white;
-  color: #2d3748;
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .logout-btn {
   border: none;
   background: transparent;
-  color: white;
+  color: var(--accent-seal);
   text-decoration: underline;
   font-weight: 600;
   cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.logout-btn:hover {
+  opacity: 0.7;
 }
 
 .auth-links {
@@ -118,13 +141,13 @@
 
 .main-content {
   flex: 1;
-  background: #f7fafc;
+  background: var(--surface);
   min-height: calc(100vh - 200px);
 }
 
 .footer {
-  background: #2d3748;
-  color: white;
+  background: var(--ink);
+  color: var(--surface);
   text-align: center;
   padding: 2rem;
   margin-top: auto;
@@ -164,6 +187,7 @@ body.flight-mode-active .main-content {
     flex-direction: column;
     gap: 1rem;
     padding: 1rem;
+    border-bottom: 1px solid var(--rule);
   }
 
   .nav-links {

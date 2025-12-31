@@ -3,7 +3,15 @@ import { boardKey, cellToWorld } from '../constants/board';
 
 export type TileOwner = 'blue' | 'red';
 export type TileOccupant = TileOwner | null;
-export type TileEffect = 'hit' | 'move' | 'march' | 'hover-valid' | 'hover-blocked' | 'hover-inspect' | null;
+export type TileEffect =
+  | 'hit'
+  | 'move'
+  | 'march'
+  | 'hover-valid'
+  | 'hover-blocked'
+  | 'hover-inspect'
+  | 'disabled'
+  | null;
 export type TileHoverState = 'none' | 'valid' | 'blocked' | 'inspect';
 
 interface TacticalBoardOptions {
@@ -22,6 +30,7 @@ interface SciFiTile {
   occupant: TileOccupant;
   effect: TileEffect;
   hoverState: TileHoverState;
+  disabled: boolean;
 }
 
 export interface TacticalBoard {
@@ -30,6 +39,8 @@ export interface TacticalBoard {
   setTileOwner: (row: number, col: number, owner: TileOwner) => void;
   setTileOccupiedBy: (row: number, col: number, occupant: TileOccupant) => void;
   setTileEffect: (row: number, col: number, effect: TileEffect) => void;
+  setTileDisabled: (row: number, col: number, disabled: boolean) => void;
+  clearDisabled: () => void;
   clearEffects: () => void;
   clearOccupants: () => void;
   setTileHoverState: (row: number, col: number, state: TileHoverState) => void;
@@ -51,7 +62,7 @@ const ownerPalettes: Record<TileOwner, { base: THREE.Color; emissive: THREE.Colo
   }
 };
 
-const tileEffectPalette: Record<Exclude<TileEffect, null>, { color: THREE.Color; intensity: number }> = {
+const tileEffectPalette: Record<Exclude<Exclude<TileEffect, 'disabled'>, null>, { color: THREE.Color; intensity: number }> = {
   hit: { color: new THREE.Color(0xff5f6d), intensity: 1.15 },
   move: { color: new THREE.Color(0x38bdf8), intensity: 0.85 },
   march: { color: new THREE.Color(0xfcd34d), intensity: 0.75 },
@@ -107,41 +118,59 @@ const techDetailPositions = [
 
 const refreshTileAppearance = (tile: SciFiTile) => {
   const palette = ownerPalettes[tile.owner];
-  tile.material.color.copy(palette.base);
-  tile.material.emissive.copy(palette.emissive);
-  tile.material.emissiveIntensity = 0.35;
-  tile.glowMaterial.color.copy(palette.glow);
-  tile.glowMaterial.opacity = 0.35;
+
+  let baseColor = palette.base.clone();
+  let emissive = palette.emissive.clone();
+  let emissiveIntensity = 0.35;
+  let glowColor = palette.glow.clone();
+  let glowOpacity = 0.35;
+  let opacity = 0.6;
 
   if (tile.occupant) {
     const occupantPalette = ownerPalettes[tile.occupant];
-    tile.material.emissive.copy(occupantPalette.emissive);
-    tile.material.emissiveIntensity = 0.95;
-    tile.glowMaterial.color.copy(occupantPalette.glow);
-    tile.glowMaterial.opacity = 0.6;
+    emissive = occupantPalette.emissive.clone();
+    emissiveIntensity = 0.95;
+    glowColor = occupantPalette.glow.clone();
+    glowOpacity = 0.6;
   }
 
-  if (tile.effect) {
+  if (tile.effect && tile.effect !== 'disabled') {
     const effect = tileEffectPalette[tile.effect];
-    tile.material.emissive.copy(effect.color);
-    tile.material.emissiveIntensity = effect.intensity;
-    tile.glowMaterial.color.copy(effect.color);
-    tile.glowMaterial.opacity = 0.85;
+    emissive = effect.color.clone();
+    emissiveIntensity = effect.intensity;
+    glowColor = effect.color.clone();
+    glowOpacity = 0.85;
   }
 
   if (tile.hoverState !== 'none') {
-    const hoverKey: TileEffect =
+    const hoverKey: Exclude<TileEffect, 'disabled' | null> =
       tile.hoverState === 'valid'
         ? 'hover-valid'
         : tile.hoverState === 'blocked'
           ? 'hover-blocked'
           : 'hover-inspect';
     const hoverEffect = tileEffectPalette[hoverKey];
-    tile.material.emissive.copy(hoverEffect.color);
-    tile.material.emissiveIntensity = hoverEffect.intensity;
-    tile.glowMaterial.color.copy(hoverEffect.color);
-    tile.glowMaterial.opacity = 0.95;
+    emissive = hoverEffect.color.clone();
+    emissiveIntensity = hoverEffect.intensity;
+    glowColor = hoverEffect.color.clone();
+    glowOpacity = 0.95;
   }
+
+  if (tile.disabled || tile.effect === 'disabled') {
+    baseColor = baseColor.multiplyScalar(0.45);
+    emissive = new THREE.Color(0x0b1220);
+    emissiveIntensity = 0.12;
+    glowColor = new THREE.Color(0x0b1220);
+    glowOpacity = 0.08;
+    opacity = 0.2;
+  }
+
+  tile.material.color.copy(baseColor);
+  tile.material.emissive.copy(emissive);
+  tile.material.emissiveIntensity = emissiveIntensity;
+  tile.material.opacity = opacity;
+  tile.glowMaterial.color.copy(glowColor);
+  tile.glowMaterial.opacity = glowOpacity;
 };
 
 const createTileMesh = (owner: TileOwner, tileSize: number, tileThickness: number) => {
@@ -256,7 +285,8 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
         owner,
         occupant: null,
         effect: null,
-        hoverState: 'none'
+        hoverState: 'none',
+        disabled: false
       };
 
       tiles.set(key, sciFiTile);
@@ -285,6 +315,13 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
     refreshTileAppearance(tile);
   };
 
+  const setTileDisabled = (row: number, col: number, disabled: boolean) => {
+    const tile = tiles.get(boardKey(row, col));
+    if (!tile) return;
+    tile.disabled = disabled;
+    refreshTileAppearance(tile);
+  };
+
   const setTileHoverState = (row: number, col: number, state: TileHoverState) => {
     const tile = tiles.get(boardKey(row, col));
     if (!tile) return;
@@ -295,6 +332,13 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
   const clearEffects = () => {
     tiles.forEach((tile) => {
       tile.effect = null;
+      refreshTileAppearance(tile);
+    });
+  };
+
+  const clearDisabled = () => {
+    tiles.forEach((tile) => {
+      tile.disabled = false;
       refreshTileAppearance(tile);
     });
   };
@@ -319,6 +363,8 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
     setTileOwner,
     setTileOccupiedBy,
     setTileEffect,
+    setTileDisabled,
+    clearDisabled,
     clearEffects,
     clearOccupants,
     setTileHoverState,

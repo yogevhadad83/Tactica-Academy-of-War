@@ -14,6 +14,10 @@ const Layout = () => {
   const { isMuted, toggleMute } = useAudio();
 
   const isActive = (path: string) => {
+    // Academy is active for both /academy and / routes
+    if (path === '/academy' && (location.pathname === '/academy' || location.pathname === '/')) {
+      return 'active';
+    }
     return location.pathname === path ? 'active' : '';
   };
 
@@ -25,18 +29,21 @@ const Layout = () => {
   return (
     <div className="layout">
       <nav className="navbar">
-        <Link to="/" className="nav-brand">
+        <Link to="/academy" className="nav-brand">
           ⚔️ Tactica: Academy of War
         </Link>
         <div className="nav-links">
-          <Link to="/" className={`nav-link ${isActive('/')}`}>
-            🏠 Home
+          <Link to="/academy" className={`nav-link ${isActive('/academy')}`}>
+            🎓 Academy
           </Link>
-          <Link to="/army-builder" className={`nav-link ${isActive('/army-builder')}`}>
-            🏰 Army Builder
+          <Link to="/training" className={`nav-link ${isActive('/training')}`}>
+            📚 Training
           </Link>
-          <Link to="/board" className={`nav-link ${isActive('/board')}`}>
-            🎮 Board
+          <Link to="/quartermaster" className={`nav-link ${isActive('/quartermaster')}`}>
+            🏰 Quartermaster
+          </Link>
+          <Link to="/war-room" className={`nav-link ${isActive('/war-room')}`}>
+            ⚔️ War Room
           </Link>
         </div>
         <div className="nav-user-area">
@@ -44,14 +51,6 @@ const Layout = () => {
             type="button" 
             className="mute-btn" 
             onClick={toggleMute}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              fontSize: '24px',
-              cursor: 'pointer',
-              padding: '0 12px',
-              color: '#fff'
-            }}
             title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted ? '🔇' : '🔊'}

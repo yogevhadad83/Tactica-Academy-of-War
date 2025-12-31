@@ -1,7 +1,6 @@
 TACTICA: ACADEMY OF WAR
-Game Design Document — Version 1.1
-
-Changelog (v1.1)
+Game Design Document — Version 1.2
+Changelog (v1.2)
 Added Academy Training Curriculum (PvE Drills) as first-class mode: onboarding + early credits + optional rank promotion via curriculum milestones.
 Clarified Home / Academy Dashboard as the post-login hub.
 Clarified multiplayer entry: Queue Drill (matchmaking) vs Challenge Hall (manual challenges).
@@ -14,7 +13,7 @@ Players:
 Build a permanent roster (owned units)
 Configure behavior logic for units
 Assemble a 20-supply squad
-Place units anywhere on a 12×8 board
+Place units anywhere on a 6×12 (two 6×6 halves) board
 Participate in a brief pre-battle “mind game”
 Watch an automatic deterministic battle resolve (no RNG)
 No micro. No randomness. No reflex advantage.
@@ -36,16 +35,30 @@ Players who enjoy designing logic without coding
 Casual-to-midcore players who enjoy spectacle + tactical planning
 
 3. The Game Board
-Grid: 12 columns × 8 rows
-Units occupy one tile
-Units are placed freely anywhere (no row restrictions)
-Units generally move forward 1 tile if unobstructed
+Grid & Coordinates
+Grid: 6 columns × 12 rows (two 6×6 halves stacked along the row axis)
+Row index (y) increases toward the camera; row 0 is the far/top edge.
+Coordinates:
+x = 0..5 (left → right)
+y = 0..11 (0 is far/top, 11 is near/bottom)
+Zones:
+Enemy zone: y = 0..5
+Player zone: y = 6..11
+Forward direction:
+Player forward: y -= 1 (toward smaller row indices)
+Enemy forward: y += 1 (toward larger row indices)
 Win Condition (Breach)
-A player wins when:
-Any of their units reaches the opponent’s back row, OR
-The opponent’s army has no remaining path to win (stalemate by blockage)
+Breach
+Player wins if any living player unit reaches enemy back row: y = 0
+Enemy wins if any living enemy unit reaches player back row: y = 11
 This is tactical breach, not pure speed.
-
+Board Size Policy (MVP)
+Standard PvP board size is fixed: 6 columns × 12 rows (two 6×6 halves).
+This fixed size applies to Ranked and Standard Unranked matches in MVP.
+Training Active Areas (Smaller “Boards” Without Changing the Engine)
+Training drills may define a smaller Active Area inside the 6×12 board to simplify lessons.
+Tiles outside the Active Area are dimmed and locked (no placement/movement).
+The underlying coordinate system does not change; Active Area is purely a restriction/zoom for teaching.
 4. Turn Structure & Deterministic Rules
 4.1 Turn Order
 Armies act sequentially, not simultaneously:
@@ -90,9 +103,11 @@ Units remain permanently owned unless destroyed (revived with a small fee).
 5.2 Configure Unit Behaviors
 Some units have configurable logic: targeting, sidestepping, movement priority, etc.
 5.3 Free Placement
-Units can be deployed anywhere as long as:
-20-supply cap is respected
-No overlaps
+Players may deploy units only within their own zone:
+Player deploy zone: y = 6..11
+Enemy deploy zone: y = 0..5
+No overlaps.
+Units may not be placed in the opponent’s zone during deployment.
 5.4 Challenger vs Defender Adjustments
 Challenger sees opponent’s board → makes one modification
 Defender responds → makes one modification
@@ -241,6 +256,20 @@ Victory condition:
 default: breach opponent’s back row
 optional: survive X turns, defend a lane, eliminate a target
 Rewards (first completion only)
+9.3.1 Training Active Area (Optional)
+A drill may optionally define an Active Area:
+Purpose: make early drills smaller and easier to understand (e.g., “2×2 per side”).
+Implementation: Active Area is a rectangle within the standard 6×12 board.
+Active Area Fields (conceptual):
+activeCols (e.g., 2 or 3)
+activeRowsPerSide (e.g., 2 or 3)
+colStart (e.g., 2) — where the rectangle begins on x
+enemyRowStart (usually 0)
+playerRowStart (usually 12 - activeRowsPerSide)
+Rules:
+Units may be placed/moved only within the Active Area.
+Starting boards for drills must place all units within the Active Area.
+Drill win condition remains “breach” unless otherwise specified, but “back row” is relative to the Active Area.
 9.4 Rewards
 Credits: added to wallet (primary reward)
 Optional: Rank Promotion Voucher via milestone (see 8.3)
@@ -273,7 +302,13 @@ Suggested rivals (optional)
 Allows direct challenge and rematch offers
 Presence / privacy:
 Players may toggle “Accepting Challenges” on/off.
-
+10.3 Alternate Arenas (Future / Optional)
+Board-size variants are allowed only as separate playlists, not mixed into Standard Ranked.
+Examples:
+“Compact Arena” (smaller Active Area)
+“Standard Arena” (6×12)
+Rationale:
+Keeping Ranked on one fixed board preserves competitive integrity and avoids multiple metas.
 11. Results, Reports, and Progression UX
 11.1 End-of-Match Overlay (Immediate)
 Shows:

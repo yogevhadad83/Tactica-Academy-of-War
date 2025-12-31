@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { calculateArmyCost, getUnitCost } from '../utils/credits';
+import { fromDbUnitTypeId, toDbUnitTypeId } from '../utils/unitTypeIds';
 
 export type PlayerArmyUnit = {
   id: string;
@@ -55,7 +56,8 @@ export function usePlayerArmy(options: UsePlayerArmyOptions = {}): UsePlayerArmy
         .from('player_armies')
         .select('id')
         .eq('player_id', user.id)
-        .order('created_at', { ascending: true })
+        .eq('is_favorite', true)
+        .order('updated_at', { ascending: false })
         .limit(1);
 
       if (!isMounted) return;
@@ -111,8 +113,11 @@ export function usePlayerArmy(options: UsePlayerArmyOptions = {}): UsePlayerArmy
       const mappedUnits = (unitRows ?? []).map((row) => ({
         id: row.id,
         slotIndex: row.col,
-        unitTypeId: row.unit_type_id
+        unitTypeId: fromDbUnitTypeId(row.unit_type_id ?? '')
       }));
+
+      console.log('[usePlayerArmy] Loaded units:', mappedUnits);
+      console.log('[usePlayerArmy] Raw unit rows:', unitRows);
 
       setArmyId(nextArmyId);
       setUnits(mappedUnits);
@@ -179,7 +184,7 @@ export function usePlayerArmy(options: UsePlayerArmyOptions = {}): UsePlayerArmy
       .from('player_army_units')
       .insert({
         player_army_id: armyId,
-        unit_type_id: unitTypeId,
+        unit_type_id: toDbUnitTypeId(unitTypeId),
         row: 0,
         col: slotIndex,
         behavior_config: null
@@ -206,7 +211,7 @@ export function usePlayerArmy(options: UsePlayerArmyOptions = {}): UsePlayerArmy
       {
         id: data.id,
         slotIndex: data.col,
-        unitTypeId: data.unit_type_id
+        unitTypeId: fromDbUnitTypeId(data.unit_type_id ?? '')
       }
     ]);
   };

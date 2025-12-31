@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -8,12 +8,16 @@ import { MultiplayerProvider } from './context/MultiplayerContext';
 import { AudioProvider, useAudio } from './context/AudioContext';
 
 const Home = lazy(() => import('./pages/Home'));
+const Academy = lazy(() => import('./pages/Academy'));
 const ArmyBuilder = lazy(() => import('./pages/ArmyBuilder'));
 const BoardView = lazy(() => import('./pages/BoardView'));
+const WarRoom = lazy(() => import('./pages/WarRoom'));
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DebugNetwork = lazy(() => import('./pages/DebugNetwork'));
+const Training = lazy(() => import('./pages/Training'));
+const TrainingRun = lazy(() => import('./pages/TrainingRun'));
 
 const RouteLoader = ({ children }: { children: React.ReactNode }) => (
   <Suspense
@@ -159,11 +163,17 @@ function AppContent() {
           <MultiplayerProvider>
             <Routes>
               <Route path="/" element={<Layout />}>
-                <Route index element={<RouteLoader><Home /></RouteLoader>} />
+                <Route index element={<Navigate to="/academy" replace />} />
+                <Route path="academy" element={<RouteLoader><Academy /></RouteLoader>} />
+                <Route path="home" element={<RouteLoader><Home /></RouteLoader>} />
                 <Route path="army-builder" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
+                <Route path="quartermaster" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
                 <Route path="board" element={<RouteLoader><BoardView /></RouteLoader>} />
+                <Route path="war-room" element={<RouteLoader><WarRoom /></RouteLoader>} />
                 <Route path="login" element={<RouteLoader><Login /></RouteLoader>} />
                 <Route path="signup" element={<RouteLoader><Signup /></RouteLoader>} />
+                <Route path="training" element={<RouteLoader><Training /></RouteLoader>} />
+                <Route path="training/:id" element={<RouteLoader><TrainingRun /></RouteLoader>} />
                 <Route
                   path="dashboard"
                   element={(

@@ -1,0 +1,25 @@
+.rule-divider {
+  position: relative;
+  height: 1px;
+  background: var(--divider-color);
+  margin: 2rem 0;
+}
+
+.rule-divider.accent {
+  background: var(--divider-accent);
+  height: 2px;
+}
+
+.rule-divider .rule-text {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--surface);
+  padding: 0 1rem;
+  color: var(--ink-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
