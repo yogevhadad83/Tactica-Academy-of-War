@@ -1,0 +1,139 @@
+.training-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem;
+  color: var(--tactica-text);
+}
+
+.training-banner {
+  border: 1px solid var(--tactica-border);
+  background: #fbf5e6;
+  color: var(--tactica-text);
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  margin-bottom: 1.25rem;
+}
+
+.training-banner-title {
+  font-weight: 800;
+}
+
+.training-banner-subtitle {
+  margin-top: 0.15rem;
+  color: var(--tactica-muted);
+}
+
+.training-card {
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
+  border-radius: 16px;
+  padding: 1.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.training-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--tactica-border);
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.training-title {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: 0.02em;
+}
+
+.training-subtitle {
+  color: var(--tactica-muted);
+}
+
+.training-continue-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.training-continue-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.training-continue-desc {
+  margin-top: 0.25rem;
+  color: var(--tactica-muted);
+}
+
+.training-list {
+  margin-top: 1.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.training-module {
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
+  border-radius: 16px;
+  padding: 1.25rem;
+}
+
+.training-module-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: baseline;
+}
+
+.training-module-title {
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+
+.training-check {
+  margin-left: 0.5rem;
+  color: #166534;
+  font-weight: 900;
+}
+
+.training-module-reward {
+  color: var(--tactica-muted);
+  font-weight: 600;
+}
+
+.training-module-desc {
+  margin-top: 0.6rem;
+  color: var(--tactica-muted);
+  line-height: 1.5;
+}
+
+.training-module-actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.training-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.7rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--tactica-border);
+  background: #fdfbff;
+  color: var(--tactica-text);
+  font-weight: 700;
+}
+
+.training-btn.primary {
+  background: white;
+  border-color: var(--tactica-border-strong);
+}
+
+.training-btn:hover {
+  border-color: var(--tactica-purple);
+}

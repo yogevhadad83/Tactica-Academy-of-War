@@ -1,0 +1,38 @@
+/**
+ * Academy Archives Theme
+ * Institutional aesthetic inspired by war academies and official records
+ * No magic, no neon - just parchment, ink, wax seals, and brass fixtures
+ */
+
+:root {
+  /* Surface colors - parchment and aged paper */
+  --surface: #f4f1e8;
+  --surface-2: #e8e3d5;
+  
+  /* Text colors - ink on parchment */
+  --ink: #2b2621;
+  --ink-muted: #6b6762;
+  
+  /* Dividers and borders - ruled lines */
+  --rule: #c9c1b0;
+  
+  /* Accent colors - official seals and brass */
+  --accent-seal: #8b2e2e;
+  --accent-brass: #b8860b;
+  
+  /* Shadows - subtle depth, no glow */
+  --shadow: rgba(43, 38, 33, 0.15);
+  --shadow-strong: rgba(43, 38, 33, 0.25);
+  
+  /* Archive-specific component tokens */
+  --archive-card-bg: #fdfcf9;
+  --archive-card-border: var(--rule);
+  --archive-card-hover: #faf8f2;
+  
+  --stamp-bg: var(--accent-seal);
+  --stamp-text: #f4f1e8;
+  --stamp-hover: #6b2020;
+  
+  --divider-color: var(--rule);
+  --divider-accent: var(--accent-brass);
+}

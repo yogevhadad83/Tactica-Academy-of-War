@@ -18,7 +18,7 @@ const Signup = () => {
     setError('');
     try {
       await signUp(email.trim(), password);
-      navigate('/dashboard');
+      navigate('/academy');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to sign up';
       setError(message);

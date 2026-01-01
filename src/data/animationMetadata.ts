@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
  * 
  * Animation metadata extracted from GLB model files.
- * Generated: 2025-12-24T05:47:45.761Z
+ * Generated: 2025-12-31T19:37:14.461Z
  * 
  * To regenerate, run: npx tsx scripts/extract-animation-metadata.ts
  */

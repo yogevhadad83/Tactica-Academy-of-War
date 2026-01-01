@@ -1,18 +1,18 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { PointerEvent as ReactPointerEvent } from 'react';
 import { BOARD_SIZE, BOARD_COLS, PLAYER_ZONE_START } from '../engine/battleEngine';
 import type { Team, BattleTickResult } from '../engine/battleEngine';
 import type { ArmyUnitInstance, BoardPlacements, PlacedUnit, UnitLogic } from '../types';
-import type { TileOccupant } from '../components/createTacticalBoard';
 import { useUser } from '../context/UserContext';
 import { useMultiplayer } from '../context/MultiplayerContext';
+import type { PreviewChange } from '../hooks/useGameServer';
 import { placementToArmyConfig } from '../utils/placementToArmyConfig';
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
-const UnitLogicPanel = lazy(() => import('../components/UnitLogicPanel'));
+const BattlePreview = lazy(() => import('../components/BattlePreview'));
 import { calculateTickDuration } from '../components/units/useUnitLayer';
 import type { DemoState, HitEvent } from '../types/battle';
 import { useUnitCatalog } from '../hooks/useUnitCatalog';
 import { usePlayerArmy } from '../hooks/usePlayerArmy';
+import BoardSetupPanel from '../components/BoardSetupPanel';
 import './BoardView.css';
 
 // Dynamic tick duration is now calculated per-tick based on animations that will play.
@@ -66,6 +66,14 @@ const BoardView = () => {
     respondToChallenge,
     startDemoBattle,
     currentRole,
+    // Preview phase
+    previewMatchId,
+    previewYourRole,
+    previewOpponentName,
+    previewYourBoard,
+    previewOpponentBoard,
+    previewTurn,
+    sendPreviewChange,
   } = useMultiplayer();
   const { units: catalogUnits } = useUnitCatalog();
   const { units: armyUnits, loading: armyLoading } = usePlayerArmy();
@@ -85,12 +93,7 @@ const BoardView = () => {
   const [_turnNumber, setTurnNumber] = useState(1);
   const [startingTeam, setStartingTeam] = useState<Team | null>(null);
   const [countdownValue, setCountdownValue] = useState<string | number | null>(null);
-  const [hoveredTile, setHoveredTile] = useState<{ row: number; col: number; occupied: boolean } | null>(null);
-  const [draggingUnit, setDraggingUnit] = useState<{ unit: ArmyUnitInstance } | null>(null);
-  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
-  const [tileMenu, setTileMenu] = useState<{ row: number; col: number; unit: PlacedUnit } | null>(null);
   const [unitLogic, setUnitLogic] = useState<UnitLogic>({});
-  const [logicPanelUnit, setLogicPanelUnit] = useState<PlacedUnit | null>(null);
   const countdownTimeoutRef = useRef<number | null>(null);
   const previousBattleStateRef = useRef<DemoState>('idle');
   const timelineTimeoutRef = useRef<number | null>(null);
@@ -115,13 +118,6 @@ const BoardView = () => {
       })
       .filter(Boolean) as ArmyUnitInstance[];
   }, [armyUnits, catalogById]);
-
-  const unitByInstanceId = useMemo(() => {
-    return armyInstances.reduce((acc, unit) => {
-      acc[unit.instanceId] = unit;
-      return acc;
-    }, {} as Record<string, ArmyUnitInstance>);
-  }, [armyInstances]);
 
   const supplyByUnitType = useMemo(() => {
     return catalogUnits.reduce((acc, unit) => {
@@ -152,10 +148,6 @@ const BoardView = () => {
       .filter(Boolean) as PlacedUnit[];
   }, [armyInstances, placements, unitLogic]);
 
-  const queueUnits = useMemo(() => {
-    return armyInstances.filter((unit) => !placements[unit.instanceId]);
-  }, [armyInstances, placements]);
-
   const totalSupplyUsed = useMemo(
     () => placedUnits.reduce((sum, unit) => sum + resolveSupplyCost(unit.id, unit), 0),
     [placedUnits, resolveSupplyCost]
@@ -164,54 +156,12 @@ const BoardView = () => {
   const remainingSupply = Math.max(0, MAX_SUPPLY - totalSupplyUsed);
   const isSupplyCapReached = totalSupplyUsed >= MAX_SUPPLY;
 
-  const activeUnits = battleState === 'idle' ? placedUnits : simulationUnits;
-
-  const planningUnits = useMemo(() => {
-    if (battleState !== 'idle') return [] as PlacedUnit[];
-    return placedUnits
-      .map((unit) => ({
-        ...unit,
-        position: {
-          row: unit.position.row - PLANNING_ROW_OFFSET,
-          col: unit.position.col
-        }
-      }))
-      .filter(
-        (unit) =>
-          unit.position.row >= 0 &&
-          unit.position.row < PLANNING_ROWS &&
-          unit.position.col >= 0 &&
-          unit.position.col < PLANNING_COLS
-      );
-  }, [battleState, placedUnits]);
-
-  const stageUnits = battleState === 'idle' ? planningUnits : activeUnits;
-
-  const stageBoardRows = battleState === 'idle' ? PLANNING_ROWS : BOARD_SIZE;
-  const stageBoardCols = battleState === 'idle' ? PLANNING_COLS : BOARD_COLS;
+  const stageUnits = battleState === 'idle' ? ([] as PlacedUnit[]) : simulationUnits;
+  const stageBoardRows = BOARD_SIZE;
+  const stageBoardCols = BOARD_COLS;
   const stageHitCells = battleState === 'idle' ? [] : hitCells;
   const stageMoveCells = battleState === 'idle' ? [] : moveCells;
   const stageMarchCells = battleState === 'idle' ? [] : marchCells;
-
-  const hoveredUnit = useMemo(() => {
-    if (!hoveredTile) return null;
-    const boardRow = hoveredTile.row + PLANNING_ROW_OFFSET;
-    return placedUnits.find((unit) => unit.position.row === boardRow && unit.position.col === hoveredTile.col) ?? null;
-  }, [hoveredTile, placedUnits]);
-
-  const tilePressRef = useRef<{ unit: PlacedUnit; startX: number; startY: number } | null>(null);
-  const DRAG_START_THRESHOLD = 6;
-
-  const availableStacks = useMemo(() => {
-    const stacks = new Map<string, { unit: ArmyUnitInstance; instances: ArmyUnitInstance[] }>();
-    queueUnits.forEach((unit) => {
-      const existing = stacks.get(unit.id) ?? { unit, instances: [] };
-      existing.unit = unit;
-      existing.instances.push(unit);
-      stacks.set(unit.id, existing);
-    });
-    return Array.from(stacks.values());
-  }, [queueUnits]);
 
   const otherOnlineUsers = useMemo(
     () => onlineUsers.filter((user) => user !== currentUsername),
@@ -305,6 +255,14 @@ const BoardView = () => {
     [isServerConnected, placedUnits.length, sendChallenge, syncArmyToServer]
   );
 
+  const handleSendPreviewChange = useCallback(
+    (change: PreviewChange) => {
+      if (!previewMatchId) return;
+      sendPreviewChange(previewMatchId, change);
+    },
+    [previewMatchId, sendPreviewChange]
+  );
+
   const handleAcceptChallenge = useCallback(() => {
     if (!incomingChallenge) {
       return;
@@ -341,244 +299,11 @@ const BoardView = () => {
     startDemoBattle(armyConfig);
   }, [isServerConnected, placedUnits, startDemoBattle]);
 
-  const removePlacement = useCallback((instanceId: string) => {
-    setPlacements((prev) => {
-      const next = { ...prev };
-      delete next[instanceId];
-      return next;
-    });
-  }, []);
-
   const isWithinPlanningBounds = useCallback(
     (row: number, col: number) =>
       row >= PLANNING_ROW_OFFSET && row < PLANNING_ROW_OFFSET + PLANNING_ROWS && col >= 0 && col < PLANNING_COLS,
     []
   );
-
-  const commitPlacement = useCallback(
-    (unit: ArmyUnitInstance, targetRow: number, targetCol: number) => {
-      if (!isWithinPlanningBounds(targetRow, targetCol)) {
-        return false;
-      }
-      const occupying = placedUnits.find((placed) => placed.position.row === targetRow && placed.position.col === targetCol);
-      if (occupying) {
-        return false;
-      }
-
-      const unitSupply = resolveSupplyCost(unit.id, unit);
-      const alreadyPlaced = Boolean(placements[unit.instanceId]);
-      const projectedSupply = totalSupplyUsed + (alreadyPlaced ? 0 : unitSupply);
-      if (projectedSupply > MAX_SUPPLY) {
-        setSupplyError(`Supply cap reached (${MAX_SUPPLY}). Remove a unit to add another.`);
-        return false;
-      }
-
-      setSupplyError(null);
-      setPlacements((prev) => ({ ...prev, [unit.instanceId]: { row: targetRow, col: targetCol } }));
-      return true;
-    },
-    [isWithinPlanningBounds, placedUnits, resolveSupplyCost, totalSupplyUsed, placements]
-  );
-
-  const startStackDrag = useCallback((event: ReactPointerEvent, unit: ArmyUnitInstance) => {
-    event.preventDefault();
-    console.log('[BoardView] Starting drag for unit:', unit.name);
-    setDraggingUnit({ unit });
-    setDragPosition({ x: event.clientX, y: event.clientY });
-    setTileMenu(null);
-  }, []);
-
-  const handleTileHover = useCallback((info: { row: number; col: number; occupied: TileOccupant | null }) => {
-    if (info.row < 0 || info.col < 0) {
-      setHoveredTile(null);
-      return;
-    }
-    setHoveredTile({ row: info.row, col: info.col, occupied: Boolean(info.occupied) });
-  }, []);
-
-  const endDrag = useCallback(() => {
-    setDraggingUnit(null);
-    setDragPosition(null);
-    setHoveredTile(null);
-  }, []);
-
-  const handleTileDrop = useCallback(
-    ({ row, col, occupied }: { row: number; col: number; occupied: TileOccupant | null }) => {
-      console.log('[BoardView] handleTileDrop called:', { row, col, occupied, draggingUnit: draggingUnit?.unit.name });
-      if (!draggingUnit) {
-        console.log('[BoardView] No dragging unit, ignoring drop');
-        return;
-      }
-      // row < 0 means drop was outside a valid tile (cancellation)
-      if (row >= 0 && col >= 0 && !occupied) {
-        const boardRow = row + PLANNING_ROW_OFFSET;
-        console.log('[BoardView] Committing placement at:', boardRow, col);
-        commitPlacement(draggingUnit.unit, boardRow, col);
-      } else {
-        console.log('[BoardView] Drop cancelled or invalid:', { row, col, occupied });
-      }
-      endDrag();
-    },
-    [commitPlacement, draggingUnit, endDrag]
-  );
-
-  const handleTileClick = useCallback(
-    ({ row, col }: { row: number; col: number; occupied: TileOccupant | null }) => {
-      const boardRow = row + PLANNING_ROW_OFFSET;
-      const unit = placedUnits.find((placed) => placed.position.row === boardRow && placed.position.col === col);
-      if (!unit) return;
-      setTileMenu({ row: boardRow, col, unit });
-    },
-    [placedUnits]
-  );
-
-  const beginMoveFromTile = useCallback(
-    (unit: PlacedUnit) => {
-      const instance = unitByInstanceId[unit.instanceId];
-      if (!instance) return;
-      setTileMenu(null);
-      removePlacement(unit.instanceId);
-      setDraggingUnit({ unit: instance });
-      setDragPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
-    },
-    [removePlacement, unitByInstanceId]
-  );
-
-  const openLogicPanel = useCallback((unit: PlacedUnit) => {
-    setLogicPanelUnit(unit);
-    setTileMenu(null);
-  }, []);
-
-  // Keep logicPanelUnit in sync with placedUnits as behaviors are updated
-  const syncedLogicPanelUnit = useMemo(() => {
-    if (!logicPanelUnit) return null;
-    const updated = placedUnits.find(u => u.instanceId === logicPanelUnit.instanceId);
-    return updated || logicPanelUnit;
-  }, [logicPanelUnit, placedUnits]);
-
-  const closeLogicPanel = useCallback(() => {
-    setLogicPanelUnit(null);
-  }, []);
-
-  const getDefaultBehaviorsForUnit = useCallback((behaviorOptions: string[]): string[] => {
-    if (!behaviorOptions.length) return [];
-
-    const categories = new Map<string, string[]>();
-
-    for (const fullBehavior of behaviorOptions) {
-      const colonIndex = fullBehavior.indexOf(':');
-      if (colonIndex <= -1) continue;
-      const category = fullBehavior.slice(0, colonIndex).trim();
-      if (!category) continue;
-      const existing = categories.get(category) ?? [];
-      existing.push(fullBehavior);
-      categories.set(category, existing);
-    }
-
-    // Non-categorized behavior lists: default to first option.
-    if (categories.size === 0) {
-      return [behaviorOptions[0]];
-    }
-
-    // Categorized: default to first option in each category.
-    const defaults: string[] = [];
-    for (const [, options] of categories) {
-      if (options.length) defaults.push(options[0]);
-    }
-    return defaults;
-  }, []);
-
-  const handleBehaviorSelect = useCallback(
-    (instanceId: string, behavior: string, categoryKey?: string) => {
-      setUnitLogic((prev) => {
-        const currentBehaviors = prev[instanceId] ?? [];
-
-        if (categoryKey) {
-          // Ensure we keep one selection per category (so changing one category doesn't clear others).
-          const behaviorOptions = unitByInstanceId[instanceId]?.behaviorOptions ?? [];
-          const defaults = getDefaultBehaviorsForUnit(behaviorOptions);
-
-          const seededBehaviors = defaults.reduce((acc, def) => {
-            const colonIndex = def.indexOf(':');
-            if (colonIndex <= -1) return acc;
-            const category = def.slice(0, colonIndex).trim();
-            if (!category) return acc;
-
-            const hasCategory = acc.some((b) => b.startsWith(`${category}:`));
-            return hasCategory ? acc : [...acc, def];
-          }, currentBehaviors);
-
-          // Replace selection within the chosen category.
-          const withoutCategory = seededBehaviors.filter((b) => !b.startsWith(`${categoryKey}:`));
-          return {
-            ...prev,
-            [instanceId]: [...withoutCategory, behavior]
-          };
-        }
-
-        // For simple behaviors, replace entirely
-        return {
-          ...prev,
-          [instanceId]: [behavior]
-        };
-      });
-    },
-    [getDefaultBehaviorsForUnit, unitByInstanceId]
-  );
-
-  const handlePointerMove = useCallback(
-    (event: PointerEvent) => {
-      if (tilePressRef.current) {
-        const { startX, startY, unit } = tilePressRef.current;
-        const dx = event.clientX - startX;
-        const dy = event.clientY - startY;
-        if (Math.hypot(dx, dy) >= DRAG_START_THRESHOLD) {
-          const instance = unitByInstanceId[unit.instanceId];
-          if (instance) {
-            setTileMenu(null);
-            removePlacement(unit.instanceId);
-            setDraggingUnit({ unit: instance });
-            setDragPosition({ x: event.clientX, y: event.clientY });
-          }
-          tilePressRef.current = null;
-          return;
-        }
-      }
-      if (!draggingUnit) return;
-      setDragPosition({ x: event.clientX, y: event.clientY });
-    },
-    [DRAG_START_THRESHOLD, draggingUnit, removePlacement, setTileMenu, unitByInstanceId]
-  );
-
-  useEffect(() => {
-    window.addEventListener('pointermove', handlePointerMove);
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-    };
-  }, [handlePointerMove]);
-
-  useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      if (battleState !== 'idle') return;
-      if (draggingUnit) return;
-      if (!hoveredUnit || !hoveredTile) return;
-      tilePressRef.current = { unit: hoveredUnit, startX: event.clientX, startY: event.clientY };
-    };
-
-    const handlePointerUp = () => {
-      if (!tilePressRef.current) return;
-      const { unit } = tilePressRef.current;
-      tilePressRef.current = null;
-      setTileMenu({ row: unit.position.row, col: unit.position.col, unit });
-    };
-
-    window.addEventListener('pointerdown', handlePointerDown);
-    window.addEventListener('pointerup', handlePointerUp);
-    return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
-      window.removeEventListener('pointerup', handlePointerUp);
-    };
-  }, [battleState, draggingUnit, hoveredTile, hoveredUnit, setTileMenu]);
 
   useEffect(() => {
     setPlacements((prev) => {
@@ -939,39 +664,6 @@ const BoardView = () => {
     return `${activeBattleLabel} in progress. ${currentTeam === 'player' ? 'Your' : 'Enemy'} team is taking their turn.`;
   })();
 
-  const stageStatusLabel = (() => {
-    if (battleState === 'countdown') {
-      return 'Flight countdown';
-    }
-    if (battleState === 'running') {
-      return 'Simulating battle';
-    }
-    if (battleState === 'finished') {
-      if (winner === 'player') return 'Victory secured';
-      if (winner === 'enemy') return 'Regroup and retry';
-      return 'Stalemate reached';
-    }
-    if (!isServerConnected) {
-      return 'Connect to server';
-    }
-    return placedUnits.length > 0 ? 'Ready for launch' : 'Awaiting placements';
-  })();
-
-  const stageHelperText = (() => {
-    if (battleState === 'countdown') {
-      return 'Engines spool up while the camera swings behind your squad.';
-    }
-    if (battleState === 'running') {
-      return 'Camera locks onto the fight and tracks each glowing formation.';
-    }
-    if (battleState === 'finished') {
-      return winner === 'draw'
-        ? 'A stalemate is still intel—review the replay and refine your tactics.'
-        : 'Replay the results below, then tweak placements for the next sortie.';
-    }
-    return 'Drag units on the left, then preview their posture in full 3D.';
-  })();
-
   const battleResultHeading = (() => {
     if (!winner) return '';
     if (overallOutcome === 'win') return 'You Won';
@@ -994,6 +686,36 @@ const BoardView = () => {
     return '';
   })();
 
+  // Show preview phase if it's active
+  if (previewMatchId && previewYourRole && previewOpponentName && previewYourBoard && previewOpponentBoard && previewTurn) {
+    const isYourTurn = previewTurn === previewYourRole;
+    return (
+      <div className="board-view-container">
+        <div className="board-view-header">
+          <h1>🎮 Pre-Battle Preview</h1>
+          <p className="header-subtitle">Review and adjust your strategy before the duel begins</p>
+        </div>
+        <Suspense
+          fallback={
+            <div className="stage-loading" role="status" aria-live="polite">
+              Loading preview…
+            </div>
+          }
+        >
+          <BattlePreview
+            matchId={previewMatchId}
+            yourRole={previewYourRole}
+            opponentName={previewOpponentName}
+            yourBoard={previewYourBoard}
+            opponentBoard={previewOpponentBoard}
+            isYourTurn={isYourTurn}
+            onSendChange={handleSendPreviewChange}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+
   return (
     <div className={`board-view-container ${battleState !== 'idle' ? 'battle-mode' : ''} ${isFlightMode ? 'flight-mode' : ''}`}>
       <div className="board-view-header">
@@ -1003,117 +725,18 @@ const BoardView = () => {
 
       <div className={`immersive-stage-panel ${battleState === 'idle' ? 'with-side' : ''}`}>
         {battleState === 'idle' ? (
-          <div className="planning-stage-layout">
-            <div className="immersive-stage-card">
-              <Suspense
-                fallback={
-                  <div className="stage-loading" role="status" aria-live="polite">
-                    Preparing tactical canvas…
-                  </div>
-                }
-              >
-                <ThreeBattleStage
-                  boardSize={stageBoardRows}
-                  boardCols={stageBoardCols}
-                  units={stageUnits}
-                  hitCells={stageHitCells}
-                  hitEvents={hitEvents}
-                  moveCells={stageMoveCells}
-                  marchCells={stageMarchCells}
-                  demoState={battleState}
-                  interactionMode="planning"
-                  dragActive={Boolean(draggingUnit)}
-                  onTileHover={handleTileHover}
-                  onTileDrop={handleTileDrop}
-                  onTileClick={handleTileClick}
-                  forceOwner="blue"
-                />
-              </Suspense>
-              {countdownValue !== null && (
-                <div className={`countdown-overlay ${countdownValue === 'START' ? 'start' : ''}`}>
-                  <span key={String(countdownValue)}>{countdownValue}</span>
-                </div>
-              )}
-              <div className="stage-overlay">
-                <div>
-                  <p className="stage-kicker">Immersive Tactical Visualizer</p>
-                  <p className="stage-caption">{stageHelperText}</p>
-                </div>
-                <div className={`stage-pill ${battleState}`}>
-                  <span className="pulse-dot" />
-                  {stageStatusLabel}
-                </div>
-              </div>
-            </div>
-
-            <div className="stage-side-dock">
-              <div className="unit-stack-panel">
-                <div className="panel-heading">
-                  <h2>Available Units</h2>
-                  <p>Drag a stack onto the close-up 6x6 grid. Yellow glow means the drop is valid; red means blocked.</p>
-                </div>
-                <div className="unit-stack-list">
-                  {availableStacks.length === 0 ? (
-                    <p className="stack-empty">All units are already deployed on the board.</p>
-                  ) : (
-                    availableStacks.map((stack) => (
-                      <button
-                        key={stack.unit.id}
-                        type="button"
-                        className="unit-stack-card"
-                        onPointerDown={(event) => startStackDrag(event, stack.instances[0])}
-                      >
-                        <span className="stack-icon">{stack.unit.icon}</span>
-                        <div className="stack-body">
-                          <div className="stack-title">{stack.unit.name}</div>
-                          <div className="stack-meta">{resolveSupplyCost(stack.unit.id, stack.unit)} supply each</div>
-                        </div>
-                        <span className="stack-count-badge">{stack.instances.length}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-                <p className="panel-footer-note">Stacks shrink automatically as you place units.</p>
-              </div>
-
-              <div className="tile-inspector-card">
-                <h2>Tile Inspector</h2>
-                {hoveredTile ? (
-                  <div className="tile-readout">
-                    <div className="tile-coords-chip">Tile {hoveredTile.row + 1}, {hoveredTile.col + 1}</div>
-                    {hoveredUnit ? (
-                      <div className="tile-unit-details">
-                        <div className="unit-icon-large">{hoveredUnit.icon}</div>
-                        <div>
-                          <h3>{hoveredUnit.name}</h3>
-                          <p className="tile-unit-meta">Supply {resolveSupplyCost(hoveredUnit.id, hoveredUnit)}</p>
-                          {hoveredUnit.selectedBehaviors && hoveredUnit.selectedBehaviors.length > 0 && (
-                            <div className="tile-unit-behaviors">
-                              {hoveredUnit.selectedBehaviors.map((behavior, idx) => (
-                                <p key={idx} className="tile-unit-behavior">⚙️ {behavior}</p>
-                              ))}
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            className="tile-menu-btn"
-                            onClick={() => setTileMenu({ row: hoveredUnit.position.row, col: hoveredUnit.position.col, unit: hoveredUnit })}
-                          >
-                            Manage unit
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="tile-empty">No unit on this tile.</p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="tile-empty">Hover over the board to inspect a tile.</p>
-                )}
-                <p className="panel-footer-note">Click an occupied tile to open unit actions.</p>
-              </div>
-            </div>
-          </div>
+          <BoardSetupPanel
+            mode="pvp"
+            armyInstances={armyInstances}
+            placements={placements}
+            setPlacements={setPlacements}
+            unitLogic={unitLogic}
+            setUnitLogic={setUnitLogic}
+            resolveSupplyCost={resolveSupplyCost}
+            totalSupplyUsed={totalSupplyUsed}
+            maxSupply={MAX_SUPPLY}
+            setSupplyError={setSupplyError}
+          />
         ) : (
           <div className="immersive-stage-card">
             <Suspense
@@ -1195,59 +818,6 @@ const BoardView = () => {
         </div>
       )}
 
-      {draggingUnit && dragPosition && (
-        <div className="drag-ghost" style={{ left: dragPosition.x, top: dragPosition.y }}>
-          <span className="ghost-icon">{draggingUnit.unit.icon}</span>
-          <span>{draggingUnit.unit.name}</span>
-        </div>
-      )}
-
-      {tileMenu && (
-        <div className="tile-menu-overlay" onClick={() => setTileMenu(null)}>
-          <div className="tile-menu-card" onClick={(event) => event.stopPropagation()}>
-            <div className="tile-menu-header">
-              <h3>{tileMenu.unit.name}</h3>
-              <p>Tile {tileMenu.row - PLANNING_ROW_OFFSET + 1}, {tileMenu.col + 1}</p>
-            </div>
-            <div className="tile-menu-actions">
-              <button
-                type="button"
-                className="tile-menu-btn"
-                onClick={() => beginMoveFromTile(tileMenu.unit)}
-              >
-                Move unit
-              </button>
-              <button
-                type="button"
-                className="tile-menu-btn"
-                onClick={() => openLogicPanel(tileMenu.unit)}
-              >
-                Configure Logic
-              </button>
-              <button
-                type="button"
-                className="tile-menu-btn destructive"
-                onClick={() => {
-                  removePlacement(tileMenu.unit.instanceId);
-                  setTileMenu(null);
-                }}
-              >
-                Remove from board
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {syncedLogicPanelUnit && (
-        <Suspense fallback={<div>Loading logic panel…</div>}>
-          <UnitLogicPanel
-            unit={syncedLogicPanelUnit}
-            onBehaviorSelect={(behavior, categoryKey) => handleBehaviorSelect(syncedLogicPanelUnit.instanceId, behavior, categoryKey)}
-            onClose={closeLogicPanel}
-          />
-        </Suspense>
-      )}
     </div>
   );
 };

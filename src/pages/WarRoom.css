@@ -1,0 +1,158 @@
+.war-room-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem;
+  background: var(--surface);
+  min-height: calc(100vh - 200px);
+}
+
+.war-room-loading {
+  text-align: center;
+  padding: 4rem;
+  color: var(--ink-muted);
+  font-size: 1.25rem;
+}
+
+.war-room-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid var(--rule);
+}
+
+.war-room-title-section {
+  flex: 1;
+}
+
+.war-room-title {
+  font-size: 2.5rem;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.war-room-subtitle {
+  font-size: 1rem;
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.war-room-status {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.supply-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.supply-label {
+  font-size: 0.875rem;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.supply-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.supply-value.over-limit {
+  color: var(--accent-seal);
+}
+
+.save-success {
+  color: #2d5016;
+  font-weight: 600;
+  font-size: 1rem;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.war-room-error {
+  background: var(--accent-seal);
+  color: var(--stamp-text);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
+.war-room-banner {
+  background: var(--accent-brass);
+  color: var(--ink);
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  border-radius: 2px;
+  font-weight: 500;
+}
+
+.war-room-board {
+  margin-bottom: 2rem;
+}
+
+.war-room-instructions {
+  background: var(--archive-card-bg);
+  border: 1px solid var(--archive-card-border);
+  border-radius: 2px;
+  padding: 1.5rem;
+  margin-top: 2rem;
+}
+
+.war-room-instructions h3 {
+  margin: 0 0 1rem;
+  color: var(--ink);
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.war-room-instructions ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: var(--ink-muted);
+  line-height: 1.8;
+}
+
+.war-room-instructions li {
+  margin-bottom: 0.5rem;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .war-room-container {
+    padding: 1rem;
+  }
+
+  .war-room-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1.5rem;
+  }
+
+  .war-room-status {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .war-room-title {
+    font-size: 2rem;
+  }
+}

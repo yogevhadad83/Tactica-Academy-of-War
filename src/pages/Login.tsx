@@ -18,7 +18,7 @@ const Login = () => {
     setError('');
     try {
       await signIn(email.trim(), password);
-      navigate('/dashboard');
+      navigate('/academy');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unable to login';
       setError(message);

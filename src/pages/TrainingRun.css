@@ -1,0 +1,237 @@
+.training-run-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem;
+  color: var(--tactica-text);
+}
+
+.training-run-card {
+  background: var(--tactica-card);
+  border: 1px solid var(--tactica-border);
+  border-radius: 16px;
+  padding: 1.75rem;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+
+.training-run-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid var(--tactica-border);
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+}
+
+.training-run-title {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.training-run-reward {
+  color: var(--tactica-muted);
+  font-weight: 700;
+}
+
+.training-run-desc {
+  color: var(--tactica-muted);
+  margin: 0.75rem 0 0;
+}
+
+.training-run-brief {
+  margin-top: 1rem;
+  padding: 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--tactica-border);
+  background: #fbf5e6;
+  color: var(--tactica-text);
+  white-space: pre-wrap;
+  line-height: 1.5;
+}
+
+.training-run-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+  align-items: center;
+}
+
+.training-run-btn {
+  padding: 0.75rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--tactica-border);
+  background: #f1f5f9;
+  color: var(--tactica-muted);
+  font-weight: 800;
+}
+
+.training-run-btn.primary {
+  background: var(--tactica-purple);
+  border-color: var(--tactica-purple);
+  color: white;
+}
+
+.training-run-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.training-run-stage {
+  position: relative;
+  margin-top: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid var(--tactica-border);
+  overflow: hidden;
+}
+
+.training-run-setup {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Training setup reuses the shared PvP planning layout; collapse it for narrow/short viewports. */
+.training-run-setup .planning-stage-layout {
+  grid-template-columns: 1fr;
+}
+
+.training-run-setup .three-stage-canvas {
+  min-height: 420px;
+  height: min(70vh, 520px);
+}
+
+/* Opponent preview is a real canvas; don't use the fixed-height inspector layout. */
+.training-run-setup .training-opponent-preview {
+  height: auto;
+  overflow: visible;
+  justify-content: flex-start;
+}
+
+.training-run-setup .training-opponent-preview .three-stage-canvas {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 380px;
+  height: auto;
+}
+
+@media (max-height: 720px) {
+  .training-run-setup .three-stage-canvas {
+    min-height: 360px;
+    height: min(62vh, 460px);
+  }
+
+  .training-run-setup .training-opponent-preview .three-stage-canvas {
+    min-height: 320px;
+    aspect-ratio: 1 / 1;
+    height: auto;
+  }
+}
+
+.training-run-playarea-legend {
+  margin-top: 1.25rem;
+  color: var(--tactica-muted);
+  font-weight: 700;
+}
+
+.training-run-config-error {
+  margin: 0.75rem 0 0;
+  padding: 0.75rem 0.9rem;
+  border-radius: 12px;
+  border: 1px solid var(--tactica-border);
+  background: rgba(248, 113, 113, 0.12);
+  color: var(--tactica-text);
+  font-weight: 800;
+}
+
+.training-run-stage-loading {
+  padding: 1.25rem;
+  color: var(--tactica-muted);
+}
+
+.training-run-playarea-mask {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  grid-template-rows: repeat(12, 1fr);
+  opacity: 0.85;
+}
+
+.training-run-playarea-mask .mask-cell.outside {
+  background: rgba(2, 6, 23, 0.35);
+}
+
+.training-run-playarea-mask .mask-cell.inside {
+  background: rgba(2, 6, 23, 0);
+}
+
+.training-run-stage-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-top: 1px solid var(--tactica-border);
+  background: #f8fafc;
+}
+
+.training-run-stage-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--tactica-border);
+  background: white;
+  color: var(--tactica-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.training-run-result {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: 16px;
+  border: 1px solid var(--tactica-border);
+  background: #f8fafc;
+}
+
+.training-run-result-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+}
+
+.training-run-result-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.35rem 0;
+}
+
+.training-run-result-label {
+  color: var(--tactica-muted);
+  font-weight: 700;
+}
+
+.training-run-result-value {
+  font-weight: 800;
+  color: var(--tactica-text);
+}
+
+.training-run-result-error {
+  margin-top: 0.5rem;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.training-run-result-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  align-items: center;
+}
+
+.training-run-link {
+  font-weight: 700;
+  color: var(--tactica-purple-dark);
+}

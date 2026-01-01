@@ -44,8 +44,10 @@ interface ThreeBattleStageProps {
   moveCells: string[];
   marchCells: string[];
   demoState: DemoState;
-  interactionMode?: 'planning' | 'battle';
+  disabledCells?: string[];
+  interactionMode?: 'planning' | 'battle' | 'preview';
   dragActive?: boolean;
+  canDropOnTile?: (row: number, col: number) => boolean;
   onTileHover?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
   onTileDrop?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
   onTileClick?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
@@ -61,8 +63,10 @@ const ThreeBattleStage = ({
   moveCells,
   marchCells,
   demoState,
+  disabledCells,
   interactionMode = 'battle',
   dragActive = false,
+  canDropOnTile,
   onTileHover,
   onTileDrop,
   onTileClick,
@@ -142,17 +146,16 @@ const ThreeBattleStage = ({
   const onTileDropRef = useRef(onTileDrop);
   const onTileHoverRef = useRef(onTileHover);
   const onTileClickRef = useRef(onTileClick);
+  const canDropOnTileRef = useRef(canDropOnTile);
 
-  // Keep refs in sync with current prop values
-  useEffect(() => {
-    dragActiveRef.current = dragActive;
-  }, [dragActive]);
-
-  useEffect(() => {
-    onTileDropRef.current = onTileDrop;
-    onTileHoverRef.current = onTileHover;
-    onTileClickRef.current = onTileClick;
-  }, [onTileDrop, onTileHover, onTileClick]);
+  // Keep refs in sync with current prop values.
+  // Important: this must be synchronous (not a useEffect) so planning drops work reliably
+  // when drag state flips during a native pointermove/pointerup event.
+  dragActiveRef.current = dragActive;
+  onTileDropRef.current = onTileDrop;
+  onTileHoverRef.current = onTileHover;
+  onTileClickRef.current = onTileClick;
+  canDropOnTileRef.current = canDropOnTile;
 
   useEffect(() => {
     const rows = boardSize;
@@ -421,10 +424,13 @@ const ThreeBattleStage = ({
       }
       const tile = board.tiles.get(key);
       const occupant = tile?.occupant ?? null;
+      const dropAllowed = canDropOnTileRef.current ? canDropOnTileRef.current(row, col) : true;
       const hoverState = dragActiveRef.current
         ? occupant
           ? 'blocked'
-          : 'valid'
+          : dropAllowed
+            ? 'valid'
+            : 'blocked'
         : occupant
           ? 'inspect'
           : 'none';
@@ -439,33 +445,34 @@ const ThreeBattleStage = ({
     };
 
     const handlePointerUp = (event: PointerEvent) => {
-      console.log('[ThreeBattleStage] handlePointerUp, dragActiveRef.current:', dragActiveRef.current, 'interactionMode:', interactionMode);
       zoomPressedRef.current = false;
       const camera = cameraRef.current;
       const board = tacticalBoardRef.current;
 
       // If in planning mode with drop handler and actively dragging, process drop
       if (interactionMode === 'planning' && onTileDropRef.current && dragActiveRef.current) {
-        console.log('[ThreeBattleStage] Drag is active, processing drop...');
         let foundTile = false;
         if (camera && board && updatePointer(event)) {
           raycasterRef.current.setFromCamera(pointerRef.current, camera);
           const intersections = raycasterRef.current.intersectObjects(tileMeshesRef.current, false);
-          console.log('[ThreeBattleStage] Raycast intersections:', intersections.length);
           if (intersections.length > 0) {
             const { key, row, col } = intersections[0].object.userData as { key?: string; row?: number; col?: number };
-            console.log('[ThreeBattleStage] Hit tile:', { key, row, col });
             if (key && row !== undefined && col !== undefined) {
+              const dropAllowed = canDropOnTileRef.current ? canDropOnTileRef.current(row, col) : true;
+              if (!dropAllowed) {
+                // Signal cancellation (blocked by rules)
+                onTileDropRef.current?.({ row: -1, col: -1, occupied: null });
+                clearHover();
+                return;
+              }
               const tile = board.tiles.get(key);
               const occupant = tile?.occupant ?? null;
-              console.log('[ThreeBattleStage] Calling onTileDrop with:', { row, col, occupied: occupant });
               onTileDropRef.current?.({ row, col, occupied: occupant });
               foundTile = true;
             }
           }
         }
         if (!foundTile) {
-          console.log('[ThreeBattleStage] No tile found, signaling cancellation');
           // Signal cancellation (no valid tile)
           onTileDropRef.current?.({ row: -1, col: -1, occupied: null });
         }
@@ -531,6 +538,22 @@ const ThreeBattleStage = ({
     const cols = boardCols ?? boardSize;
     syncUnits(units, boardSize, cols);
   }, [syncUnits, units, boardSize, boardCols, modelRevision]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const board = tacticalBoardRef.current;
+    if (!board) return;
+
+    board.clearDisabled();
+    if (!disabledCells || disabledCells.length === 0) return;
+
+    disabledCells.forEach((key) => {
+      const [row, col] = key.split('-').map(Number);
+      if (Number.isFinite(row) && Number.isFinite(col)) {
+        board.setTileDisabled(row, col, true);
+      }
+    });
+  }, [disabledCells]);
 
   useEffect(() => {
     if (!dragActive) {

@@ -1,0 +1,34 @@
+.archive-card {
+  background: var(--archive-card-bg);
+  border: 1px solid var(--archive-card-border);
+  border-radius: 2px;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px var(--shadow);
+  transition: all 0.2s ease;
+}
+
+.archive-card:hover {
+  background: var(--archive-card-hover);
+  box-shadow: 0 2px 6px var(--shadow-strong);
+  cursor: pointer;
+}
+
+.archive-card.clickable {
+  cursor: pointer;
+}
+
+.archive-card.primary {
+  border-width: 2px;
+  border-color: var(--accent-seal);
+}
+
+.archive-card h2,
+.archive-card h3 {
+  color: var(--ink);
+  margin-top: 0;
+}
+
+.archive-card p {
+  color: var(--ink-muted);
+  line-height: 1.6;
+}
