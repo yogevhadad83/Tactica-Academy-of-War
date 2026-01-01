@@ -106,6 +106,15 @@ export function useGameServer(username: string | null) {
   
   const rewardedMatchesRef = useRef<Set<string>>(new Set());
 
+  const clearPreviewState = useCallback(() => {
+    setPreviewMatchId(null);
+    setPreviewYourRole(null);
+    setPreviewOpponentName(null);
+    setPreviewYourBoard(null);
+    setPreviewOpponentBoard(null);
+    setPreviewTurn(null);
+  }, []);
+
   // Send message helper
   const sendMessage = useCallback((message: ClientToServer) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -167,6 +176,7 @@ export function useGameServer(username: string | null) {
       setUserId(null);
       setCurrentMatchId(null);
       setCurrentRole(null);
+      clearPreviewState();
       return;
     }
 
@@ -240,6 +250,9 @@ export function useGameServer(username: string | null) {
 
             case 'preview_start':
               console.log('Preview phase starting:', message);
+              clearPreviewState();
+              setCurrentMatchId(message.matchId);
+              setCurrentRole(message.youAre);
               setPreviewMatchId(message.matchId);
               setPreviewYourRole(message.youAre);
               setPreviewOpponentName(message.opponentName);
@@ -275,6 +288,7 @@ export function useGameServer(username: string | null) {
 
             case 'battle_result':
               console.log('Battle result:', message);
+              clearPreviewState();
               setCurrentMatchId(message.matchId);
               setLastResult({ ...message, battleType: message.battleType ?? 'pvp', role: currentRole });
 
@@ -307,6 +321,7 @@ export function useGameServer(username: string | null) {
         setStatus('disconnected');
         setUsers([]);
         setUserId(null);
+        clearPreviewState();
         
         // Don't clear match state on disconnect - user might be in a battle
         // setCurrentMatchId(null);
@@ -339,7 +354,7 @@ export function useGameServer(username: string | null) {
         }
       }
     };
-  }, [username]);
+  }, [username, clearPreviewState]);
 
   return useMemo(
     () => ({
