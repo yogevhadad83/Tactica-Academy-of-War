@@ -32,8 +32,7 @@ export interface PlacedUnit extends ArmyUnitInstance {
   team: Team;
   currentHp?: number;
   currentShield?: number;
-  // Optional behavior override applied during preview/battle setup
-  selectedBehaviors?: string[];
+  selectedBehaviors?: string[]; // Selected behaviors/logic for this specific instance (supports multiple)
 }
 
 export interface HitEvent {
