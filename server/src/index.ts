@@ -145,7 +145,7 @@ function applyPreviewChange(board: ArmyConfig, change: PreviewChange): void {
       if (!isValidGddUnitId(change.newPlayerUnitId)) {
         throw new Error(`Invalid unit ID: ${change.newPlayerUnitId}`);
       }
-
+      // Build a new unit from catalog (simplified: just replace type info)
       const newUnitDef = buildGddUnit(change.newPlayerUnitId);
       if (!newUnitDef) {
         throw new Error(`Unit definition ${change.newPlayerUnitId} not found`);
