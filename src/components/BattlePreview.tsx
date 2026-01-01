@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { BOARD_COLS, BOARD_SIZE } from '../engine/battleEngine';
 import type { PlacedUnit } from '../types';
 import type { PreviewChange } from '../hooks/useGameServer';
@@ -31,6 +31,20 @@ const BattlePreview = ({
 
   const boardSize = BOARD_SIZE;
   const boardCols = BOARD_COLS;
+
+  const normalizedYourBoard = useMemo(
+    () => yourBoard.map((unit) => ({ ...unit, team: 'player' as const })),
+    [yourBoard]
+  );
+
+  const mirroredOpponentBoard = useMemo(() => {
+    const maxRow = boardSize - 1;
+    return opponentBoard.map((unit) => ({
+      ...unit,
+      team: 'enemy' as const,
+      position: { ...unit.position, row: maxRow - unit.position.row }
+    }));
+  }, [boardSize, opponentBoard]);
 
   const turn = yourRole === 'A' ? 'Challenger' : 'Defender';
   const turnStatus = isYourTurn ? `${turn}'s Turn — Make One Change` : `Waiting for ${opponentName}...`;
@@ -72,7 +86,7 @@ const BattlePreview = ({
             <ThreeBattleStage
               boardSize={boardSize}
               boardCols={boardCols}
-              units={yourBoard}
+              units={normalizedYourBoard}
               hitCells={[]}
               hitEvents={[]}
               moveCells={[]}
@@ -98,7 +112,7 @@ const BattlePreview = ({
             <ThreeBattleStage
               boardSize={boardSize}
               boardCols={boardCols}
-              units={opponentBoard}
+              units={mirroredOpponentBoard}
               hitCells={[]}
               hitEvents={[]}
               moveCells={[]}
