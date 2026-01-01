@@ -32,6 +32,7 @@ export interface PlacedUnit extends ArmyUnitInstance {
   team: Team;
   currentHp?: number;
   currentShield?: number;
+  selectedBehaviors?: string[]; // Selected behaviors/logic for this specific instance (supports multiple)
 }
 
 export interface HitEvent {

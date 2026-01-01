@@ -117,7 +117,7 @@ function applyPreviewChange(board: ArmyConfig, change: PreviewChange): void {
         throw new Error(`Unit ${change.unitInstanceId} not found`);
       }
       // Build a new unit from catalog (simplified: just replace type info)
-      const newUnitDef = buildGddUnit(change.newPlayerUnitId);
+      const newUnitDef = buildGddUnit(change.newPlayerUnitId as any);
       if (!newUnitDef) {
         throw new Error(`Unit definition ${change.newPlayerUnitId} not found`);
       }
