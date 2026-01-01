@@ -2,7 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import express from 'express';
 import { randomUUID } from 'crypto';
-import { ClientToServer, ServerToClient, ArmyConfig } from './types';
+import { ClientToServer, ServerToClient, ArmyConfig, PreviewChange } from './types';
 import { runServerBattle, mirrorTimelineForPlayerB } from './runBattle';
 import { buildGddUnit } from '../../shared/gddUnits';
 
@@ -11,6 +11,19 @@ interface Client {
   userId: string;
   name: string;
   army?: ArmyConfig;
+}
+
+interface PreviewMatch {
+  matchId: string;
+  challengerName: string;
+  responderName: string;
+  challengerSocket: WebSocket;
+  responderSocket: WebSocket;
+  boardA: ArmyConfig; // Challenger's board (copy)
+  boardB: ArmyConfig; // Responder's board (copy)
+  currentTurn: 'A' | 'B'; // Whose turn it is to make a change
+  aCommitted: boolean;
+  bCommitted: boolean;
 }
 
 
@@ -30,6 +43,9 @@ app.use(
 const clientsBySocket = new Map<WebSocket, Client>();
 const clientsByName = new Map<string, Client>();
 
+// Track preview matches in-memory
+const previewMatchesById = new Map<string, PreviewMatch>();
+
 // Helper to send a typed message to a client
 function send(socket: WebSocket, message: ServerToClient) {
   if (socket.readyState === WebSocket.OPEN) {
@@ -46,6 +62,85 @@ function broadcastPresence() {
     if (client.name) {
       send(client.socket, presenceMessage);
     }
+  }
+}
+
+/**
+ * Apply a preview change to a board (deep mutation of ArmyConfig)
+ */
+function applyPreviewChange(board: ArmyConfig, change: PreviewChange): void {
+  switch (change.type) {
+    case 'move': {
+      if (!change.unitInstanceId || !change.newPosition) {
+        throw new Error('Move requires unitInstanceId and newPosition');
+      }
+      const unit = board.find((u) => u.instanceId === change.unitInstanceId);
+      if (!unit) {
+        throw new Error(`Unit ${change.unitInstanceId} not found`);
+      }
+      // Check if tile is occupied
+      const occupied = board.some(
+        (u) =>
+          u.instanceId !== change.unitInstanceId &&
+          u.position.row === change.newPosition!.row &&
+          u.position.col === change.newPosition!.col
+      );
+      if (occupied) {
+        throw new Error('Destination tile is occupied');
+      }
+      unit.position = { ...change.newPosition };
+      break;
+    }
+
+    case 'swap': {
+      if (!change.unitInstanceId || !change.targetInstanceId) {
+        throw new Error('Swap requires unitInstanceId and targetInstanceId');
+      }
+      const unitA = board.find((u) => u.instanceId === change.unitInstanceId);
+      const unitB = board.find((u) => u.instanceId === change.targetInstanceId);
+      if (!unitA || !unitB) {
+        throw new Error('One or both units not found');
+      }
+      // Swap positions
+      const tempPos = { ...unitA.position };
+      unitA.position = { ...unitB.position };
+      unitB.position = tempPos;
+      break;
+    }
+
+    case 'replace': {
+      if (!change.unitInstanceId || !change.newPlayerUnitId) {
+        throw new Error('Replace requires unitInstanceId and newPlayerUnitId');
+      }
+      const unit = board.find((u) => u.instanceId === change.unitInstanceId);
+      if (!unit) {
+        throw new Error(`Unit ${change.unitInstanceId} not found`);
+      }
+      // Build a new unit from catalog (simplified: just replace type info)
+      const newUnitDef = buildGddUnit(change.newPlayerUnitId);
+      if (!newUnitDef) {
+        throw new Error(`Unit definition ${change.newPlayerUnitId} not found`);
+      }
+      // Keep position and instanceId, but update unit properties
+      Object.assign(unit, newUnitDef);
+      unit.instanceId = change.unitInstanceId; // Preserve instance ID
+      break;
+    }
+
+    case 'edit_behavior': {
+      if (!change.unitInstanceId || !change.newBehaviors) {
+        throw new Error('Edit behavior requires unitInstanceId and newBehaviors');
+      }
+      const unit = board.find((u) => u.instanceId === change.unitInstanceId);
+      if (!unit) {
+        throw new Error(`Unit ${change.unitInstanceId} not found`);
+      }
+      unit.selectedBehaviors = change.newBehaviors;
+      break;
+    }
+
+    default:
+      throw new Error(`Unknown change type: ${(change as any).type}`);
   }
 }
 
@@ -286,42 +381,166 @@ wss.on('connection', (socket: WebSocket) => {
           // Generate match ID
           const matchId = randomUUID();
 
-          // Send battle_start to both players
+          // Create preview match in-memory
+          const previewMatch: PreviewMatch = {
+            matchId,
+            challengerName: challenger.name,
+            responderName: responder.name,
+            challengerSocket: challenger.socket,
+            responderSocket: responder.socket,
+            boardA: JSON.parse(JSON.stringify(challengerArmy)), // Deep clone
+            boardB: JSON.parse(JSON.stringify(responderArmy)), // Deep clone
+            currentTurn: 'A', // Challenger goes first
+            aCommitted: false,
+            bCommitted: false,
+          };
+          previewMatchesById.set(matchId, previewMatch);
+
+          // Send preview_start to both players
           send(challenger.socket, {
-            type: 'battle_start',
+            type: 'preview_start',
             matchId,
             youAre: 'A',
             opponentName: responder.name,
+            yourBoard: previewMatch.boardA,
+            opponentBoard: previewMatch.boardB,
+            turn: 'A',
           });
 
           send(responder.socket, {
-            type: 'battle_start',
+            type: 'preview_start',
             matchId,
             youAre: 'B',
             opponentName: challenger.name,
+            yourBoard: previewMatch.boardB,
+            opponentBoard: previewMatch.boardA,
+            turn: 'A',
           });
 
-          const { winner, timeline } = runServerBattle(challengerArmy, responderArmy);
-          console.log(`Battle ${matchId}: winner ${winner}`);
+          console.log(`Preview match ${matchId} created: ${challengerName} (A) vs ${responder.name} (B)`);
+          break;
+        }
 
-          // Send per-player timelines: A gets canonical, B gets mirrored
-          const battleResultA: ServerToClient = {
-            type: 'battle_result',
-            matchId,
-            winner,
-            battleType: 'pvp',
-            timeline,
-          };
-          const battleResultB: ServerToClient = {
-            type: 'battle_result',
-            matchId,
-            winner,
-            battleType: 'pvp',
-            timeline: mirrorTimelineForPlayerB(timeline),
-          };
+        case 'preview_change': {
+          const player = clientsBySocket.get(socket);
+          if (!player) {
+            send(socket, {
+              type: 'error',
+              message: 'Not authenticated. Send hello first.',
+            });
+            return;
+          }
 
-          send(challenger.socket, battleResultA);
-          send(responder.socket, battleResultB);
+          const { matchId, change } = message;
+          const previewMatch = previewMatchesById.get(matchId);
+
+          if (!previewMatch) {
+            send(socket, {
+              type: 'error',
+              message: 'Preview match not found',
+            });
+            return;
+          }
+
+          // Determine if this is player A or B
+          const isPlayerA = player.socket === previewMatch.challengerSocket;
+          const playerRole = isPlayerA ? 'A' : 'B';
+
+          // Check if it's this player's turn
+          if (previewMatch.currentTurn !== playerRole) {
+            send(socket, {
+              type: 'error',
+              message: 'Not your turn',
+            });
+            return;
+          }
+
+          // Apply the change to the appropriate board
+          const boardToModify = isPlayerA ? previewMatch.boardA : previewMatch.boardB;
+
+          try {
+            applyPreviewChange(boardToModify, change);
+          } catch (error) {
+            console.error('Failed to apply preview change:', error);
+            send(socket, {
+              type: 'error',
+              message: `Invalid change: ${error instanceof Error ? error.message : 'unknown error'}`,
+            });
+            return;
+          }
+
+          // Mark player as committed
+          if (isPlayerA) {
+            previewMatch.aCommitted = true;
+          } else {
+            previewMatch.bCommitted = true;
+          }
+
+          // Switch turn
+          previewMatch.currentTurn = isPlayerA ? 'B' : 'A';
+
+          // Notify both players of the update
+          send(previewMatch.challengerSocket, {
+            type: 'preview_update',
+            matchId,
+            turn: previewMatch.currentTurn,
+            updatedBoard: isPlayerA ? previewMatch.boardA : previewMatch.boardB,
+            side: isPlayerA ? 'yours' : 'opponent',
+          });
+
+          send(previewMatch.responderSocket, {
+            type: 'preview_update',
+            matchId,
+            turn: previewMatch.currentTurn,
+            updatedBoard: isPlayerA ? previewMatch.boardA : previewMatch.boardB,
+            side: isPlayerA ? 'opponent' : 'yours',
+          });
+
+          // Notify of commitment
+          send(previewMatch.challengerSocket, {
+            type: 'preview_committed',
+            matchId,
+            side: isPlayerA ? 'yours' : 'opponent',
+          });
+
+          send(previewMatch.responderSocket, {
+            type: 'preview_committed',
+            matchId,
+            side: isPlayerA ? 'opponent' : 'yours',
+          });
+
+          // Check if both have committed
+          if (previewMatch.aCommitted && previewMatch.bCommitted) {
+            console.log(`Preview match ${matchId} complete. Starting battle...`);
+
+            // Remove preview match
+            previewMatchesById.delete(matchId);
+
+            // Run battle with modified boards
+            const { winner, timeline } = runServerBattle(previewMatch.boardA, previewMatch.boardB);
+            console.log(`Battle ${matchId}: winner ${winner}`);
+
+            // Send battle results to both players
+            const battleResultA: ServerToClient = {
+              type: 'battle_result',
+              matchId,
+              winner,
+              battleType: 'pvp',
+              timeline,
+            };
+            const battleResultB: ServerToClient = {
+              type: 'battle_result',
+              matchId,
+              winner,
+              battleType: 'pvp',
+              timeline: mirrorTimelineForPlayerB(timeline),
+            };
+
+            send(previewMatch.challengerSocket, battleResultA);
+            send(previewMatch.responderSocket, battleResultB);
+          }
+          break;
+        }
           break;
         }
 

@@ -17,6 +17,13 @@
   --tactica-purple-soft: #e0d8ff;
   --tactica-text: #2d3748;
   --tactica-muted: #718096;
+
+  /* Shared UI tokens mapped to the Archives palette */
+  --surface-lowest: var(--surface);
+  --surface-low: var(--surface-2);
+  --surface-high: var(--rule);
+  --primary-accent: var(--accent-seal);
+  --error: var(--accent-seal);
 }
 
 * {

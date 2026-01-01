@@ -115,7 +115,7 @@
 
 .planning-stage-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 380px;
+  grid-template-columns: minmax(0, 1.6fr) 480px;
   gap: 1.25rem;
   align-items: stretch;
 }
@@ -381,6 +381,21 @@
   flex-direction: column;
   justify-content: space-between;
   overflow: hidden;
+}
+
+/* Override for opponent board preview - needs to be much larger */
+.tile-inspector-card.training-opponent-preview {
+  height: auto;
+  min-height: 420px;
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+.tile-inspector-card.training-opponent-preview .three-stage-canvas {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 380px;
+  height: auto;
 }
 
 .tile-readout,
@@ -1392,5 +1407,168 @@
 
   .board-grid {
     min-width: 320px;
+  }
+}
+/* Battle Preview Styles */
+.battle-preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding: 2rem;
+}
+
+.preview-header {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.preview-header h2 {
+  font-size: 2rem;
+  margin: 0 0 0.5rem;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.preview-status {
+  font-size: 1.1rem;
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.preview-boards-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.preview-board-section {
+  border: 2px solid var(--rule);
+  border-radius: 8px;
+  padding: 1.5rem;
+  background: var(--surface-low);
+}
+
+.preview-board-section h3 {
+  font-size: 1.3rem;
+  margin: 0 0 1rem;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.preview-change-panel {
+  border: 2px solid var(--primary-accent);
+  border-radius: 8px;
+  padding: 2rem;
+  background: var(--surface);
+}
+
+.preview-change-panel h4 {
+  margin-top: 0;
+  font-size: 1.2rem;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.change-mode-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+}
+
+.change-btn {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid var(--primary-accent);
+  background: transparent;
+  color: var(--primary-accent);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.change-btn:hover {
+  background: var(--primary-accent);
+  color: var(--surface);
+}
+
+.change-btn:active {
+  transform: scale(0.98);
+}
+
+.change-interaction {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.change-prompt {
+  font-size: 1rem;
+  color: var(--ink);
+  margin: 0;
+  font-weight: 500;
+}
+
+.selected-unit-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--surface-low);
+  border-radius: 4px;
+  border-left: 4px solid var(--primary-accent);
+}
+
+.selected-unit-info span:first-child {
+  font-size: 2rem;
+}
+
+.selected-unit-info span:last-child {
+  font-size: 1.1rem;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.cancel-btn {
+  padding: 0.75rem 1.5rem;
+  border: 2px solid var(--error);
+  background: transparent;
+  color: var(--error);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover {
+  background: var(--error);
+  color: white;
+}
+
+.preview-waiting {
+  border: 2px solid var(--rule);
+  border-radius: 8px;
+  padding: 2rem;
+  background: var(--surface-low);
+  text-align: center;
+}
+
+.preview-waiting p {
+  font-size: 1.2rem;
+  color: var(--ink-muted);
+  margin: 0;
+  font-style: italic;
+}
+
+@media (max-width: 1200px) {
+  .preview-boards-layout {
+    grid-template-columns: 1fr;
   }
 }

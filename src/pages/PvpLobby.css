@@ -1,0 +1,356 @@
+.pvp-lobby {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 1.5rem;
+}
+
+.pvp-toast {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  background: var(--stamp-bg);
+  color: var(--stamp-text);
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  z-index: 1000;
+  font-size: 0.95rem;
+  animation: slideIn 0.3s ease-out;
+  box-shadow: 0 10px 24px var(--shadow-strong);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.pvp-toast-close {
+  background: none;
+  border: none;
+  color: currentColor;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.pvp-toast-close:hover {
+  opacity: 1;
+}
+
+.pvp-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.pvp-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  background: var(--archive-card-bg);
+  border: 1px solid var(--archive-card-border);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 10px 24px var(--shadow);
+}
+
+.pvp-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-bottom: 1px solid var(--divider-color);
+  padding-bottom: 1rem;
+}
+
+.pvp-section-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.pvp-search-input {
+  padding: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 0.5rem;
+  color: var(--ink);
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+
+.pvp-search-input:focus {
+  outline: none;
+  border-color: var(--divider-accent);
+}
+
+.pvp-search-input::placeholder {
+  color: var(--ink-muted);
+  opacity: 0.5;
+}
+
+.opponents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.opponent-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--archive-card-bg);
+  border: 1px solid var(--archive-card-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  transition: border-color 0.2s;
+}
+
+.opponent-card:hover {
+  border-color: var(--divider-accent);
+}
+
+.opponent-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.opponent-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.opponent-credits {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  opacity: 0.7;
+}
+
+.opponent-challenge-btn {
+  padding: 0.5rem 1rem;
+  background: var(--stamp-bg);
+  color: var(--stamp-text);
+  border: none;
+  border-radius: 0.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.opponent-challenge-btn:hover:not(:disabled) {
+  background-color: var(--stamp-hover);
+}
+
+.opponent-challenge-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.challenges-subsection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.challenges-subsection-title {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+}
+
+.challenges-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.challenge-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--archive-card-bg);
+  border: 1px solid var(--archive-card-border);
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.challenge-card.incoming {
+  border-left: 3px solid var(--stamp-bg);
+}
+
+.challenge-card.outgoing {
+  border-left: 3px solid var(--divider-accent);
+}
+
+.challenge-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.challenge-player {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.challenge-time,
+.challenge-status {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--ink-muted);
+  opacity: 0.7;
+}
+
+.challenge-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.challenge-btn {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 0.4rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.challenge-btn.accept {
+  background: var(--stamp-bg);
+  color: var(--stamp-text);
+}
+
+.challenge-btn.accept:hover:not(:disabled) {
+  background-color: var(--stamp-hover);
+}
+
+.challenge-btn.decline,
+.challenge-btn.cancel {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.challenge-btn.decline:hover:not(:disabled),
+.challenge-btn.cancel:hover:not(:disabled) {
+  background-color: var(--ink-muted);
+}
+
+.challenge-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.pvp-loading,
+.pvp-empty {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--ink-muted);
+  opacity: 0.6;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.pvp-login-prompt,
+.pvp-error {
+  text-align: center;
+  padding: 2rem;
+}
+
+.pvp-login-prompt p,
+.pvp-error p {
+  margin: 0 0 1rem 0;
+  color: var(--ink);
+}
+
+.pvp-error {
+  background: var(--archive-card-bg);
+  border: 1px solid var(--accent-seal);
+  border-radius: 0.5rem;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+  .pvp-container {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .pvp-lobby {
+    padding: 1rem;
+  }
+
+  .pvp-container {
+    gap: 1rem;
+  }
+
+  .pvp-section {
+    padding: 1rem;
+  }
+
+  .pvp-section-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .opponents-list {
+    max-height: 300px;
+  }
+
+  .opponent-card,
+  .challenge-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .opponent-challenge-btn {
+    width: 100%;
+  }
+
+  .challenge-actions {
+    width: 100%;
+    gap: 0.5rem;
+  }
+
+  .challenge-btn {
+    flex: 1;
+  }
+}

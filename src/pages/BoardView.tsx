@@ -4,8 +4,10 @@ import type { Team, BattleTickResult } from '../engine/battleEngine';
 import type { ArmyUnitInstance, BoardPlacements, PlacedUnit, UnitLogic } from '../types';
 import { useUser } from '../context/UserContext';
 import { useMultiplayer } from '../context/MultiplayerContext';
+import type { PreviewChange } from '../hooks/useGameServer';
 import { placementToArmyConfig } from '../utils/placementToArmyConfig';
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
+const BattlePreview = lazy(() => import('../components/BattlePreview'));
 import { calculateTickDuration } from '../components/units/useUnitLayer';
 import type { DemoState, HitEvent } from '../types/battle';
 import { useUnitCatalog } from '../hooks/useUnitCatalog';
@@ -64,6 +66,14 @@ const BoardView = () => {
     respondToChallenge,
     startDemoBattle,
     currentRole,
+    // Preview phase
+    previewMatchId,
+    previewYourRole,
+    previewOpponentName,
+    previewYourBoard,
+    previewOpponentBoard,
+    previewTurn,
+    sendPreviewChange,
   } = useMultiplayer();
   const { units: catalogUnits } = useUnitCatalog();
   const { units: armyUnits, loading: armyLoading } = usePlayerArmy();
@@ -243,6 +253,14 @@ const BoardView = () => {
       sendChallenge(opponentName);
     },
     [isServerConnected, placedUnits.length, sendChallenge, syncArmyToServer]
+  );
+
+  const handleSendPreviewChange = useCallback(
+    (change: PreviewChange) => {
+      if (!previewMatchId) return;
+      sendPreviewChange(previewMatchId, change);
+    },
+    [previewMatchId, sendPreviewChange]
   );
 
   const handleAcceptChallenge = useCallback(() => {
@@ -667,6 +685,36 @@ const BoardView = () => {
     }
     return '';
   })();
+
+  // Show preview phase if it's active
+  if (previewMatchId && previewYourRole && previewOpponentName && previewYourBoard && previewOpponentBoard && previewTurn) {
+    const isYourTurn = previewTurn === previewYourRole;
+    return (
+      <div className="board-view-container">
+        <div className="board-view-header">
+          <h1>🎮 Pre-Battle Preview</h1>
+          <p className="header-subtitle">Review and adjust your strategy before the duel begins</p>
+        </div>
+        <Suspense
+          fallback={
+            <div className="stage-loading" role="status" aria-live="polite">
+              Loading preview…
+            </div>
+          }
+        >
+          <BattlePreview
+            matchId={previewMatchId}
+            yourRole={previewYourRole}
+            opponentName={previewOpponentName}
+            yourBoard={previewYourBoard}
+            opponentBoard={previewOpponentBoard}
+            isYourTurn={isYourTurn}
+            onSendChange={handleSendPreviewChange}
+          />
+        </Suspense>
+      </div>
+    );
+  }
 
   return (
     <div className={`board-view-container ${battleState !== 'idle' ? 'battle-mode' : ''} ${isFlightMode ? 'flight-mode' : ''}`}>

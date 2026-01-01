@@ -45,7 +45,7 @@ interface ThreeBattleStageProps {
   marchCells: string[];
   demoState: DemoState;
   disabledCells?: string[];
-  interactionMode?: 'planning' | 'battle';
+  interactionMode?: 'planning' | 'battle' | 'preview';
   dragActive?: boolean;
   canDropOnTile?: (row: number, col: number) => boolean;
   onTileHover?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;

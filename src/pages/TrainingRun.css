@@ -110,8 +110,9 @@
 
 .training-run-setup .training-opponent-preview .three-stage-canvas {
   width: 100%;
-  min-height: 220px;
-  height: clamp(220px, 34vh, 360px);
+  aspect-ratio: 1 / 1;
+  min-height: 380px;
+  height: auto;
 }
 
 @media (max-height: 720px) {
@@ -121,8 +122,9 @@
   }
 
   .training-run-setup .training-opponent-preview .three-stage-canvas {
-    min-height: 200px;
-    height: clamp(200px, 30vh, 300px);
+    min-height: 320px;
+    aspect-ratio: 1 / 1;
+    height: auto;
   }
 }
 

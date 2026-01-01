@@ -9,12 +9,28 @@ import { applyBattleRewards } from '../utils/credits';
 export type ArmyConfig = PlacedUnit[];
 export type BattleType = 'demo' | 'pvp';
 
+export type PreviewChangeType = 'move' | 'swap' | 'replace' | 'edit_behavior';
+
+export interface PreviewChange {
+  type: PreviewChangeType;
+  unitInstanceId?: string;
+  targetInstanceId?: string;
+  newPosition?: { row: number; col: number };
+  newPlayerUnitId?: string;
+  newBehaviors?: string[];
+}
+
 type ClientToServer =
   | { type: 'hello'; name: string }
   | { type: 'set_army'; army: ArmyConfig }
   | { type: 'challenge'; opponentName: string }
   | { type: 'challenge_response'; challengerName: string; accepted: boolean }
-  | { type: 'demo_battle'; army: ArmyConfig };
+  | { type: 'demo_battle'; army: ArmyConfig }
+  | {
+      type: 'preview_change';
+      matchId: string;
+      change: PreviewChange;
+    };
 
 export type MatchRole = 'A' | 'B';
 
@@ -24,6 +40,27 @@ type ServerToClient =
   | { type: 'error'; message: string }
   | { type: 'challenge_received'; from: string }
   | { type: 'challenge_result'; success: boolean; message?: string }
+  | {
+      type: 'preview_start';
+      matchId: string;
+      youAre: 'A' | 'B';
+      opponentName: string;
+      yourBoard: ArmyConfig;
+      opponentBoard: ArmyConfig;
+      turn: 'A' | 'B';
+    }
+  | {
+      type: 'preview_update';
+      matchId: string;
+      turn: 'A' | 'B';
+      updatedBoard: ArmyConfig;
+      side: 'yours' | 'opponent';
+    }
+  | {
+      type: 'preview_committed';
+      matchId: string;
+      side: 'yours' | 'opponent';
+    }
   | {
       type: 'battle_start';
       matchId: string;
@@ -58,6 +95,15 @@ export function useGameServer(username: string | null) {
   const [userId, setUserId] = useState<string | null>(null);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<MatchRole | null>(null);
+  
+  // Preview phase state
+  const [previewMatchId, setPreviewMatchId] = useState<string | null>(null);
+  const [previewYourRole, setPreviewYourRole] = useState<MatchRole | null>(null);
+  const [previewOpponentName, setPreviewOpponentName] = useState<string | null>(null);
+  const [previewYourBoard, setPreviewYourBoard] = useState<ArmyConfig | null>(null);
+  const [previewOpponentBoard, setPreviewOpponentBoard] = useState<ArmyConfig | null>(null);
+  const [previewTurn, setPreviewTurn] = useState<'A' | 'B' | null>(null);
+  
   const rewardedMatchesRef = useRef<Set<string>>(new Set());
 
   // Send message helper
@@ -96,6 +142,13 @@ export function useGameServer(username: string | null) {
   const startDemoBattle = useCallback(
     (armyConfig: ArmyConfig) => {
       sendMessage({ type: 'demo_battle', army: armyConfig });
+    },
+    [sendMessage]
+  );
+
+  const sendPreviewChange = useCallback(
+    (matchId: string, change: PreviewChange) => {
+      sendMessage({ type: 'preview_change', matchId, change });
     },
     [sendMessage]
   );
@@ -183,6 +236,31 @@ export function useGameServer(username: string | null) {
                 console.log('Challenge failed:', message.message);
                 alert(`Challenge failed: ${message.message}`);
               }
+              break;
+
+            case 'preview_start':
+              console.log('Preview phase starting:', message);
+              setPreviewMatchId(message.matchId);
+              setPreviewYourRole(message.youAre);
+              setPreviewOpponentName(message.opponentName);
+              setPreviewYourBoard(message.yourBoard);
+              setPreviewOpponentBoard(message.opponentBoard);
+              setPreviewTurn(message.turn);
+              break;
+
+            case 'preview_update':
+              console.log('Preview board updated:', message);
+              if (message.side === 'yours') {
+                setPreviewYourBoard(message.updatedBoard);
+              } else {
+                setPreviewOpponentBoard(message.updatedBoard);
+              }
+              setPreviewTurn(message.turn);
+              break;
+
+            case 'preview_committed':
+              console.log('Player committed a preview change:', message);
+              // Turn switches automatically on next message
               break;
 
             case 'battle_start':
@@ -276,6 +354,14 @@ export function useGameServer(username: string | null) {
       startDemoBattle,
       currentMatchId,
       currentRole,
+      // Preview phase
+      previewMatchId,
+      previewYourRole,
+      previewOpponentName,
+      previewYourBoard,
+      previewOpponentBoard,
+      previewTurn,
+      sendPreviewChange,
     }),
     [
       status,
@@ -289,6 +375,13 @@ export function useGameServer(username: string | null) {
       startDemoBattle,
       currentMatchId,
       currentRole,
+      previewMatchId,
+      previewYourRole,
+      previewOpponentName,
+      previewYourBoard,
+      previewOpponentBoard,
+      previewTurn,
+      sendPreviewChange,
     ]
   );
 }

@@ -91,6 +91,19 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
     mode === 'training' ? (props.trainingBoard ?? 'player') : 'full';
   const isPlanningViewport = mode === 'pvp' || (mode === 'training' && trainingBoard === 'player');
 
+  const trainingPlayerUsesPlanningCoords = useMemo(() => {
+    if (mode !== 'training' || trainingBoard !== 'player') return false;
+    if (!props.playerUnits.length) return false;
+    return props.playerUnits.every(
+      (unit) => unit.position.row >= 0 && unit.position.row < PLANNING_ROWS
+    );
+  }, [mode, props, trainingBoard]);
+
+  const trainingPlayerRowOffset = useMemo(() => {
+    if (mode !== 'training' || trainingBoard !== 'player') return 0;
+    return trainingPlayerUsesPlanningCoords ? 0 : PLANNING_ROW_OFFSET;
+  }, [mode, trainingBoard, trainingPlayerUsesPlanningCoords]);
+
   const effectiveLocks: Required<BoardSetupLocks> = {
     restrictToActiveArea: Boolean(locks?.restrictToActiveArea ?? Boolean(activeArea)),
     restrictToOwnZone: Boolean(locks?.restrictToOwnZone ?? true),
@@ -192,7 +205,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
       .map((u) => ({
         ...u,
         position: {
-          row: u.position.row - PLANNING_ROW_OFFSET,
+          row: u.position.row - trainingPlayerRowOffset,
           col: u.position.col
         }
       }))
@@ -203,7 +216,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
           u.position.col >= 0 &&
           u.position.col < PLANNING_COLS
       );
-  }, [mode, props, trainingBoard]);
+  }, [mode, props, trainingBoard, trainingPlayerRowOffset]);
 
   const stageUnits = useMemo(() => {
     const filterHidden = (units: PlacedUnit[]) =>
@@ -249,7 +262,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
     }
 
     if (trainingBoard === 'player') {
-      const boardRow = hoveredTile.row + PLANNING_ROW_OFFSET;
+      const boardRow = hoveredTile.row + trainingPlayerRowOffset;
       return props.playerUnits.find((unit) => unit.position.row === boardRow && unit.position.col === hoveredTile.col) ?? null;
     }
 
@@ -454,7 +467,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
           endDrag();
           return;
         }
-        const boardRow = trainingBoard === 'player' ? row + PLANNING_ROW_OFFSET : row;
+        const boardRow = trainingBoard === 'player' ? row + trainingPlayerRowOffset : row;
         commitMoveTraining(placedDrag.unit, boardRow, col);
         endDrag();
       }
@@ -468,7 +481,8 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
       endDrag,
       mode,
       props,
-      trainingBoard
+      trainingBoard,
+      trainingPlayerRowOffset
     ]
   );
 
@@ -512,7 +526,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
         if (effectiveLocks.enemyLocked && unit.team === 'enemy') return false;
         if (!allowReposition) return false;
 
-        const targetBoardRow = trainingBoard === 'player' ? row + PLANNING_ROW_OFFSET : row;
+        const targetBoardRow = trainingBoard === 'player' ? row + trainingPlayerRowOffset : row;
         if (!canPlaceOnTile(unit.team, targetBoardRow, col)) return false;
 
         const occupancyPool = trainingBoard === 'player' ? props.playerUnits : trainingAllUnits;
@@ -536,7 +550,8 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
       props,
       pvpPlacedUnits,
       trainingAllUnits,
-      trainingBoard
+      trainingBoard,
+      trainingPlayerRowOffset
     ]
   );
 
@@ -547,14 +562,14 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
     const result: string[] = [];
     for (let r = 0; r < rows; r += 1) {
       for (let c = 0; c < cols; c += 1) {
-        const boardRow = trainingBoard === 'player' ? r + PLANNING_ROW_OFFSET : r;
+        const boardRow = trainingBoard === 'player' ? r + trainingPlayerRowOffset : r;
         if (!canPlaceOnTile('player', boardRow, c)) {
           result.push(boardKey(r, c));
         }
       }
     }
     return result;
-  }, [canPlaceOnTile, mode, stageBoardCols, stageBoardRows, trainingBoard]);
+  }, [canPlaceOnTile, mode, stageBoardCols, stageBoardRows, trainingBoard, trainingPlayerRowOffset]);
 
   const handleTileClick = useCallback(
     ({ row, col }: { row: number; col: number; occupied: TileOccupant | null }) => {
@@ -567,7 +582,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
       }
 
       if (trainingBoard === 'player') {
-        const boardRow = row + PLANNING_ROW_OFFSET;
+        const boardRow = row + trainingPlayerRowOffset;
         const unit = props.playerUnits.find((placed) => placed.position.row === boardRow && placed.position.col === col);
         if (!unit) return;
         setTileMenu({ row: boardRow, col, unit });
@@ -578,7 +593,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
       if (!unit) return;
       setTileMenu({ row, col, unit });
     },
-    [mode, pvpPlacedUnits, trainingAllUnits, trainingBoard, props]
+    [mode, pvpPlacedUnits, trainingAllUnits, trainingBoard, props, trainingPlayerRowOffset]
   );
 
   const openLogicPanel = useCallback((unit: PlacedUnit) => {
@@ -783,9 +798,25 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
 
   const enemyPreviewUnits = useMemo(() => {
     if (mode !== 'training') return [] as PlacedUnit[];
+    const enemyUsesPlanningCoords =
+      props.enemyUnits.length > 0 && props.enemyUnits.every((unit) => unit.position.row >= 0 && unit.position.row < PLANNING_ROWS);
+    const enemyRowOffset = enemyUsesPlanningCoords ? 0 : PLANNING_ROW_OFFSET;
+
     return props.enemyUnits
-      .map((u) => ({ ...u, position: { ...u.position } }))
-      .filter((u) => u.position.row >= 0 && u.position.row < BOARD_SIZE && u.position.col >= 0 && u.position.col < BOARD_COLS);
+      .map((u) => ({
+        ...u,
+        position: {
+          ...u.position,
+          row: u.position.row - enemyRowOffset
+        }
+      }))
+      .filter(
+        (u) =>
+          u.position.row >= 0 &&
+          u.position.row < PLANNING_ROWS &&
+          u.position.col >= 0 &&
+          u.position.col < PLANNING_COLS
+      );
   }, [mode, props]);
 
   return (
@@ -966,7 +997,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
               <p>
                 Tile{' '}
                 {isPlanningViewport
-                  ? `${tileMenu.row - PLANNING_ROW_OFFSET + 1}, ${tileMenu.col + 1}`
+                  ? `${tileMenu.row - (mode === 'training' && trainingBoard === 'player' ? trainingPlayerRowOffset : PLANNING_ROW_OFFSET) + 1}, ${tileMenu.col + 1}`
                   : `${tileMenu.row + 1}, ${tileMenu.col + 1}`}
               </p>
             </div>

@@ -45,6 +45,9 @@ const Layout = () => {
           <Link to="/war-room" className={`nav-link ${isActive('/war-room')}`}>
             ⚔️ War Room
           </Link>
+          <Link to="/pvp" className={`nav-link ${isActive('/pvp')}`}>
+            🎯 PvP
+          </Link>
         </div>
         <div className="nav-user-area">
           <button 

@@ -18,6 +18,9 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DebugNetwork = lazy(() => import('./pages/DebugNetwork'));
 const Training = lazy(() => import('./pages/Training'));
 const TrainingRun = lazy(() => import('./pages/TrainingRun'));
+const PvpLobby = lazy(() => import('./pages/PvpLobby'));
+const PvpMatch = lazy(() => import('./pages/PvpMatch'));
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 const RouteLoader = ({ children }: { children: React.ReactNode }) => (
   <Suspense
@@ -162,6 +165,7 @@ function AppContent() {
         <BrowserRouter>
           <MultiplayerProvider>
             <Routes>
+              <Route path="queue" element={<Navigate to="/pvp" replace />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={<Navigate to="/academy" replace />} />
                 <Route path="academy" element={<RouteLoader><Academy /></RouteLoader>} />
@@ -169,6 +173,9 @@ function AppContent() {
                 <Route path="army-builder" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
                 <Route path="quartermaster" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
                 <Route path="board" element={<RouteLoader><BoardView /></RouteLoader>} />
+                <Route path="pvp" element={<RouteLoader><PvpLobby /></RouteLoader>} />
+                <Route path="pvp/match/:matchId" element={<RouteLoader><PvpMatch /></RouteLoader>} />
+                <Route path="queue" element={<Navigate to="/pvp" replace />} />
                 <Route path="war-room" element={<RouteLoader><WarRoom /></RouteLoader>} />
                 <Route path="login" element={<RouteLoader><Login /></RouteLoader>} />
                 <Route path="signup" element={<RouteLoader><Signup /></RouteLoader>} />
@@ -183,7 +190,9 @@ function AppContent() {
                   )}
                 />
                 <Route path="debug" element={<RouteLoader><DebugNetwork /></RouteLoader>} />
+                <Route path="*" element={<RouteLoader><NotFound /></RouteLoader>} />
               </Route>
+              <Route path="*" element={<RouteLoader><NotFound /></RouteLoader>} />
             </Routes>
           </MultiplayerProvider>
         </BrowserRouter>

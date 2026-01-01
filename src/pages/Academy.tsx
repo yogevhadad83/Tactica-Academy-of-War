@@ -64,7 +64,7 @@ const Academy = () => {
     return {
       title: 'Find Opponent',
       description: 'Your battle plan is ready. Queue for matchmaking.',
-      action: () => navigate('/queue'),
+      action: () => navigate('/pvp'),
       actionLabel: 'Find Opponent'
     };
   };
@@ -140,7 +140,7 @@ const Academy = () => {
             <p>Place units and configure logic</p>
           </ArchiveCard>
 
-          <ArchiveCard onClick={() => navigate('/queue')}>
+          <ArchiveCard onClick={() => navigate('/pvp')}>
             <div className="quick-action-icon">🎯</div>
             <h3>Find Opponent</h3>
             <p>Queue for matchmaking</p>
