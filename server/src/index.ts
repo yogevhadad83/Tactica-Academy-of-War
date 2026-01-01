@@ -541,8 +541,6 @@ wss.on('connection', (socket: WebSocket) => {
           }
           break;
         }
-          break;
-        }
 
         default:
           send(socket, {
