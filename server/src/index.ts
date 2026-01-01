@@ -4,7 +4,7 @@ import express from 'express';
 import { randomUUID } from 'crypto';
 import { ClientToServer, ServerToClient, ArmyConfig, PreviewChange } from './types';
 import { runServerBattle, mirrorTimelineForPlayerB } from './runBattle';
-import { buildGddUnit } from '../../shared/gddUnits';
+import { buildGddUnit, GDD_UNIT_IDS, type GddUnitId } from '../../shared/gddUnits';
 
 interface Client {
   socket: WebSocket;
@@ -45,6 +45,13 @@ const clientsByName = new Map<string, Client>();
 
 // Track preview matches in-memory
 const previewMatchesById = new Map<string, PreviewMatch>();
+
+/**
+ * Type guard to check if a string is a valid GddUnitId
+ */
+function isValidGddUnitId(id: string): id is GddUnitId {
+  return GDD_UNIT_IDS.includes(id as GddUnitId);
+}
 
 // Helper to send a typed message to a client
 function send(socket: WebSocket, message: ServerToClient) {
@@ -116,8 +123,12 @@ function applyPreviewChange(board: ArmyConfig, change: PreviewChange): void {
       if (!unit) {
         throw new Error(`Unit ${change.unitInstanceId} not found`);
       }
+      // Validate that the unit ID is valid
+      if (!isValidGddUnitId(change.newPlayerUnitId)) {
+        throw new Error(`Invalid unit ID: ${change.newPlayerUnitId}`);
+      }
       // Build a new unit from catalog (simplified: just replace type info)
-      const newUnitDef = buildGddUnit(change.newPlayerUnitId as any);
+      const newUnitDef = buildGddUnit(change.newPlayerUnitId);
       if (!newUnitDef) {
         throw new Error(`Unit definition ${change.newPlayerUnitId} not found`);
       }
