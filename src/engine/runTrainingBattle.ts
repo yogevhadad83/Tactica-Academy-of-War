@@ -30,7 +30,12 @@ export function runTrainingBattle(params: {
   enemyUnits: PlacedUnit[];
   playerGoesFirst: boolean;
   maxTicks?: number;
+  mode?: 'training';
 }): TrainingBattleResult {
+  if (params.mode && params.mode !== 'training') {
+    throw new Error('runTrainingBattle is restricted to training mode.');
+  }
+
   const startingTeam: Team = params.playerGoesFirst ? 'player' : 'enemy';
   const maxTicks = params.maxTicks ?? MAX_TICKS;
   const rawUnits = [...params.playerUnits, ...params.enemyUnits];

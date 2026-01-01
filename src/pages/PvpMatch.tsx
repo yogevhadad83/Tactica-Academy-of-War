@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext';
 import { useUnitCatalog, type UnitCatalogEntry } from '../hooks/useUnitCatalog';
 import { BOARD_COLS, BOARD_SIZE, PLAYER_ZONE_START } from '../engine/battleEngine';
 import type { ArmyUnitInstance, PlacedUnit } from '../types';
-import { runTrainingBattle } from '../engine/runTrainingBattle';
 import { calculateTickDuration } from '../components/units/useUnitLayer';
 import type { BattleTickResult } from '../engine/battleEngine';
 import {
@@ -14,14 +13,16 @@ import {
   completeMatch,
   fetchMatchBundle,
   ensureMatchPreBattle,
+  getMatchTimeline,
   startMatch,
   submitPreBattleMove,
   subscribeParticipants,
+  type MatchTimelinePayload,
   type MatchBundle,
   type PreBattleMove
 } from '../lib/pvp';
 import { supabase } from '../lib/supabaseClient';
-import type { MatchSide } from '../types/supabase';
+import type { MatchSide, WinnerSide } from '../types/supabase';
 
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
 
@@ -141,6 +142,12 @@ const PvpMatch = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [timelineA, setTimelineA] = useState<BattleTickResult[] | null>(null);
+  const [timelineB, setTimelineB] = useState<BattleTickResult[] | null>(null);
+  const [winnerSide, setWinnerSide] = useState<WinnerSide | null>(null);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const { units: catalogUnits } = useUnitCatalog();
   const catalogById = useMemo(() => new Map(catalogUnits.map((unit) => [unit.id.toLowerCase(), unit])), [catalogUnits]);
   const [playerUnits, setPlayerUnits] = useState<PlacedUnit[]>([]);
@@ -167,12 +174,50 @@ const PvpMatch = () => {
   const timelineIndexRef = useRef(0);
   const pendingWinnerRef = useRef<'player' | 'enemy' | 'draw'>('draw');
 
+  const showToast = useCallback((message: string) => {
+    setToastMessage(message);
+  }, []);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeout = window.setTimeout(() => setToastMessage(null), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
+
+  const toast = toastMessage ? (
+    <div className="pvp-toast">
+      <span>{toastMessage}</span>
+      <button type="button" className="pvp-toast-close" aria-label="Dismiss" onClick={() => setToastMessage(null)}>
+        ×
+      </button>
+    </div>
+  ) : null;
+
+  const applyTimelinePayload = useCallback((payload: MatchTimelinePayload) => {
+    setTimelineA(payload.timelineA as BattleTickResult[]);
+    setTimelineB(payload.timelineB as BattleTickResult[]);
+    setWinnerSide(payload.winnerSide ?? null);
+    setTimelineError(null);
+  }, []);
+
   useEffect(() => {
     if (!matchId || !user) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
     setNotice(null);
+    setTimelineA(null);
+    setTimelineB(null);
+    setWinnerSide(null);
+    setTimelineError(null);
+    setBattleTimeline([]);
+    setBattleDemoState('idle');
+    setSimulationUnits([]);
+    setHitCells([]);
+    setHitEvents([]);
+    setMoveCells([]);
+    setMarchCells([]);
+    setWinner(null);
 
     fetchMatchBundle(matchId)
       .then((data) => {
@@ -272,6 +317,49 @@ const PvpMatch = () => {
       });
   }, [bundle]);
 
+  useEffect(() => {
+    if (!bundle || bundle.match.status !== 'IN_PROGRESS' || !matchId) return;
+    if (timelineA && timelineB) return;
+    if (isLoadingTimeline) return;
+
+    let cancelled = false;
+    setIsLoadingTimeline(true);
+    setTimelineError(null);
+
+    const attemptFetch = async () => {
+      let lastError: string | null = null;
+
+      for (let attempt = 1; attempt <= 5; attempt += 1) {
+        try {
+          const payload = await getMatchTimeline(matchId);
+          if (cancelled) return;
+          applyTimelinePayload(payload);
+          setIsLoadingTimeline(false);
+          return;
+        } catch (err) {
+          lastError = err instanceof Error ? err.message : 'Failed to load match timeline.';
+        }
+
+        if (cancelled) return;
+        await new Promise((resolve) => setTimeout(resolve, 650));
+      }
+
+      if (cancelled) return;
+      setIsLoadingTimeline(false);
+      setTimelineError(lastError);
+      setError((prev) => prev ?? lastError ?? 'Match timeline not available yet.');
+      if (lastError) {
+        showToast(lastError);
+      }
+    };
+
+    attemptFetch();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyTimelinePayload, bundle, getMatchTimeline, isLoadingTimeline, matchId, showToast, timelineA, timelineB]);
+
   // If the match is already in progress when we load, render battle in-place.
 
   const participants = bundle?.participants ?? [];
@@ -300,6 +388,18 @@ const PvpMatch = () => {
   const youSubmitted = Boolean(yourParticipant?.pre_battle_adjustments);
   const opponentSubmitted = Boolean(opponentParticipant?.pre_battle_adjustments);
   const isMyTurn = Boolean(yourParticipant && turn !== 'LOCKED' && turn === yourParticipant.side && !youSubmitted);
+
+  const viewerSide = yourParticipant?.side ?? null;
+
+  const mapWinnerSideToViewer = useCallback(
+    (side: WinnerSide | null): 'player' | 'enemy' | 'draw' => {
+      if (!side || side === 'draw' || !viewerSide) return 'draw';
+      return side === viewerSide ? 'player' : 'enemy';
+    },
+    [viewerSide]
+  );
+
+  const displayError = error ?? timelineError;
 
   const pendingMove = useMemo(() => {
     if (!playerUnits.length || !playerBaselineUnits.length) return null;
@@ -349,9 +449,7 @@ const PvpMatch = () => {
     }
 
     const positioned = opponentMatchUnits;
-    const mirrorOpponent = positioned.length > 0 && positioned.every((unit) => unit.row >= PLAYER_ZONE_START);
-    const rowTransform = mirrorOpponent ? (row: number) => BOARD_SIZE - 1 - row : (row: number) => row;
-    const placed = buildPlacedUnits(positioned, 'enemy', rowTransform, catalogById);
+    const placed = buildPlacedUnits(positioned, 'enemy', (row) => row, catalogById);
     setEnemyUnits(clonePlacedUnits(placed));
   }, [bundle, catalogById, opponentMatchUnits, opponentParticipant]);
 
@@ -421,12 +519,14 @@ const PvpMatch = () => {
 
   const handleStartBattle = useCallback(async () => {
     if (!bundle) return;
-    setNotice('Launching battle...');
+    setNotice('Requesting server battle…');
     setError(null);
+    setTimelineError(null);
+    setIsLoadingTimeline(true);
     setSubmitting(true);
     try {
-      await startMatch(bundle.match.id);
-      // Update local bundle to reflect the new status
+      const payload = await startMatch(bundle.match.id);
+      applyTimelinePayload(payload);
       setBundle((prev) => {
         if (!prev) return prev;
         return {
@@ -436,11 +536,15 @@ const PvpMatch = () => {
       });
       setNotice('Battle starting…');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start battle.');
+      const message = err instanceof Error ? err.message : 'Failed to start battle.';
+      setError(message);
+      setTimelineError(message);
+      showToast(message);
     } finally {
       setSubmitting(false);
+      setIsLoadingTimeline(false);
     }
-  }, [bundle]);
+  }, [applyTimelinePayload, bundle, showToast]);
 
   const handleResetMove = useCallback(() => {
     if (matchTerminated) return;
@@ -493,66 +597,48 @@ const PvpMatch = () => {
     };
   }, []);
 
-  // When the match flips to IN_PROGRESS, run the existing deterministic battle runner
-  // and play back the resulting timeline using ThreeBattleStage.
-  const battlePlayerUnits = useMemo(() => {
-    if (!bundle || !yourParticipant) return [] as PlacedUnit[];
-    const positioned = playerMatchUnits;
-    return buildPlacedUnits(positioned, 'player', (row) => row, catalogById);
-  }, [bundle, catalogById, playerMatchUnits, yourParticipant]);
-
-  const battleEnemyUnits = useMemo(() => {
-    if (!bundle || !opponentParticipant) return [] as PlacedUnit[];
-    const positioned = opponentMatchUnits;
-    return buildPlacedUnits(positioned, 'enemy', (row) => row, catalogById);
-  }, [bundle, catalogById, opponentMatchUnits, opponentParticipant]);
+  const viewerTimeline = useMemo(() => {
+    if (viewerSide === 'A') return timelineA;
+    if (viewerSide === 'B') return timelineB;
+    return timelineA ?? timelineB;
+  }, [timelineA, timelineB, viewerSide]);
 
   useEffect(() => {
-    if (!bundle) return;
-    if (bundle.match.status !== 'IN_PROGRESS') return;
-    if (battleDemoState !== 'idle') return;
+    if (!bundle || bundle.match.status !== 'IN_PROGRESS') {
+      setBattleDemoState('idle');
+      return;
+    }
 
-    // Reset playback state.
+    if (!viewerTimeline || viewerTimeline.length === 0) {
+      return;
+    }
+
     if (timelineTimeoutRef.current !== null) {
       window.clearTimeout(timelineTimeoutRef.current);
       timelineTimeoutRef.current = null;
     }
+
+    const mappedWinner = mapWinnerSideToViewer(winnerSide);
+    pendingWinnerRef.current = mappedWinner;
+
     timelineIndexRef.current = 0;
-    setBattleTimeline([]);
-    setSimulationUnits([]);
+    setBattleTimeline(viewerTimeline);
+    setSimulationUnits(viewerTimeline[0]?.units ?? []);
     setHitCells([]);
     setHitEvents([]);
     setMoveCells([]);
     setMarchCells([]);
     setWinner(null);
 
-    try {
-      const playerGoesFirst = yourParticipant?.side === 'A';
-      const result = runTrainingBattle({
-        playerUnits: battlePlayerUnits,
-        enemyUnits: battleEnemyUnits,
-        playerGoesFirst,
-      });
-
-      pendingWinnerRef.current = result.winner;
-      setBattleTimeline(result.timeline);
-      timelineIndexRef.current = 1;
-      if (result.timeline[0]) {
-        setSimulationUnits(result.timeline[0].units);
-      }
-
-      if (result.timeline.length <= 1) {
-        setWinner(result.winner);
-        setBattleDemoState('finished');
-        return;
-      }
-
-      setBattleDemoState('running');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start battle simulation.');
-      setBattleDemoState('idle');
+    if (viewerTimeline.length <= 1) {
+      setWinner(mappedWinner);
+      setBattleDemoState('finished');
+      return;
     }
-  }, [battleDemoState, battleEnemyUnits, battlePlayerUnits, bundle, yourParticipant?.side]);
+
+    timelineIndexRef.current = 1;
+    setBattleDemoState('running');
+  }, [bundle, mapWinnerSideToViewer, viewerTimeline, winnerSide]);
 
   useEffect(() => {
     if (battleDemoState !== 'running' || battleTimeline.length === 0) {
@@ -611,50 +697,62 @@ const PvpMatch = () => {
 
   if (!user) {
     return (
-      <div className="prebattle-shell">
-        <div className="prebattle-card">
-          <p>Please sign in to view this match.</p>
-          <button type="button" className="prebattle-btn" onClick={() => navigate('/login')}>
-            Log In
-          </button>
+      <>
+        {toast}
+        <div className="prebattle-shell">
+          <div className="prebattle-card">
+            <p>Please sign in to view this match.</p>
+            <button type="button" className="prebattle-btn" onClick={() => navigate('/login')}>
+              Log In
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (loading) {
     return (
-      <div className="prebattle-shell">
-        <div className="prebattle-card">
-          <p className="prebattle-loading">Loading match intelligence…</p>
+      <>
+        {toast}
+        <div className="prebattle-shell">
+          <div className="prebattle-card">
+            <p className="prebattle-loading">Loading match intelligence…</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
-  if (error && !bundle) {
+  if (displayError && !bundle) {
     return (
-      <div className="prebattle-shell">
-        <div className="prebattle-card">
-          <p className="prebattle-error">⚠️ {error}</p>
-          <button type="button" className="prebattle-btn" onClick={() => navigate('/pvp')}>
-            Back to Lobby
-          </button>
+      <>
+        {toast}
+        <div className="prebattle-shell">
+          <div className="prebattle-card">
+            <p className="prebattle-error">⚠️ {displayError}</p>
+            <button type="button" className="prebattle-btn" onClick={() => navigate('/pvp')}>
+              Back to Lobby
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (!bundle || !yourParticipant) {
     return (
-      <div className="prebattle-shell">
-        <div className="prebattle-card">
-          <p>You are not a participant in this match.</p>
-          <button type="button" className="prebattle-btn" onClick={() => navigate('/pvp')}>
-            Back to Lobby
-          </button>
+      <>
+        {toast}
+        <div className="prebattle-shell">
+          <div className="prebattle-card">
+            <p>You are not a participant in this match.</p>
+            <button type="button" className="prebattle-btn" onClick={() => navigate('/pvp')}>
+              Back to Lobby
+            </button>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -667,181 +765,196 @@ const PvpMatch = () => {
 
   if (bundle.match.status === 'IN_PROGRESS') {
     const winnerLabel = winner ? (winner === 'draw' ? 'Draw' : winner === 'player' ? 'Victory' : 'Defeat') : null;
+    const timelineReady = Boolean(viewerTimeline && viewerTimeline.length);
+    const playbackHeadline = winnerLabel ?? (battleDemoState === 'running' ? 'Engaged…' : isLoadingTimeline ? 'Fetching timeline…' : 'Preparing…');
+    const playbackStatus = winnerLabel
+      ? 'Battle finished.'
+      : isLoadingTimeline
+        ? 'Retrieving authoritative battle timeline…'
+        : timelineReady
+          ? 'Playing server timeline…'
+          : 'Awaiting server timeline…';
     return (
+      <>
+        {toast}
+        <div className="prebattle-shell">
+          <div className="prebattle-banner">
+            <p className="banner-kicker">Battlefield</p>
+            <h1>PvP BATTLE</h1>
+            <p>Status: IN_PROGRESS</p>
+          </div>
+
+          {displayError && <div className="prebattle-error">⚠️ {displayError}</div>}
+          {notice && <div className="prebattle-notice">{notice}</div>}
+
+          <div className="prebattle-stage-section">
+            <div className="prebattle-board-wrapper">
+              <Suspense
+                fallback={
+                  <div className="stage-loading" role="status" aria-live="polite">
+                    Preparing tactical canvas…
+                  </div>
+                }
+              >
+                <ThreeBattleStage
+                  boardSize={BOARD_SIZE}
+                  boardCols={BOARD_COLS}
+                  units={simulationUnits}
+                  hitCells={hitCells}
+                  hitEvents={hitEvents}
+                  moveCells={moveCells}
+                  marchCells={marchCells}
+                  demoState={battleDemoState === 'running' ? 'running' : battleDemoState === 'finished' ? 'finished' : 'idle'}
+                  interactionMode="battle"
+                  dragActive={false}
+                />
+              </Suspense>
+            </div>
+
+            <aside className="prebattle-control-card">
+              <div className="control-card-header">
+                <p className="board-label">Battle Status</p>
+                <h2>{playbackHeadline}</h2>
+                <p className="board-status">{playbackStatus}</p>
+              </div>
+
+              <div className="prebattle-opponent-meta">
+                <h3>Match</h3>
+                <p className="board-status">{bundle.match.id.slice(0, 8)}…</p>
+                <p className="board-status muted">You: {yourParticipant.display_name ?? 'Commander'}</p>
+                <p className="board-status muted">Opponent: {opponentParticipant?.display_name ?? 'Commander'}</p>
+              </div>
+            </aside>
+          </div>
+
+          <div className="prebattle-footer">
+            <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle}
+              disabled={matchTerminated}
+            >
+              Back to Lobby
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      {toast}
       <div className="prebattle-shell">
         <div className="prebattle-banner">
-          <p className="banner-kicker">Battlefield</p>
-          <h1>PvP BATTLE</h1>
-          <p>Status: IN_PROGRESS</p>
+          <p className="banner-kicker">Pre-Battle Directive</p>
+          <h1>PRE-BATTLE: ONE MOVE EACH</h1>
+          <p>Challenger acts first, defender responds. One precise reposition per commander.</p>
         </div>
 
-        {error && <div className="prebattle-error">⚠️ {error}</div>}
+        <div className="prebattle-meta-row">
+          <div className="meta-card">
+            <p className="meta-label">Match</p>
+            <h3>{bundle.match.id.slice(0, 8)}…</h3>
+            <p className="meta-subtext">Status: {bundle.match.status}</p>
+            <p className="meta-subtext">Created: {new Date(bundle.match.created_at).toLocaleString()}</p>
+          </div>
+          <div className="meta-card">
+            <p className="meta-label">Turn State</p>
+            <h3>{turnBanner}</h3>
+            <p className="meta-subtext">
+              {isMyTurn ? 'Your move window is open.' : youSubmitted ? 'Move submitted. Awaiting opponent.' : turn === 'LOCKED' ? 'Both moves locked.' : 'Stand by for your cue.'}
+            </p>
+          </div>
+        </div>
+
+        {displayError && bundle && <div className="prebattle-error">⚠️ {displayError}</div>}
         {notice && <div className="prebattle-notice">{notice}</div>}
 
         <div className="prebattle-stage-section">
           <div className="prebattle-board-wrapper">
-            <Suspense
-              fallback={
-                <div className="stage-loading" role="status" aria-live="polite">
-                  Preparing tactical canvas…
-                </div>
-              }
-            >
-              <ThreeBattleStage
-                boardSize={BOARD_SIZE}
-                boardCols={BOARD_COLS}
-                units={simulationUnits}
-                hitCells={hitCells}
-                hitEvents={hitEvents}
-                moveCells={moveCells}
-                marchCells={marchCells}
-                demoState={battleDemoState === 'running' ? 'running' : battleDemoState === 'finished' ? 'finished' : 'idle'}
-                interactionMode="battle"
-                dragActive={false}
-              />
-            </Suspense>
+            <BoardSetupPanel
+              mode="training"
+              trainingBoard="player"
+              playerUnits={playerUnits}
+              enemyUnits={enemyUnits}
+              onChange={handleBoardChange}
+              allowedEdits={{ repositions: canInteract ? 1 : 0, behaviorChanges: 0 }}
+              locks={{ restrictToActiveArea: false, restrictToOwnZone: true, disallowAddRemove: true, enemyLocked: true }}
+              canEditBehavior={() => false}
+            />
           </div>
 
           <aside className="prebattle-control-card">
             <div className="control-card-header">
-              <p className="board-label">Battle Status</p>
-              <h2>{winnerLabel ?? (battleDemoState === 'running' ? 'Engaged…' : 'Preparing…')}</h2>
-              <p className="board-status">{winnerLabel ? 'Battle finished.' : 'Simulating battle timeline…'}</p>
+              <p className="board-label">Command Summary</p>
+              <h2>{yourParticipant.display_name ?? 'You'}</h2>
+              <p className="board-status">{summarizeMove(yourParticipant.pre_battle_adjustments ?? null)}</p>
+            </div>
+
+            <div className="prebattle-status-pills">
+              <span className={`prebattle-status-pill ${canInteract ? 'active' : ''}`}>
+                {youSubmitted ? 'Move locked' : canInteract ? 'Your window is open' : 'Stand by'}
+              </span>
+              <span className="prebattle-status-pill muted">
+                {opponentSubmitted ? 'Opponent locked' : 'Opponent adjusting'}
+              </span>
+            </div>
+
+            <div className="prebattle-move-summary">
+              <h3>Staged Adjustment</h3>
+              <p>{pendingMoveSummary}</p>
+            </div>
+
+            {draftError && <p className="prebattle-control-error">{draftError}</p>}
+
+            <div className="prebattle-control-actions">
+              <button type="button" className="prebattle-btn ghost" onClick={handleResetMove} disabled={!pendingMove || youSubmitted}>
+                Reset move
+              </button>
+              <button
+                type="button"
+                className="prebattle-btn accent"
+                onClick={handleSubmitMove}
+                disabled={!canSubmitMove}
+              >
+                {submitting ? 'Submitting…' : pendingMove ? 'Confirm move' : 'Skip changes'}
+              </button>
             </div>
 
             <div className="prebattle-opponent-meta">
-              <h3>Match</h3>
-              <p className="board-status">{bundle.match.id.slice(0, 8)}…</p>
-              <p className="board-status muted">You: {yourParticipant.display_name ?? 'Commander'}</p>
-              <p className="board-status muted">Opponent: {opponentParticipant?.display_name ?? 'Commander'}</p>
+              <h3>Opponent Forces</h3>
+              <p className="board-status">{summarizeMove(opponentParticipant?.pre_battle_adjustments ?? null)}</p>
+              <p className="board-status muted">
+                {opponentSubmitted ? 'Opponent move locked.' : 'Waiting for opponent move…'}
+              </p>
             </div>
           </aside>
         </div>
 
         <div className="prebattle-footer">
-          <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle}
-            disabled={matchTerminated}
-          >
+          <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle}>
             Back to Lobby
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="prebattle-shell">
-      <div className="prebattle-banner">
-        <p className="banner-kicker">Pre-Battle Directive</p>
-        <h1>PRE-BATTLE: ONE MOVE EACH</h1>
-        <p>Challenger acts first, defender responds. One precise reposition per commander.</p>
-      </div>
-
-      <div className="prebattle-meta-row">
-        <div className="meta-card">
-          <p className="meta-label">Match</p>
-          <h3>{bundle.match.id.slice(0, 8)}…</h3>
-          <p className="meta-subtext">Status: {bundle.match.status}</p>
-          <p className="meta-subtext">Created: {new Date(bundle.match.created_at).toLocaleString()}</p>
-        </div>
-        <div className="meta-card">
-          <p className="meta-label">Turn State</p>
-          <h3>{turnBanner}</h3>
-          <p className="meta-subtext">
-            {isMyTurn ? 'Your move window is open.' : youSubmitted ? 'Move submitted. Awaiting opponent.' : turn === 'LOCKED' ? 'Both moves locked.' : 'Stand by for your cue.'}
-          </p>
-        </div>
-      </div>
-
-      {error && bundle && <div className="prebattle-error">⚠️ {error}</div>}
-      {notice && <div className="prebattle-notice">{notice}</div>}
-
-      <div className="prebattle-stage-section">
-        <div className="prebattle-board-wrapper">
-          <BoardSetupPanel
-            mode="training"
-            trainingBoard="player"
-            playerUnits={playerUnits}
-            enemyUnits={enemyUnits}
-            onChange={handleBoardChange}
-            allowedEdits={{ repositions: canInteract ? 1 : 0, behaviorChanges: 0 }}
-            locks={{ restrictToActiveArea: false, restrictToOwnZone: true, disallowAddRemove: true, enemyLocked: true }}
-            canEditBehavior={() => false}
-          />
-        </div>
-
-        <aside className="prebattle-control-card">
-          <div className="control-card-header">
-            <p className="board-label">Command Summary</p>
-            <h2>{yourParticipant.display_name ?? 'You'}</h2>
-            <p className="board-status">{summarizeMove(yourParticipant.pre_battle_adjustments ?? null)}</p>
-          </div>
-
-          <div className="prebattle-status-pills">
-            <span className={`prebattle-status-pill ${canInteract ? 'active' : ''}`}>
-              {youSubmitted ? 'Move locked' : canInteract ? 'Your window is open' : 'Stand by'}
-            </span>
-            <span className="prebattle-status-pill muted">
-              {opponentSubmitted ? 'Opponent locked' : 'Opponent adjusting'}
-            </span>
-          </div>
-
-          <div className="prebattle-move-summary">
-            <h3>Staged Adjustment</h3>
-            <p>{pendingMoveSummary}</p>
-          </div>
-
-          {draftError && <p className="prebattle-control-error">{draftError}</p>}
-
-          <div className="prebattle-control-actions">
-            <button type="button" className="prebattle-btn ghost" onClick={handleResetMove} disabled={!pendingMove || youSubmitted}>
-              Reset move
-            </button>
+          <button type="button" className="prebattle-btn danger" onClick={handleAbortMatch} disabled={aborting}>
+            {aborting ? 'Aborting…' : 'Abort battle'}
+          </button>
+          {allSubmitted && (
             <button
               type="button"
               className="prebattle-btn accent"
-              onClick={handleSubmitMove}
-              disabled={!canSubmitMove}
+              onClick={handleStartBattle}
+              disabled={submitting}
             >
-              {submitting ? 'Submitting…' : pendingMove ? 'Confirm move' : 'Skip changes'}
+              {submitting ? 'Starting…' : 'START BATTLE'}
             </button>
-          </div>
+          )}
+        </div>
 
-          <div className="prebattle-opponent-meta">
-            <h3>Opponent Forces</h3>
-            <p className="board-status">{summarizeMove(opponentParticipant?.pre_battle_adjustments ?? null)}</p>
-            <p className="board-status muted">
-              {opponentSubmitted ? 'Opponent move locked.' : 'Waiting for opponent move…'}
-            </p>
-          </div>
-        </aside>
-      </div>
-
-      <div className="prebattle-footer">
-        <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle}>
-          Back to Lobby
-        </button>
-        <button type="button" className="prebattle-btn danger" onClick={handleAbortMatch} disabled={aborting}>
-          {aborting ? 'Aborting…' : 'Abort battle'}
-        </button>
         {allSubmitted && (
-          <button
-            type="button"
-            className="prebattle-btn accent"
-            onClick={handleStartBattle}
-            disabled={submitting}
-          >
-            {submitting ? 'Starting…' : 'START BATTLE'}
-          </button>
+          <p className="prebattle-footer-note">
+            Both players ready. Click START BATTLE to proceed.
+          </p>
         )}
       </div>
-
-      {allSubmitted && (
-        <p className="prebattle-footer-note">
-          Both players ready. Click START BATTLE to proceed.
-        </p>
-      )}
-    </div>
+    </>
   );
 };
 
