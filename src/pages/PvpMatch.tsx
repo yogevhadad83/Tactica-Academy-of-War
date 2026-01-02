@@ -148,8 +148,9 @@ const PvpMatch = () => {
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const { units: catalogUnits } = useUnitCatalog();
+  const { units: catalogUnits, loading: catalogLoading } = useUnitCatalog();
   const catalogById = useMemo(() => new Map(catalogUnits.map((unit) => [unit.id.toLowerCase(), unit])), [catalogUnits]);
+  const catalogReady = !catalogLoading && catalogById.size > 0;
   const [playerUnits, setPlayerUnits] = useState<PlacedUnit[]>([]);
   const [playerBaselineUnits, setPlayerBaselineUnits] = useState<PlacedUnit[]>([]);
   const [enemyUnits, setEnemyUnits] = useState<PlacedUnit[]>([]);
@@ -173,6 +174,7 @@ const PvpMatch = () => {
   const timelineTimeoutRef = useRef<number | null>(null);
   const timelineIndexRef = useRef(0);
   const pendingWinnerRef = useRef<'player' | 'enemy' | 'draw'>('draw');
+  const navigatedToTheaterRef = useRef(false);
 
   const showToast = useCallback((message: string) => {
     setToastMessage(message);
@@ -239,6 +241,10 @@ const PvpMatch = () => {
       cancelled = true;
     };
   }, [matchId, user]);
+
+  useEffect(() => {
+    navigatedToTheaterRef.current = false;
+  }, [matchId]);
 
   // Define handleMatchTerminated early so it can be used in effects
   const handleMatchTerminated = useCallback(
@@ -388,6 +394,9 @@ const PvpMatch = () => {
   const youSubmitted = Boolean(yourParticipant?.pre_battle_adjustments);
   const opponentSubmitted = Boolean(opponentParticipant?.pre_battle_adjustments);
   const isMyTurn = Boolean(yourParticipant && turn !== 'LOCKED' && turn === yourParticipant.side && !youSubmitted);
+  const isFinalizingBattle = Boolean(
+    yourParticipant?.side === 'B' && challengerSubmitted && !youSubmitted && turn !== 'LOCKED'
+  );
 
   const viewerSide = yourParticipant?.side ?? null;
 
@@ -478,6 +487,35 @@ const PvpMatch = () => {
     [matchTerminated, playerBaselineUnits, playerRowShift]
   );
 
+  const handleStartBattle = useCallback(async () => {
+    if (!bundle) return;
+    setNotice('Requesting server battle…');
+    setError(null);
+    setTimelineError(null);
+    setIsLoadingTimeline(true);
+    setSubmitting(true);
+    try {
+      const payload = await startMatch(bundle.match.id);
+      applyTimelinePayload(payload);
+      setBundle((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          match: { ...prev.match, status: 'IN_PROGRESS' }
+        };
+      });
+      setNotice('Battle starting…');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to start battle.';
+      setError(message);
+      setTimelineError(message);
+      showToast(message);
+    } finally {
+      setSubmitting(false);
+      setIsLoadingTimeline(false);
+    }
+  }, [applyTimelinePayload, bundle, showToast]);
+
   const handleSubmitMove = useCallback(async () => {
     if (!yourParticipant || matchTerminated) return;
 
@@ -509,42 +547,22 @@ const PvpMatch = () => {
       });
       setPlayerBaselineUnits(clonePlacedUnits(playerUnits));
       setHasLocalDraft(false);
-      setNotice(move.kind === 'MOVE' ? 'Move locked. Waiting for opponent…' : 'Skip locked. Waiting for opponent…');
+      setNotice(
+        isFinalizingBattle
+          ? 'Move locked. Launching battle...'
+          : move.kind === 'MOVE'
+            ? 'Move locked. Waiting for opponent...'
+            : 'Skip locked. Waiting for opponent...'
+      );
+      if (isFinalizingBattle) {
+        await handleStartBattle();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit move.');
     } finally {
       setSubmitting(false);
     }
-  }, [matchTerminated, pendingMove, playerUnits, yourParticipant]);
-
-  const handleStartBattle = useCallback(async () => {
-    if (!bundle) return;
-    setNotice('Requesting server battle…');
-    setError(null);
-    setTimelineError(null);
-    setIsLoadingTimeline(true);
-    setSubmitting(true);
-    try {
-      const payload = await startMatch(bundle.match.id);
-      applyTimelinePayload(payload);
-      setBundle((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          match: { ...prev.match, status: 'IN_PROGRESS' }
-        };
-      });
-      setNotice('Battle starting…');
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to start battle.';
-      setError(message);
-      setTimelineError(message);
-      showToast(message);
-    } finally {
-      setSubmitting(false);
-      setIsLoadingTimeline(false);
-    }
-  }, [applyTimelinePayload, bundle, showToast]);
+  }, [handleStartBattle, isFinalizingBattle, matchTerminated, pendingMove, playerUnits, yourParticipant]);
 
   const handleResetMove = useCallback(() => {
     if (matchTerminated) return;
@@ -583,6 +601,11 @@ const PvpMatch = () => {
       // Still navigate away even if completion fails, so player isn't stuck
       setTimeout(() => navigate('/pvp'), 2000);
     }
+  }, [bundle, navigate]);
+
+  const handleOpenTheater = useCallback(() => {
+    if (!bundle) return;
+    navigate(`/battle/${bundle.match.id}`);
   }, [bundle, navigate]);
 
   useEffect(() => {
@@ -639,6 +662,13 @@ const PvpMatch = () => {
     timelineIndexRef.current = 1;
     setBattleDemoState('running');
   }, [bundle, mapWinnerSideToViewer, viewerTimeline, winnerSide]);
+
+  useEffect(() => {
+    if (!bundle || bundle.match.status !== 'IN_PROGRESS') return;
+    if (navigatedToTheaterRef.current) return;
+    navigatedToTheaterRef.current = true;
+    navigate(`/battle/${bundle.match.id}`);
+  }, [bundle, navigate]);
 
   useEffect(() => {
     if (battleDemoState !== 'running' || battleTimeline.length === 0) {
@@ -711,7 +741,10 @@ const PvpMatch = () => {
     );
   }
 
-  if (loading) {
+  const unitsReady = playerUnits.length > 0 || enemyUnits.length > 0 || (bundle?.units?.length === 0);
+  const showLoadingState = loading || !catalogReady || (!unitsReady && bundle?.match?.status !== 'IN_PROGRESS');
+
+  if (showLoadingState) {
     return (
       <>
         {toast}
@@ -833,6 +866,13 @@ const PvpMatch = () => {
             >
               Back to Lobby
             </button>
+            <button
+              type="button"
+              className="prebattle-btn accent"
+              onClick={handleOpenTheater}
+            >
+              Open Battle Theater
+            </button>
           </div>
         </div>
       </>
@@ -915,7 +955,15 @@ const PvpMatch = () => {
                 onClick={handleSubmitMove}
                 disabled={!canSubmitMove}
               >
-                {submitting ? 'Submitting…' : pendingMove ? 'Confirm move' : 'Skip changes'}
+                {submitting
+                  ? 'Submitting...'
+                  : isFinalizingBattle
+                    ? pendingMove
+                      ? 'Confirm and start battle'
+                      : 'Skip and start battle'
+                    : pendingMove
+                      ? 'Confirm move'
+                      : 'Skip changes'}
               </button>
             </div>
 

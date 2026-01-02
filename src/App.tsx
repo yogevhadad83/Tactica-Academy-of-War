@@ -20,6 +20,8 @@ const Training = lazy(() => import('./pages/Training'));
 const TrainingRun = lazy(() => import('./pages/TrainingRun'));
 const PvpLobby = lazy(() => import('./pages/PvpLobby'));
 const PvpMatch = lazy(() => import('./pages/PvpMatch'));
+const BattleTheater = lazy(() => import('./pages/BattleTheater'));
+const AfterActionReport = lazy(() => import('./pages/AfterActionReport'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const RouteLoader = ({ children }: { children: React.ReactNode }) => (
@@ -192,6 +194,8 @@ function AppContent() {
                 <Route path="debug" element={<RouteLoader><DebugNetwork /></RouteLoader>} />
                 <Route path="*" element={<RouteLoader><NotFound /></RouteLoader>} />
               </Route>
+              <Route path="battle/:matchId" element={<RouteLoader><BattleTheater /></RouteLoader>} />
+              <Route path="after-action/:matchId" element={<RouteLoader><AfterActionReport /></RouteLoader>} />
               <Route path="*" element={<RouteLoader><NotFound /></RouteLoader>} />
             </Routes>
           </MultiplayerProvider>
