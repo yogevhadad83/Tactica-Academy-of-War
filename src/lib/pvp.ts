@@ -1,5 +1,6 @@
 import type { PostgrestError, RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
-import type { Database } from '../types/supabase';
+import { API_BASE_URL } from '../config/api';
+import type { Database, WinnerSide } from '../types/supabase';
 import { supabase } from './supabaseClient';
 
 type PlayerRow = {
@@ -34,6 +35,13 @@ type MatchSide = Database['public']['Enums']['match_side'];
 type MatchRow = Database['public']['Tables']['matches']['Row'];
 type RawParticipantRow = Database['public']['Tables']['match_participants']['Row'];
 type MatchUnitRow = Database['public']['Tables']['match_units']['Row'];
+
+export type MatchTimelinePayload = {
+  matchId: string;
+  winnerSide: WinnerSide | null;
+  timelineA: unknown[];
+  timelineB: unknown[];
+};
 
 const SIDE_CHALLENGER: MatchSide = 'A';
 const SIDE_DEFENDER: MatchSide = 'B';
@@ -597,17 +605,67 @@ export async function submitPreBattleMove(participantId: string, move: PreBattle
   return payload;
 }
 
-export async function startMatch(matchId: string): Promise<void> {
-  const { error } = await supabase
-    .from('matches')
-    .update({ status: 'IN_PROGRESS' })
-    .eq('id', matchId)
-    // Allow starting from PRE_BATTLE (or legacy PENDING) into active play.
-    .in('status', ['PRE_BATTLE', 'PENDING']);
+export async function runMatchOnServer(matchId: string): Promise<MatchTimelinePayload> {
+  const url = `${API_BASE_URL}/api/pvp/matches/${matchId}/run`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, { method: 'POST' });
+  } catch (err) {
+    throw new Error(err instanceof Error ? err.message : 'Failed to reach battle server.');
+  }
+
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch (err) {
+    // Non-JSON error bodies fall through to generic error handling
+  }
+
+  if (!response.ok) {
+    const message = (payload && typeof payload.error === 'string')
+      ? payload.error
+      : `Failed to start match ${matchId}`;
+    throw new Error(message);
+  }
+
+  if (!payload || payload.timelineA === undefined || payload.timelineB === undefined) {
+    throw new Error('Server did not return a match timeline.');
+  }
+
+  return {
+    matchId: payload.matchId ?? matchId,
+    winnerSide: (payload.winnerSide as WinnerSide | null) ?? null,
+    timelineA: payload.timelineA as unknown[],
+    timelineB: payload.timelineB as unknown[],
+  };
+}
+
+export async function startMatch(matchId: string): Promise<MatchTimelinePayload> {
+  return runMatchOnServer(matchId);
+}
+
+export async function getMatchTimeline(matchId: string): Promise<MatchTimelinePayload> {
+  const { data, error } = await supabase
+    .from('match_timelines')
+    .select('timeline_a, timeline_b, winner_side')
+    .eq('match_id', matchId)
+    .maybeSingle();
 
   if (error) {
     throw new Error(formatSupabaseError(error));
   }
+
+  if (!data || data.timeline_a == null || data.timeline_b == null) {
+    throw new Error('Match timeline is not available yet.');
+  }
+
+  return {
+    matchId,
+    winnerSide: (data.winner_side as WinnerSide | null) ?? null,
+    timelineA: data.timeline_a as unknown[],
+    timelineB: data.timeline_b as unknown[],
+  };
 }
 
 export async function ensureMatchPreBattle(matchId: string): Promise<boolean> {

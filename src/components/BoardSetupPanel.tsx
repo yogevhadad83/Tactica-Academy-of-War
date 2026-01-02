@@ -801,15 +801,20 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
     const enemyUsesPlanningCoords =
       props.enemyUnits.length > 0 && props.enemyUnits.every((unit) => unit.position.row >= 0 && unit.position.row < PLANNING_ROWS);
     const enemyRowOffset = enemyUsesPlanningCoords ? 0 : PLANNING_ROW_OFFSET;
+    const mirrorRow = (row: number) => PLANNING_ROWS - 1 - row;
 
     return props.enemyUnits
-      .map((u) => ({
-        ...u,
-        position: {
-          ...u.position,
-          row: u.position.row - enemyRowOffset
-        }
-      }))
+      .map((u) => {
+        const planningRow = u.position.row - enemyRowOffset;
+        return {
+          ...u,
+          team: 'enemy' as const,
+          position: {
+            ...u.position,
+            row: mirrorRow(planningRow)
+          }
+        };
+      })
       .filter(
         (u) =>
           u.position.row >= 0 &&

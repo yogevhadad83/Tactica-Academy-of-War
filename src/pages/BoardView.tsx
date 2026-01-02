@@ -686,8 +686,41 @@ const BoardView = () => {
     return '';
   })();
 
+  const hasPreviewSession = Boolean(
+    previewMatchId && previewYourRole && previewOpponentName && previewTurn
+  );
+  const previewBoardsReady = Boolean(
+    previewYourBoard &&
+    previewOpponentBoard &&
+    previewYourBoard.length > 0 &&
+    previewOpponentBoard.length > 0
+  );
+
+  if (hasPreviewSession && !previewBoardsReady) {
+    return (
+      <div className="board-view-container">
+        <div className="board-view-header">
+          <h1>🎮 Pre-Battle Preview</h1>
+          <p className="header-subtitle">Syncing boards with the server…</p>
+        </div>
+        <div className="stage-loading" role="status" aria-live="polite">
+          Loading battle boards…
+        </div>
+      </div>
+    );
+  }
+
   // Show preview phase if it's active
-  if (previewMatchId && previewYourRole && previewOpponentName && previewYourBoard && previewOpponentBoard && previewTurn) {
+  if (
+    hasPreviewSession &&
+    previewBoardsReady &&
+    previewMatchId &&
+    previewYourRole &&
+    previewOpponentName &&
+    previewYourBoard &&
+    previewOpponentBoard &&
+    previewTurn
+  ) {
     const isYourTurn = previewTurn === previewYourRole;
     return (
       <div className="board-view-container">
