@@ -2,631 +2,110 @@
 
 **Date:** 2026-01-02  
 **Repository:** yogevhadad83/Tactica-Academy-of-War  
-**Review Scope:** Full codebase analysis for dead code, duplication, improvements, and foot-guns
+**Scope:** Full codebase pass focused on dead code, duplication, low-risk improvements, and foot-guns. Existing checks run: `npm test` (fails: no tests found), `npm run lint` (42 errors, 10 warnings).
 
 ---
 
-## Executive Summary
+## Summary (most important findings)
 
-### Critical Issues Found: 5
-- **1 Critical Bug:** Conditional React hooks in `TrainingRun.tsx` (breaks React rules)
-- **5 Performance Issues:** Multiple `setState` calls in effects causing cascading renders
-- **4 Dead Code Files:** Unused pages, utilities, and assets
-- **2 Dead Engine Files:** Build artifacts committed to source control
-
-### Key Metrics
-- **Total TypeScript Files:** 69
-- **Largest File:** `useUnitLayer.ts` (1,609 lines) - potential candidate for splitting
-- **ESLint Errors:** 54 errors, 13 warnings
-- **TypeScript Compilation:** ✅ Clean (no errors)
+1. **Duplicate routing:** `/queue` redirect is declared twice in `src/App.tsx`, adding unnecessary route handling and maintenance noise.
+2. **Dead artifacts:** `src/types/index.js` and `src/types/battle.js` are compiled stubs never imported anywhere—safe to remove.
+3. **Cascading renders:** Multiple `setState` calls executed inside effects (e.g., `UserContext`, `useMatchTimeline`, `AfterActionReport`, two spots in `BoardView`) trigger lint errors and risk extra renders.
+4. **Stale subscriptions:** `useGameServer` effect omits `currentRole` and `user.id` dependencies while capturing them, risking stale listeners after reconnects or user changes.
+5. **Unused state:** `_turnNumber` state in `BoardView.tsx` is assigned but never read; leaves dead renders and lint noise.
+6. **Fast-refresh blockers:** `PlayerContext.tsx` and `UserContext.tsx` export non-component helpers in the same file as providers, tripping `react-refresh/only-export-components` and breaking hot reload guarantees.
+7. **Test gap:** `npm test` fails because no `tests/**/*.test.ts` files exist; suite is effectively empty.
 
 ---
 
-## Summary (Top Findings)
+## Quick wins (high value, low risk)
 
-1. **🔴 CRITICAL: Conditional hooks in TrainingRun.tsx** - React hooks called after early return, violating hooks rules. This can cause runtime crashes.
-
-2. **🟡 Dead code: StrategyEditor page** - Complete unused page with CSS (198 lines + CSS), not referenced in routing.
-
-3. **🟡 Dead code: transformTimelineForPerspective utility** - NO-OP function that's never imported, has unused parameter warning.
-
-4. **🟡 Performance: Multiple setState in effects** - BoardView.tsx has 5 instances of synchronous setState in useEffect, causing cascading renders.
-
-5. **🟠 Build artifacts in source** - `battleEngine.js` and `battleEngine.cjs` are build outputs but committed to repo.
-
-6. **🟠 Unused CSS file** - `archivesTheme.css` (30+ lines) not imported anywhere.
-
-7. **🟠 Unused asset** - `react.svg` in assets folder, not referenced.
-
-8. **🟠 Context naming confusion** - Both `UserContext` and `PlayerContext` exist with similar purposes, potentially confusing.
-
-9. **🟢 Massive file** - `useUnitLayer.ts` at 1,609 lines could benefit from extraction (not urgent).
-
-10. **🟢 Exhaustive deps warnings** - Several useEffect/useMemo hooks with missing or unnecessary dependencies.
+- **Remove duplicate route:** Drop one of the two `<Route path="queue" element={<Navigate to="/pvp" replace />} />` entries in `src/App.tsx`.
+- **Delete compiled stubs:** Remove `src/types/index.js` and `src/types/battle.js` (not referenced by any import).
+- **Prune unused state:** Delete `_turnNumber` state in `src/pages/BoardView.tsx` or wire it to UI if needed.
+- **Split helper exports:** Move helper functions (e.g., `usePlayerContext`, `createDefaultProfile`) into separate files or export from index barrels to satisfy `react-refresh/only-export-components`.
+- **Add missing deps:** Include `currentRole` and `user.id` in the `useEffect` dependencies around the websocket wiring in `src/hooks/useGameServer.ts` to avoid stale closures.
 
 ---
 
-## 1. Quick Wins (Highest Value / Lowest Risk)
+## Dead code candidates
 
-### Dead Code Removal (Zero Risk)
+| File | Why likely unused | How to confirm |
+| --- | --- | --- |
+| `src/types/index.js` | Compiled stub; `rg "types/index.js"` returns no imports. TS version exists and is used instead. | Remove file and run `npm run lint && npm run build`. |
+| `src/types/battle.js` | Compiled stub; `rg "types/battle.js"` returns no imports. TS version exists and is used instead. | Remove file and run `npm run lint && npm run build`. |
+| `_turnNumber` state in `src/pages/BoardView.tsx` | Declared and set but never read; eslint reports unused variable. | Remove state hook; verify board view still renders. |
 
-#### A. Remove unused StrategyEditor page
-**Files:**
-- `src/pages/StrategyEditor.tsx` (198 lines)
-- `src/pages/StrategyEditor.css`
+---
 
-**Why unused:**
-```bash
-$ grep -r "StrategyEditor" src/App.tsx src/pages/
-# No route defined
-# Only self-reference in StrategyEditor.tsx itself
+## Duplication candidates
+
+- **Queue redirect defined twice:** `src/App.tsx` has two identical `/queue` redirects; keep one under the root layout.
+- **Player state split between contexts:** `UserContext` (localStorage-driven demo profiles) and `PlayerContext`/`usePlayer` (Supabase-backed) both expose `army/placements`, inviting divergence. Consider consolidating or making the boundary explicit (e.g., demo vs. authenticated) in one provider.
+
+---
+
+## Risky / bug-prone spots
+
+- **setState inside effects (cascading renders):**
+  - `src/context/UserContext.tsx` sets currentUser inside an effect that also mutates profiles.
+  - `src/hooks/useMatchTimeline.ts` calls `fetchTimeline()` directly in `useEffect` (lint flags synchronous state updates).
+  - `src/pages/AfterActionReport.tsx` clears `bundleError` inside effect each run.
+  - `src/pages/BoardView.tsx` sets simulation units and placements inside effects; both flagged by lint.
+- **Missing deps in effect:** `src/hooks/useGameServer.ts` websocket effect captures `currentRole`/`user.id` but leaves them out of the dependency array; can leave stale subscriptions after reconnect or login change.
+- **Fast-refresh blockers:** `react-refresh/only-export-components` errors in `PlayerContext.tsx` and `UserContext.tsx` mean hot reload reliability is reduced.
+- **Empty test suite:** `npm test` fails with “Could not find tests/**/*.test.ts”; regressions will slip through.
+
+---
+
+## Patch-style suggestions (minimal diffs)
+
+**1) Remove duplicate queue route**
+```diff
+// src/App.tsx
+-              <Route path="queue" element={<Navigate to="/pvp" replace />} />
+               <Route path="/" element={<Layout />}>
+                 <Route index element={<Navigate to="/academy" replace />} />
+...
 ```
 
-**Impact:** -200 lines, cleaner codebase
-
----
-
-#### B. Remove unused transformTimelineForPerspective
-**File:** `src/utils/transformTimelineForPerspective.ts` (9 lines)
-
-**Content:**
-```typescript
-// NO-OP: Server now performs all mirroring. Keep this API to avoid import breakage.
-export function transformTimelineForPerspective(
-  timeline: BattleTickResult[],
-  _perspective: MatchPerspective | null
-): BattleTickResult[] {
-  return timeline;
-}
+**2) Drop unused turn state**
+```diff
+// src/pages/BoardView.tsx
+-  const [_turnNumber, setTurnNumber] = useState(1);
+   const [startingTeam, setStartingTeam] = useState<Team | null>(null);
 ```
 
-**Why unused:**
-```bash
-$ grep -r "transformTimelineForPerspective" src/ --include="*.tsx" --include="*.ts" | grep import
-# Returns: 0 imports
+**3) Delete compiled stubs**
+```diff
+- src/types/index.js   // remove file
+- src/types/battle.js  // remove file
 ```
 
-**Linter issue:** `_perspective` parameter triggers unused-vars warning
-
-**Impact:** Removes dead code and fixes eslint warning
-
----
-
-#### C. Remove unused asset
-**File:** `src/assets/react.svg`
-
-**Why unused:**
-```bash
-$ grep -r "react.svg" src/
-# No references found
+**4) Fix stale websocket dependencies**
+```diff
+// src/hooks/useGameServer.ts (effect around ws lifecycle)
+-  useEffect(() => {
++  useEffect(() => {
+     // ...
+-  }, [supabase, setLastResult, setLastMatchSummary, setLastMatchDetail]);
++  }, [supabase, setLastResult, setLastMatchSummary, setLastMatchDetail, currentRole, user?.id]);
 ```
 
-**Impact:** -1 asset file
-
----
-
-#### D. Remove unused CSS
-**File:** `src/styles/archivesTheme.css`
-
-**Why unused:**
-```bash
-$ grep -r "archivesTheme" src/
-# No imports found
-```
-
-**Impact:** -30+ lines of unused CSS variables
-
----
-
-### Build Cleanup (Low Risk)
-
-#### E. Add build artifacts to .gitignore
-**Files:**
-- `src/engine/battleEngine.js` (build artifact)
-- `src/engine/battleEngine.cjs` (build artifact)
-
-**Why:** These are generated by `scripts/build-engine.js` from `battleEngine.ts`
-
-**Action:** Add to `.gitignore`:
-```gitignore
-# Build artifacts
-src/engine/battleEngine.js
-src/engine/battleEngine.cjs
-dist/
-```
-
-**Impact:** Prevents merge conflicts on build outputs
-
----
-
-#### F. Remove unused demoBattle.ts
-**File:** `src/engine/demoBattle.ts`
-
-**Why unused:**
-```bash
-$ grep -r "demoBattle" src/ --include="*.ts" --include="*.tsx" | grep import
-# No imports found
-```
-
-**Impact:** Removes dead engine code
-
----
-
-## 2. Dead Code Candidates
-
-### Confirmed Dead Code
-
-| File | Lines | Reason | How to Confirm |
-|------|-------|--------|----------------|
-| `src/pages/StrategyEditor.tsx` | 198 | Not in routes, no imports | `grep -r "StrategyEditor" src/App.tsx` |
-| `src/pages/StrategyEditor.css` | ~50 | Companion to unused page | Imported only by dead page |
-| `src/utils/transformTimelineForPerspective.ts` | 9 | No imports, NO-OP function | `grep -r "transformTimelineForPerspective.*import" src/` |
-| `src/assets/react.svg` | N/A | No references in code | `grep -r "react.svg" src/` |
-| `src/styles/archivesTheme.css` | ~30 | No imports | `grep -r "archivesTheme" src/` |
-| `src/engine/demoBattle.ts` | ? | No imports | `grep -r "demoBattle.*import" src/` |
-| `src/engine/battleEngine.js` | N/A | Build artifact | Generated by build-engine.js |
-| `src/engine/battleEngine.cjs` | N/A | Build artifact | Generated by build-engine.js |
-
-### Potentially Unused Scripts
-
-| File | Used In | Notes |
-|------|---------|-------|
-| `scripts/install-hooks.sh` | Not in package.json | Manual git hooks setup, kept for dev use |
-| `scripts/pre-push` | Installed by install-hooks.sh | TypeScript check hook, optional |
-
-**Recommendation:** Keep the git hook scripts - they're optional dev tools and don't hurt.
-
----
-
-## 3. Duplication Candidates
-
-### Context Confusion (Minor)
-
-**Issue:** Both `UserContext` and `PlayerContext` exist:
-- **UserContext** (`src/context/UserContext.tsx`): LocalStorage-based player profiles (legacy)
-- **PlayerContext** (`src/context/PlayerContext.tsx`): Supabase-based player data (current)
-
-**Why confusing:**
-- Similar names but different purposes
-- Both used in same codebase (8 vs 6 imports)
-
-**Recommendation:** Rename for clarity (but NOT now - risky refactor):
-- `UserContext` → `LocalProfileContext` or `LegacyUserContext`
-- Keep as-is for now since both are actively used
-
-**Impact:** Low priority, naming only
-
----
-
-### No Significant Code Duplication
-
-**Finding:** No repeated logic blocks or copy-pasted patterns detected.
-- Utilities are well-factored (single responsibility)
-- Components don't duplicate each other
-- Constants are centralized in `/constants` and `/data`
-
----
-
-## 4. Risky/Bug-Prone Spots
-
-### 🔴 CRITICAL: Conditional Hooks in TrainingRun.tsx
-
-**File:** `src/pages/TrainingRun.tsx`  
-**Lines:** 155-166 (early return), 168-358 (hooks called after return)
-
-**Issue:**
-```typescript
-// Line 155-166: Early return
-if (!module) {
-  return (
-    <div className="training-run-page">
-      <div className="training-run-card">
-        <h1 className="training-run-title">Drill not found</h1>
-        <Link className="training-run-link" to="/training">
-          Back to Training
-        </Link>
-      </div>
-    </div>
-  );
-}
-
-// Line 168+: Hooks called AFTER the return!!!
-const resetPlayback = useCallback(() => { /* ... */ }, []);
-const startDrill = useCallback(() => { /* ... */ }, [module, ...]);
-// ... more hooks
-```
-
-**Why dangerous:**
-- Violates React's "Rules of Hooks"
-- Hooks must be called in the same order every render
-- Can cause crashes, stale closures, memory leaks
-
-**Fix:**
-```typescript
-const TrainingRun = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const userIdOrNull = user?.id ?? null;
-  const { player, setPlayerCredits, refresh: refreshPlayer } = usePlayerContext();
-  
-  // ... ALL state and hooks first
-  
-  const resetPlayback = useCallback(() => { /* ... */ }, []);
-  const startDrill = useCallback(() => { /* ... */ }, [module, ...]);
-  // ... all other hooks
-  
-  // THEN the early return
-  if (!module) {
-    return (
-      <div className="training-run-page">
-        {/* ... */}
-      </div>
-    );
-  }
-  
-  // ... rest of render
-};
-```
-
-**Impact:** HIGH - Fixes critical React violation
-
----
-
-### 🟡 Performance: Cascading Renders in BoardView.tsx
-
-**File:** `src/pages/BoardView.tsx`  
-**Lines:** 195, 201, 227, 309, 383
-
-**Issue:** Multiple `setState` calls directly in `useEffect` bodies (5 instances)
-
-**Example:**
-```typescript
-// Line 195
-useEffect(() => {
-  setPlacements(currentUser?.boardPlacements ?? {});
-}, [currentUserId]);
-
-// Line 201
-useEffect(() => {
-  if (!armyInstances.length) return;
-  const validIds = new Set(armyInstances.map((unit) => unit.instanceId));
-  setPlacements((prev) => { /* ... */ });
-}, [armyInstances]);
-```
-
-**Why problematic:**
-- Causes cascading renders (effect → setState → re-render → effect → ...)
-- Hurts performance
-- React docs recommend deriving state or using refs instead
-
-**Fix (example for line 195):**
-```typescript
-// Option 1: Derive state
-const placements = currentUser?.boardPlacements ?? {};
-
-// Option 2: Use useLayoutEffect if synchronization is needed
-useLayoutEffect(() => {
-  setPlacements(currentUser?.boardPlacements ?? {});
-}, [currentUser?.boardPlacements]); // Also fix dependency
-```
-
-**Impact:** MEDIUM - Improves performance, fixes lint warnings
-
----
-
-### 🟡 Exhaustive Dependencies Issues
-
-**Files:**
-- `src/pages/BoardView.tsx:196` - Missing `currentUser?.boardPlacements` dependency
-- `src/pages/PvpMatch.tsx:367` - Unnecessary `getMatchTimeline` dependency
-- `src/pages/StrategyEditor.tsx:31` - `strategyBook` should be in useMemo
-- `src/pages/TrainingRun.tsx:59` - Unnecessary `progressVersion` dependency
-- `src/pages/TrainingRun.tsx:99` - Missing `module` dependency
-
-**Impact:** LOW-MEDIUM - Can cause stale closures or unnecessary re-renders
-
----
-
-## 5. Obvious Improvements (Small/Low-Risk)
-
-### Naming & Organization
-
-#### A. Large File: useUnitLayer.ts (1,609 lines)
-
-**Finding:** Single file with 293 constants, multiple concerns:
-- Model loading
-- Animation state machine
-- HP bar rendering
-- Arrow projectiles
-- Canvas drawing utilities
-
-**Recommendation (future):** Extract into modules:
-```
-components/units/
-  ├── useUnitLayer.ts (main hook, ~300 lines)
-  ├── modelLoading.ts (GLTFLoader, asset caching)
-  ├── animationController.ts (animation state machine)
-  ├── hpBarRenderer.ts (canvas HP bars)
-  ├── projectiles.ts (arrow animations)
-  └── constants.ts (all constants)
-```
-
-**Impact:** FUTURE - Not urgent, but would improve maintainability
-
----
-
-#### B. Missing Types
-
-**Finding:** TypeScript compilation is clean! No obvious missing types.
-
----
-
-#### C. Error Handling
-
-**Finding:** Error handling is generally good:
-- Try-catch blocks in async operations
-- Error states in contexts
-- Supabase errors are caught and logged
-
-**One improvement:**
-```typescript
-// src/context/UserContext.tsx:68-74
-try {
-  return JSON.parse(raw) as Record<string, PlayerProfile>;
-} catch (error) {
-  console.warn('Failed to parse stored profiles, resetting.', error);
-  return {};
-}
-```
-
-Could also clear the corrupt localStorage item:
-```typescript
-} catch (error) {
-  console.warn('Failed to parse stored profiles, resetting.', error);
-  window.localStorage.removeItem(PLAYER_PROFILES_KEY); // Clear corrupt data
-  return {};
-}
-```
-
-**Impact:** LOW - Minor improvement
-
----
-
-### Performance
-
-**No obvious performance issues** beyond the `setState` in effects mentioned above.
-
-**Memoization is appropriate:**
-- Heavy computations are memoized
-- Components use lazy loading
-- No obvious unnecessary re-renders (except the setState issues)
-
----
-
-### Accessibility
-
-**Finding:** Basic accessibility is present:
-- `aria-live="polite"` on loading states
-- Semantic HTML in most places
-
-**Minor improvements:**
-- Some buttons lack `aria-label` (low priority)
-- Focus management could be improved (low priority)
-
----
-
-## 6. Detailed Patches for Top Issues
-
-### Patch 1: Fix Conditional Hooks in TrainingRun.tsx
-
-**Before:**
-```typescript
-const TrainingRun = () => {
-  // ... params, auth, player hooks
-  
-  // ... some state and refs
-  
-  if (!module) {
-    return <div>Drill not found</div>;
-  }
-  
-  // 🔴 BUG: Hooks after conditional return!
-  const resetPlayback = useCallback(() => { /* ... */ }, []);
-  const startDrill = useCallback(() => { /* ... */ }, []);
-  // ... more hooks
-```
-
-**After:**
-```typescript
-const TrainingRun = () => {
-  // ... params, auth, player hooks
-  
-  // ... ALL state and refs
-  
-  // ✅ All hooks before any conditional returns
-  const resetPlayback = useCallback(() => {
-    if (!module) return; // Guard inside hook if needed
-    // ... hook body
-  }, [module /* ... */]);
-  
-  const startDrill = useCallback(() => {
-    if (!module) return; // Guard inside hook
-    // ... hook body
-  }, [module, /* ... */]);
-  
-  // ... all other hooks
-  
-  // NOW safe to return early
-  if (!module) {
-    return <div>Drill not found</div>;
-  }
-  
-  // ... rest of component
-```
-
-**Lines to change:** Move lines 168-358 to BEFORE line 155
-
----
-
-### Patch 2: Fix setState in Effect (BoardView.tsx:195)
-
-**Before:**
-```typescript
-useEffect(() => {
-  setPlacements(currentUser?.boardPlacements ?? {});
-}, [currentUserId]);
-```
-
-**After:**
-```typescript
-useEffect(() => {
-  setPlacements(currentUser?.boardPlacements ?? {});
-}, [currentUser?.boardPlacements]); // ✅ Fixed dependency
-```
-
-**Or better (derive state):**
-```typescript
-// Remove the effect entirely, derive from currentUser
-const placements = useMemo(
-  () => currentUser?.boardPlacements ?? {},
-  [currentUser?.boardPlacements]
-);
+**5) Separate provider from helpers (fast-refresh)**
+```diff
+// Move helper exports into their own module
+// src/context/UserContext.helpers.ts
+export const createDefaultProfile = (...) => { ... };
+
+// src/context/UserContext.tsx
+-export const createDefaultProfile = ...
+ export const UserProvider = ...
 ```
 
 ---
 
-### Patch 3: Remove Dead transformTimelineForPerspective
+## Notes on checks
 
-**Before:**
-```typescript
-// src/utils/transformTimelineForPerspective.ts
-import type { BattleTickResult } from '../engine/battleEngine';
-export type MatchPerspective = 'A' | 'B';
-export function transformTimelineForPerspective(
-  timeline: BattleTickResult[],
-  _perspective: MatchPerspective | null
-): BattleTickResult[] {
-  return timeline;
-}
-```
-
-**After:**
-```bash
-# Delete the file
-rm src/utils/transformTimelineForPerspective.ts
-```
-
-**Impact:** -9 lines, -1 eslint warning
-
----
-
-### Patch 4: Update .gitignore
-
-**Before:**
-```gitignore
-# (existing .gitignore)
-```
-
-**After:**
-```gitignore
-# (existing .gitignore)
-
-# Build artifacts
-src/engine/battleEngine.js
-src/engine/battleEngine.cjs
-dist/
-```
-
-Then remove from git:
-```bash
-git rm --cached src/engine/battleEngine.js src/engine/battleEngine.cjs
-```
-
----
-
-### Patch 5: Delete StrategyEditor Page
-
-**Before:**
-```
-src/pages/StrategyEditor.tsx (198 lines)
-src/pages/StrategyEditor.css (~50 lines)
-```
-
-**After:**
-```bash
-rm src/pages/StrategyEditor.tsx
-rm src/pages/StrategyEditor.css
-```
-
-**Impact:** -248 lines
-
----
-
-## Conclusion
-
-### Priority Actions
-
-1. **🔴 CRITICAL (Do Now):** Fix conditional hooks in TrainingRun.tsx
-2. **🟡 HIGH (This Sprint):** Remove dead code files (5 files, ~300 lines)
-3. **🟡 HIGH (This Sprint):** Fix setState-in-effect issues in BoardView.tsx
-4. **🟠 MEDIUM (Next Sprint):** Fix exhaustive-deps warnings
-5. **🟢 LOW (Future):** Consider splitting useUnitLayer.ts
-
-### Overall Code Quality: **B+**
-
-**Strengths:**
-- TypeScript typing is excellent (no compilation errors)
-- No major duplication
-- Good separation of concerns
-- Proper use of hooks in most places
-- Clean build setup
-
-**Weaknesses:**
-- One critical bug (conditional hooks)
-- Some dead code accumulation
-- Performance issues with setState in effects
-- Very large files in some areas
-
-### Estimated Effort
-
-- **Critical fixes:** 2-3 hours
-- **Dead code removal:** 30 minutes
-- **Performance fixes:** 2-3 hours
-- **Exhaustive deps:** 1-2 hours
-
-**Total:** 1 day of focused work
-
----
-
-## Appendix: Files Analyzed
-
-### Pages (16 files)
-- Academy.tsx, AfterActionReport.tsx, ArmyBuilder.tsx, BattleTheater.tsx
-- BoardView.tsx, Dashboard.tsx, DebugNetwork.tsx, Home.tsx
-- Login.tsx, NotFound.tsx, PvpLobby.tsx, PvpMatch.tsx
-- Signup.tsx, StrategyEditor.tsx ⚠️, Training.tsx, TrainingRun.tsx ⚠️, WarRoom.tsx
-
-### Components (11 files)
-- Layout, ProtectedRoute, BattlePreview, BattleResultOverlay
-- BoardSetupPanel, ThreeBattleStage, UnitLogicPanel, UnitPreviewCanvas
-- createTacticalBoard, ui/* (ArchiveCard, RuleDivider, StampButton)
-- units/useUnitLayer ⚠️
-
-### Hooks (7 files)
-- useFullscreen, useGameServer, useMatchTimeline, usePlayer
-- usePlayerArmy, usePlayerInventory, useUnitCatalog
-
-### Utils (7 files)
-- credits, placementToArmyConfig, trainingProgress, unitTypeIds
-- validatePlacementsInBounds, walletSync
-- transformTimelineForPerspective ⚠️
-
-### Context (5 files)
-- AudioContext, AuthContext, MultiplayerContext, PlayerContext, UserContext
-
-### Engine (6 files)
-- attackResolution, battleEngine.ts, battleEngine.js ⚠️, battleEngine.cjs ⚠️
-- demoBattle ⚠️, runTrainingBattle
-
-⚠️ = Issue found
+- `npm test` → fails: `Could not find '/tests/**/*.test.ts'`. No tests present.
+- `npm run lint` → 42 errors, 10 warnings. Main categories: setState in effects, fast-refresh rule violations, missing effect deps, unused variables, `any`/unused catch params.
