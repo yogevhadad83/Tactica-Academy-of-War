@@ -1,0 +1,32 @@
+:root {
+  /* Archives-inspired neutral surfaces */
+  --surface: #f8fafc;
+  --surface-2: #eef2ff;
+  --surface-low: #f1f5f9;
+  --rule: #d7dce3;
+
+  /* Typography */
+  --ink: #0f172a;
+  --ink-muted: #475569;
+  --tactica-fg: #0f172a;
+
+  /* Accents */
+  --accent-seal: #4338ca;
+  --accent-brass: #d97706;
+
+  /* Buttons & stamps */
+  --stamp-bg: linear-gradient(135deg, #4338ca 0%, #312e81 100%);
+  --stamp-hover: #4f46e5;
+  --stamp-text: #f8fafc;
+
+  /* Cards & surfaces */
+  --archive-card-bg: #ffffff;
+  --archive-card-border: #e2e8f0;
+  --archive-card-hover: #f1f5f9;
+
+  /* Dividers & shadows */
+  --divider-color: rgba(15, 23, 42, 0.12);
+  --divider-accent: #d97706;
+  --shadow: rgba(15, 23, 42, 0.08);
+  --shadow-strong: rgba(15, 23, 42, 0.16);
+}
