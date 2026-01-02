@@ -96,7 +96,7 @@ const TrainingRun = () => {
     );
     setRepositionsRemaining(module.allowedEdits.maxRepositions);
     setBehaviorChangesRemaining(module.allowedEdits.maxBehaviorChanges);
-  }, [module?.id]);
+  }, [module]);
 
   const previewUnits = useMemo(() => {
     if (!module) return [] as PlacedUnit[];
@@ -151,19 +151,6 @@ const TrainingRun = () => {
   useEffect(() => {
     setConfigError(previewValidation.ok ? null : previewValidation.message);
   }, [previewValidation]);
-
-  if (!module) {
-    return (
-      <div className="training-run-page">
-        <div className="training-run-card">
-          <h1 className="training-run-title">Drill not found</h1>
-          <Link className="training-run-link" to="/training">
-            Back to Training
-          </Link>
-        </div>
-      </div>
-    );
-  }
 
   const resetPlayback = useCallback(() => {
     if (timelineTimeoutRef.current !== null) {
@@ -362,6 +349,20 @@ const TrainingRun = () => {
     }
     navigate(`/training/${nextIncompleteModule.id}`);
   }, [navigate, nextIncompleteModule]);
+
+  // Early return check AFTER all hooks (React hooks rules)
+  if (!module) {
+    return (
+      <div className="training-run-page">
+        <div className="training-run-card">
+          <h1 className="training-run-title">Drill not found</h1>
+          <Link className="training-run-link" to="/training">
+            Back to Training
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="training-run-page">

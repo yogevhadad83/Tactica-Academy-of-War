@@ -364,7 +364,8 @@ const PvpMatch = () => {
     return () => {
       cancelled = true;
     };
-  }, [applyTimelinePayload, bundle, getMatchTimeline, isLoadingTimeline, matchId, showToast, timelineA, timelineB]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- getMatchTimeline is a stable import
+  }, [applyTimelinePayload, bundle, isLoadingTimeline, matchId, showToast, timelineA, timelineB]);
 
   // If the match is already in progress when we load, render battle in-place.
 

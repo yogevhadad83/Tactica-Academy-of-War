@@ -191,13 +191,16 @@ const BoardView = () => {
     previousBattleStateRef.current = battleState;
   }, [battleState, restoreUnitsToFullHp]);
 
+  // Sync placements from user profile
   useEffect(() => {
     setPlacements(currentUser?.boardPlacements ?? {});
-  }, [currentUserId]);
+  }, [currentUser?.boardPlacements]);
 
+  // Clean up placements for units that no longer exist in army
   useEffect(() => {
     if (!armyInstances.length) return;
     const validIds = new Set(armyInstances.map((unit) => unit.instanceId));
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncing external state (army changes)
     setPlacements((prev) => {
       let changed = false;
       const next = { ...prev };
@@ -222,8 +225,10 @@ const BoardView = () => {
     return () => window.clearTimeout(timeout);
   }, [supplyError]);
 
+  // Auto-clear supply error when supply becomes valid
   useEffect(() => {
     if (totalSupplyUsed < MAX_SUPPLY) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Derived state pattern (clearing error)
       setSupplyError(null);
     }
   }, [totalSupplyUsed]);
@@ -305,7 +310,9 @@ const BoardView = () => {
     []
   );
 
+  // Clean up placements outside of valid planning bounds
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncing with bounds changes
     setPlacements((prev) => {
       let changed = false;
       const next = { ...prev };
@@ -359,6 +366,7 @@ const BoardView = () => {
 
   useEffect(() => () => clearCountdownTimers(), [clearCountdownTimers]);
 
+  // Process multiplayer battle results from server
   useEffect(() => {
     if (!multiplayerResult) {
       return;
@@ -380,6 +388,7 @@ const BoardView = () => {
     const timeline = multiplayerResult.timeline ?? [];
     const winnerFromServer = mapServerWinnerToTeam(multiplayerResult.winner, roleKey);
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Syncing external system (multiplayer server)
     setPendingWinner(winnerFromServer);
     setBattleTimeline(timeline);
     setStartingTeam(deriveStartingTeam(timeline[0]));

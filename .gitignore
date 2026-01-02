@@ -15,6 +15,10 @@ dist-ssr
 # Compiled TypeScript files in shared directory
 shared/*.js
 
+# Build artifacts from engine
+src/engine/battleEngine.js
+src/engine/battleEngine.cjs
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
