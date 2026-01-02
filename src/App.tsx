@@ -41,11 +41,30 @@ function AppContent() {
   const [showTitle, setShowTitle] = useState(true);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const { audioRef, isMuted } = useAudio();
+  const INTRO_SEEN_KEY = 'tactica:introSeen';
+
+  const markIntroSeen = () => {
+    try {
+      localStorage.setItem(INTRO_SEEN_KEY, '1');
+    } catch (err) {
+      console.warn('Unable to persist intro state', err);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const isDebugFromEnv = import.meta.env.VITE_FORCE_DEBUG === 'true';
     const isDebug = params.has('debug') || isDebugFromEnv;
+    const isDeepLink = window.location.pathname !== '/';
+
+    const hasSeenIntro = (() => {
+      try {
+        return localStorage.getItem(INTRO_SEEN_KEY) === '1';
+      } catch (err) {
+        console.warn('Unable to read intro state', err);
+        return false;
+      }
+    })();
 
     // If debug is forced via env, ensure the URL contains ?debug
     // (Vite's `--open` may not preserve query strings reliably across platforms.)
@@ -55,9 +74,13 @@ function AppContent() {
       window.history.replaceState(null, '', `${window.location.pathname}${nextSearch}${window.location.hash}`);
     }
 
-    // If debug is enabled, skip intro entirely
-    if (isDebug) {
+    // If debug is enabled or user already saw/skipped the intro, skip intro entirely
+    if (isDebug || hasSeenIntro || isDeepLink) {
       setShowIntro(false);
+      setShowTitle(false);
+      if (!hasSeenIntro) {
+        markIntroSeen();
+      }
     }
 
     const v = videoRef.current;
@@ -83,6 +106,7 @@ function AppContent() {
       });
     }
     setShowTitle(false);
+    markIntroSeen();
     
     // Start playing video
     setTimeout(() => {
@@ -156,7 +180,10 @@ function AppContent() {
                 objectFit: 'contain'
               }}
               controls={false}
-              onEnded={() => setShowIntro(false)}
+              onEnded={() => {
+                setShowIntro(false);
+                markIntroSeen();
+              }}
             >
               <source src="/video/hb.mp4" type="video/mp4" />
               Your browser does not support the video tag.
