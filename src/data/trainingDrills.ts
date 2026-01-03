@@ -48,72 +48,33 @@ function makePlacedUnit(params: {
   } as PlacedUnit;
 }
 
+const ACTIVE_COL = 2;
+
 export const trainingDrills: TrainingModule[] = [
   {
-    id: 'drill-01-lane-discipline',
-    title: 'Lane Discipline',
-    description: 'Practice Recruit lane behaviors to find a clean breach path.',
+    id: 'drill-01-tempo-trap',
+    title: 'Drill 01 — Tempo Trap (Pull Back to Win)',
+    description: 'A single-lane duel: pull back one tile, let the enemy lunge first, then counter.',
     instructorBrief:
-      'Cadet: Your recruits will follow their lane logic exactly. Your task is to adjust up to 3 recruits (position and behavior) to exploit a weak lane and breach the enemy back row.\n\nTip: Runner favors the lane with fewer enemies. Aggressive favors the lane with more enemies. Moderate follows the line.',
-    rewardCredits: 75,
-    playerGoesFirst: true,
-    // Global board is 6 columns × 12 rows (enemy rows 0–5, player rows 6–11).
-    // This drill uses a smaller active area (2×3 per side) inside the global board.
+      'Cadet: This is a tempo drill. The opponent strikes first. You get ONE move before battle: reposition your recruit on the highlighted tile behind the front. Do not change behaviors. Do not add or remove units. After you move, start the battle and let the enemy step into your swing.\n\nRules: Bot acts first. Only the single highlighted column is active. One action per unit per turn (move OR attack). Victory when the enemy Recruit falls. Defeat if your Recruit dies first.',
+    rewardCredits: 25,
+    playerGoesFirst: false,
+    // Active area: 1 column, 2 rows per side, centered so front tiles touch.
     playArea: {
-      cols: 3,
+      cols: 1,
       rowsPerSide: 2,
-      colStart: 1,
+      colStart: ACTIVE_COL,
       playerRowStart: 6,
-      enemyRowStart: 0,
+      enemyRowStart: 4,
     },
     playerStartBoard: [
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-r1', team: 'player', row: 7, col: 1, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-r2', team: 'player', row: 7, col: 2, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-r3', team: 'player', row: 7, col: 3, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-r4', team: 'player', row: 6, col: 2, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-r5', team: 'player', row: 6, col: 3, selectedBehaviors: ['Moderate'] })
+      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-recruit', team: 'player', row: 6, col: ACTIVE_COL })
     ],
     opponentStartBoard: [
-      // Enemy clumps mid lanes, leaving a side lane more exploitable.
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'e-r1', team: 'enemy', row: 0, col: 2, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'e-r2', team: 'enemy', row: 1, col: 2, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'e-r3', team: 'enemy', row: 1, col: 3, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'e-r4', team: 'enemy', row: 0, col: 3, selectedBehaviors: ['Moderate'] })
+      makePlacedUnit({ unitId: 'recruit', instanceId: 'e-recruit', team: 'enemy', row: 5, col: ACTIVE_COL })
     ],
     allowedEdits: {
-      maxRepositions: 3,
-      maxBehaviorChanges: 3,
-      behaviorChangeUnitIds: ['recruit']
-    },
-    successCondition: 'winMatch'
-  },
-  {
-    id: 'drill-02-supply-math',
-    title: 'Supply Math',
-    description: 'Reposition a mixed squad to avoid bad trades and secure a breach.',
-    instructorBrief:
-      'Cadet: This drill is about formation and lane commitment with a mixed squad under a 20-supply mindset. You may reposition up to 5 units, but you may not change behaviors.\n\nTip: Avoid feeding single units into stacked enemy lanes; coordinate your frontline and protect your archer.',
-    rewardCredits: 100,
-    playerGoesFirst: true,
-    playerStartBoard: [
-      // Mixed squad (no behavior edits required for MVP)
-      makePlacedUnit({ unitId: 'knight', instanceId: 'p-k1', team: 'player', row: 7, col: 4 }),
-      makePlacedUnit({ unitId: 'knight', instanceId: 'p-k2', team: 'player', row: 7, col: 5 }),
-      makePlacedUnit({ unitId: 'archer', instanceId: 'p-a1', team: 'player', row: 6, col: 5, selectedBehaviors: ['Target: Weakest in range', 'Priority: Shooting'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-r1', team: 'player', row: 6, col: 3, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'p-r2', team: 'player', row: 6, col: 4, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'zombie', instanceId: 'p-z1', team: 'player', row: 7, col: 2, selectedBehaviors: ['Sidestep left first'] })
-    ],
-    opponentStartBoard: [
-      // Enemy punishes sloppy center pushes; player should re-lane and protect backline.
-      makePlacedUnit({ unitId: 'knight', instanceId: 'e-k1', team: 'enemy', row: 1, col: 5 }),
-      makePlacedUnit({ unitId: 'beast', instanceId: 'e-b1', team: 'enemy', row: 0, col: 5 }),
-      makePlacedUnit({ unitId: 'archer', instanceId: 'e-a1', team: 'enemy', row: 0, col: 4, selectedBehaviors: ['Target: Strongest in range', 'Priority: Shooting'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'e-r1', team: 'enemy', row: 2, col: 4, selectedBehaviors: ['Moderate'] }),
-      makePlacedUnit({ unitId: 'recruit', instanceId: 'e-r2', team: 'enemy', row: 2, col: 5, selectedBehaviors: ['Moderate'] })
-    ],
-    allowedEdits: {
-      maxRepositions: 5,
+      maxRepositions: 1,
       maxBehaviorChanges: 0,
       behaviorChangeUnitIds: []
     },
