@@ -1,0 +1,20 @@
+:root {
+  --surface: #f8f1e4;
+  --surface-2: #f1e6d7;
+  --surface-low: #fdf8f0;
+  --rule: #d9c8b4;
+  --ink: #2a241c;
+  --ink-muted: #766b5f;
+  --accent-seal: #7a3b2e;
+  --accent-brass: #b8893b;
+  --archive-card-bg: #fbf6ed;
+  --archive-card-border: #e2d7c7;
+  --archive-card-hover: #f3e9d9;
+  --shadow: rgba(42, 36, 28, 0.12);
+  --shadow-strong: rgba(42, 36, 28, 0.2);
+  --divider-color: #e6ddcf;
+  --divider-accent: #c8a46b;
+  --stamp-bg: #8b4a3a;
+  --stamp-text: #fdf7ef;
+  --stamp-hover: #9c5948;
+}
