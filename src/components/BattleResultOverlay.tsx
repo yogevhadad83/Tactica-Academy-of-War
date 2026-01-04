@@ -11,6 +11,8 @@ interface BattleResultOverlayProps {
   onBack: () => void;
   onReplay?: () => void;
   forceFocus?: boolean;
+  showAfterAction?: boolean;
+  backLabel?: string;
 }
 
 const focusableSelector = [
@@ -38,6 +40,8 @@ export const BattleResultOverlay = ({
   onBack,
   onReplay,
   forceFocus = true,
+  showAfterAction = true,
+  backLabel = 'Back to Academy',
 }: BattleResultOverlayProps) => {
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const lastFocusedRef = useRef<HTMLElement | null>(null);
@@ -105,11 +109,13 @@ export const BattleResultOverlay = ({
         )}
 
         <div className="overlay-actions">
-          <button type="button" className="cta primary" onClick={onAfterAction} autoFocus>
-            After-Action Report
-          </button>
+          {showAfterAction && (
+            <button type="button" className="cta primary" onClick={onAfterAction} autoFocus>
+              After-Action Report
+            </button>
+          )}
           <button type="button" className="cta secondary" onClick={onBack}>
-            Back to Academy
+            {backLabel}
           </button>
           {onReplay && (
             <button type="button" className="cta ghost" onClick={onReplay}>

@@ -556,9 +556,23 @@ const ArmyBuilder = () => {
     }
   };
 
-  const getRecruitState = () => {
+  const getLockedUnits = (): Set<string> => {
+    // Units locked at the Quadmaster until player reaches required rank
+    const lockedUnits = new Set(['mage', 'giant', 'zombie']);
+    return lockedUnits;
+  };
+
+  const isUnitLocked = (unitId: string): boolean => {
+    const locked = getLockedUnits();
+    return locked.has(unitId.toLowerCase());
+  };
+
+  const getRecruitState = (unitId?: string) => {
     if (!canModify) {
       return { disabled: true, reason: 'Login to add units' };
+    }
+    if (unitId && isUnitLocked(unitId)) {
+      return { disabled: true, reason: 'Unlock by rank' };
     }
     if (unitLimitReached) {
       return { disabled: true, reason: 'Unit cap reached' };
@@ -749,7 +763,7 @@ const ArmyBuilder = () => {
 
             <div className="catalog-grid">
               {catalogUnits.map((unit) => {
-                const { disabled, reason } = getRecruitState();
+                const { disabled, reason } = getRecruitState(unit.id);
                 return (
                   <article
                     key={unit.id}

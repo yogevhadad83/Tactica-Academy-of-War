@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useMultiplayer } from '../context/MultiplayerContext';
 import { useUnitCatalog } from '../hooks/useUnitCatalog';
 import { getBattlePlan, saveBattlePlan } from '../game/battlePlanStorage';
 import type { BattlePlan } from '../game/battlePlan';
@@ -9,6 +11,7 @@ import StampButton from '../components/ui/StampButton';
 import { usePlayerInventory } from '../hooks/usePlayerInventory';
 import { ensureActiveArmy } from '../lib/activeArmy';
 import { movePlacedUnit, placeUnit, unplaceByPlayerUnitId } from '../lib/inventoryApi';
+import { placementToArmyConfig } from '../utils/placementToArmyConfig';
 import './WarRoom.css';
 
 const MAX_SUPPLY = 20;
@@ -17,6 +20,7 @@ const looksLikeUuid = (value: string): boolean =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 
 const WarRoom = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const userIdOrNull = user?.id ?? null;
   const { units: catalogUnits } = useUnitCatalog();
@@ -25,6 +29,11 @@ const WarRoom = () => {
     loading: inventoryLoading,
     unitTypeIdByPlayerUnitId
   } = usePlayerInventory();
+  const { 
+    status: multiplayerStatus,
+    lastResult: multiplayerResult,
+    startDemoBattle,
+  } = useMultiplayer();
   
   const [placements, setPlacements] = useState<BoardPlacements>({});
   const [unitLogic, setUnitLogic] = useState<UnitLogic>({});
@@ -34,6 +43,7 @@ const WarRoom = () => {
   const [loading, setLoading] = useState(true);
   const [activeArmyId, setActiveArmyId] = useState<string | null>(null);
   const [loadedPlanPlacements, setLoadedPlanPlacements] = useState<PlacedUnit[]>([]);
+  const [testingPlan, setTestingPlan] = useState(false);
   const prevPlacementsRef = useRef<BoardPlacements | null>(null);
 
   const reloadPlan = useCallback(async () => {
@@ -247,6 +257,54 @@ const WarRoom = () => {
     };
   }, [activeArmyId, placements, reloadPlan, unitLogic, unitTypeIdByPlayerUnitId, userIdOrNull]);
 
+  // Monitor demo battle result and navigate to Battle Theater when it arrives
+  useEffect(() => {
+    if (!testingPlan || !multiplayerResult) return;
+    if (multiplayerResult.battleType !== 'demo') return;
+
+    const timeline = multiplayerResult.timeline ?? [];
+    if (!timeline.length) {
+      setTestingPlan(false);
+      alert('Demo battle did not return a timeline.');
+      return;
+    }
+
+    const matchId = multiplayerResult.matchId || (typeof crypto !== 'undefined' ? crypto.randomUUID() : `demo-${Date.now()}`);
+    const winnerRaw = String(multiplayerResult.winner);
+    const winnerSide: 'A' | 'B' | 'draw' = winnerRaw === 'A' || winnerRaw === 'player'
+      ? 'A'
+      : winnerRaw === 'B' || winnerRaw === 'enemy'
+        ? 'B'
+        : 'draw';
+
+    setTestingPlan(false);
+    navigate(`/battle/${matchId}`, {
+      state: {
+        mode: 'demo',
+        matchId,
+        timelineA: timeline,
+        timelineB: null,
+        winnerSide,
+      },
+    });
+  }, [multiplayerResult, testingPlan, navigate]);
+
+  const handleTestPlan = useCallback(() => {
+    if (multiplayerStatus !== 'connected') {
+      alert('Connect to the multiplayer server before testing a plan.');
+      return;
+    }
+    if (placedUnits.length === 0) {
+      alert('Place at least one unit before testing your plan.');
+      return;
+    }
+    
+    console.log('[WarRoom] Starting test plan with', placedUnits.length, 'units');
+    setTestingPlan(true);
+    const armyConfig = placementToArmyConfig(placedUnits);
+    startDemoBattle(armyConfig);
+  }, [multiplayerStatus, placedUnits, startDemoBattle]);
+
   if (loading || inventoryLoading) {
     return (
       <div className="war-room-container">
@@ -270,6 +328,13 @@ const WarRoom = () => {
               {totalSupplyUsed} / {MAX_SUPPLY}
             </span>
           </div>
+          
+          <StampButton 
+            onClick={handleTestPlan} 
+            disabled={testingPlan || placedUnits.length === 0 || multiplayerStatus !== 'connected'}
+          >
+            {testingPlan ? 'Testing...' : 'Test Plan'}
+          </StampButton>
           
           <StampButton onClick={handleSave} disabled={saving || totalSupplyUsed > MAX_SUPPLY}>
             {saving ? 'Saving...' : 'Save Plan'}

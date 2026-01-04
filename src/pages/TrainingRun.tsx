@@ -1,352 +1,192 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import BoardSetupPanel from '../components/BoardSetupPanel';
+import PrebattleLayout from '../components/PrebattleLayout';
 import { useAuth } from '../context/AuthContext';
 import { usePlayerContext } from '../context/PlayerContext';
-import { supabase } from '../lib/supabaseClient';
 import { trainingDrills } from '../data/trainingDrills';
-import type { BattleTickResult, Team } from '../engine/battleEngine';
 import { BOARD_COLS, BOARD_SIZE } from '../engine/battleEngine';
-import type { PlacedUnit } from '../types';
-import type { DemoState } from '../types/battle';
-import { calculateTickDuration } from '../components/units/useUnitLayer';
 import { runTrainingBattle } from '../engine/runTrainingBattle';
+import type { PlacedUnit } from '../types';
 import { addGuestCredits, hasCompleted, markCompleted } from '../utils/trainingProgress';
 import { validatePlacementsInBounds } from '../utils/validatePlacementsInBounds';
-import BoardSetupPanel from '../components/BoardSetupPanel';
-import './TrainingRun.css';
+import { supabase } from '../lib/supabaseClient';
 
-const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
+type ValidationResult = { ok: true } | { ok: false; message: string };
 
-const DEFAULT_TICK_MS = 2000;
-const MIN_TICK_MS = 800;
-
-type OutcomeState = 'win' | 'lose' | 'draw' | 'pending';
+const cloneUnit = (unit: PlacedUnit): PlacedUnit => ({
+  ...unit,
+  position: { ...unit.position },
+  currentHp: unit.currentHp ?? unit.hp,
+  currentShield: unit.currentShield ?? unit.shield ?? 0,
+});
 
 const TrainingRun = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const userIdOrNull = user?.id ?? null;
   const { player, setPlayerCredits, refresh: refreshPlayer } = usePlayerContext();
   const module = trainingDrills.find((m) => m.id === id) ?? null;
+  const userId = user?.id ?? null;
 
-  const [demoState, setDemoState] = useState<DemoState>('idle');
-  const [phase, setPhase] = useState<'setup' | 'playback'>('setup');
-  const [battleTimeline, setBattleTimeline] = useState<BattleTickResult[]>([]);
-  const [simulationUnits, setSimulationUnits] = useState<PlacedUnit[]>([]);
-  const [hitCells, setHitCells] = useState<string[]>([]);
-  const [hitEvents, setHitEvents] = useState<BattleTickResult['hitEvents']>([]);
-  const [moveCells, setMoveCells] = useState<string[]>([]);
-  const [marchCells, setMarchCells] = useState<string[]>([]);
-  const [winner, setWinner] = useState<Team | 'draw' | null>(null);
-  const [startingTeam, setStartingTeam] = useState<Team>('player');
-  const [rewardGranted, setRewardGranted] = useState<number>(0);
-  const [rewardError, setRewardError] = useState<string | null>(null);
-  const [configError, setConfigError] = useState<string | null>(null);
-
-  const [setupPlayerUnits, setSetupPlayerUnits] = useState<PlacedUnit[]>([]);
-  const [setupEnemyUnits, setSetupEnemyUnits] = useState<PlacedUnit[]>([]);
+  const [playerUnits, setPlayerUnits] = useState<PlacedUnit[]>([]);
+  const [enemyUnits, setEnemyUnits] = useState<PlacedUnit[]>([]);
   const [repositionsRemaining, setRepositionsRemaining] = useState<number>(0);
   const [behaviorChangesRemaining, setBehaviorChangesRemaining] = useState<number>(0);
+  const [configError, setConfigError] = useState<string | null>(null);
+  const [rewardError, setRewardError] = useState<string | null>(null);
+  const [rewardGranted, setRewardGranted] = useState<number>(0);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [startingTeam, setStartingTeam] = useState<'player' | 'enemy'>('player');
 
-  const timelineTimeoutRef = useRef<number | null>(null);
-  const timelineIndexRef = useRef(0);
-  const rewardAppliedRef = useRef(false);
-  const wasReplayRef = useRef(false);
-  const pendingWinnerRef = useRef<Team | 'draw'>('draw');
+  const alreadyCompleted = useMemo(() => (module ? hasCompleted(module.id, userId) : false), [module, userId]);
 
-  const hydrateFromModule = useCallback(() => {
+  const resetFromModule = useCallback(() => {
     if (!module) return;
-    setPhase('setup');
-    setDemoState('idle');
-    setBattleTimeline([]);
-    setSimulationUnits([]);
-    setHitCells([]);
-    setHitEvents([]);
-    setMoveCells([]);
-    setMarchCells([]);
-    setWinner(null);
-    setRewardGranted(0);
-    setRewardError(null);
-    setConfigError(null);
-
-    setSetupPlayerUnits(
-      module.playerStartBoard.map((u) => ({
-        ...u,
-        position: { ...u.position },
-        currentHp: u.currentHp ?? u.hp,
-        currentShield: u.currentShield ?? u.shield ?? 0,
-      }))
-    );
-    setSetupEnemyUnits(
-      module.opponentStartBoard.map((u) => ({
-        ...u,
-        position: { ...u.position },
-        currentHp: u.currentHp ?? u.hp,
-        currentShield: u.currentShield ?? u.shield ?? 0,
-      }))
-    );
+    setPlayerUnits(module.playerStartBoard.map(cloneUnit));
+    setEnemyUnits(module.opponentStartBoard.map(cloneUnit));
     setRepositionsRemaining(module.allowedEdits.maxRepositions);
     setBehaviorChangesRemaining(module.allowedEdits.maxBehaviorChanges);
+    setConfigError(null);
+    setRewardError(null);
+    setRewardGranted(0);
+    setNotice(null);
+    setStartingTeam(module.playerGoesFirst ? 'player' : 'enemy');
   }, [module]);
 
   useEffect(() => {
-    hydrateFromModule();
-  }, [hydrateFromModule]);
-
-  const previewUnits = useMemo(() => {
-    if (!module) return [] as PlacedUnit[];
-    const combined = [...setupPlayerUnits, ...setupEnemyUnits];
-    return combined;
-  }, [module, setupEnemyUnits, setupPlayerUnits]);
+    resetFromModule();
+  }, [resetFromModule]);
 
   const playArea = module?.playArea ?? null;
 
-  const isInsidePlayArea = useCallback(
-    (row: number, col: number) => {
-      if (!playArea) return true;
-      const inCols = col >= playArea.colStart && col < playArea.colStart + playArea.cols;
-      const inEnemyRows = row >= playArea.enemyRowStart && row < playArea.enemyRowStart + playArea.rowsPerSide;
-      const inPlayerRows = row >= playArea.playerRowStart && row < playArea.playerRowStart + playArea.rowsPerSide;
-      return inCols && (inEnemyRows || inPlayerRows);
-    },
-    [playArea]
-  );
+  const validateSetup = useCallback((): ValidationResult => {
+    if (!module) return { ok: false, message: 'Drill not found.' };
 
-  const previewValidation = useMemo(() => {
-    if (!module) return { ok: true as const };
-    const bounds = validatePlacementsInBounds(previewUnits, BOARD_COLS, BOARD_SIZE);
+    const combined = [...playerUnits, ...enemyUnits];
+    const bounds = validatePlacementsInBounds(combined, BOARD_COLS, BOARD_SIZE);
     if (!bounds.ok) {
       const { unitId, col, row } = bounds.error;
-      return { ok: false as const, message: `Invalid drill config: unit out of bounds: ${unitId} at (${col},${row})` };
+      return { ok: false, message: `Invalid drill config: unit out of bounds: ${unitId} at (${col},${row})` };
     }
+
     if (playArea) {
-      const offender = previewUnits.find((u) => !isInsidePlayArea(u.position.row, u.position.col));
+      const offender = combined.find((u) => {
+        const inCols = u.position.col >= playArea.colStart && u.position.col < playArea.colStart + playArea.cols;
+        const inEnemyRows = u.position.row >= playArea.enemyRowStart && u.position.row < playArea.enemyRowStart + playArea.rowsPerSide;
+        const inPlayerRows = u.position.row >= playArea.playerRowStart && u.position.row < playArea.playerRowStart + playArea.rowsPerSide;
+        return !(inCols && (inEnemyRows || inPlayerRows));
+      });
+
       if (offender) {
-        const unitId = offender.instanceId ?? offender.id;
-        return {
-          ok: false as const,
-          message: `Invalid drill config: unit outside play area: ${unitId} at (${offender.position.col},${offender.position.row})`
-        };
+        const idLabel = offender.instanceId ?? offender.id;
+        return { ok: false, message: `Invalid drill config: unit outside play area: ${idLabel} at (${offender.position.col},${offender.position.row})` };
       }
     }
-    return { ok: true as const };
-  }, [isInsidePlayArea, module, playArea, previewUnits]);
 
-  const outcome: OutcomeState = useMemo(() => {
-    if (!winner) return 'pending';
-    if (winner === 'draw') return 'draw';
-    return winner === 'player' ? 'win' : 'lose';
-  }, [winner]);
+    return { ok: true };
+  }, [enemyUnits, module, playArea, playerUnits]);
 
-  const stageUnits = demoState === 'idle' ? previewUnits : simulationUnits;
-
-  // Prevent rendering floating units: show board but with no units when config invalid.
-  const safeStageUnits = previewValidation.ok ? stageUnits : ([] as PlacedUnit[]);
-
-  useEffect(() => {
-    setConfigError(previewValidation.ok ? null : previewValidation.message);
-  }, [previewValidation]);
-
-  const resetPlayback = useCallback(() => {
-    if (timelineTimeoutRef.current !== null) {
-      window.clearTimeout(timelineTimeoutRef.current);
-      timelineTimeoutRef.current = null;
-    }
-    timelineIndexRef.current = 0;
-    setDemoState('idle');
-    setBattleTimeline([]);
-    setSimulationUnits([]);
-    setHitCells([]);
-    setHitEvents([]);
-    setMoveCells([]);
-    setMarchCells([]);
-    setWinner(null);
-    setRewardGranted(0);
-    setRewardError(null);
+  const handleBoardChange = useCallback((nextPlayer: PlacedUnit[], nextEnemy: PlacedUnit[]) => {
+    setPlayerUnits(nextPlayer);
+    setEnemyUnits(nextEnemy);
     setConfigError(null);
-    rewardAppliedRef.current = false;
-    wasReplayRef.current = false;
-    pendingWinnerRef.current = 'draw';
-
-    setPhase('setup');
   }, []);
 
-  const resetDrill = useCallback(() => {
-    resetPlayback();
-    hydrateFromModule();
-  }, [hydrateFromModule, resetPlayback]);
-
-  const startDrill = useCallback(() => {
+  const applyReward = useCallback(async (winner: 'player' | 'enemy' | 'draw') => {
     if (!module) return;
-
-    // Validate before simulation.
-    if (!previewValidation.ok) {
-      setConfigError(previewValidation.message);
-      return;
-    }
-
-    setRewardError(null);
-    setRewardGranted(0);
-    rewardAppliedRef.current = false;
-
-    const replay = hasCompleted(module.id, userIdOrNull);
-    wasReplayRef.current = replay;
-
-    const starting: Team = module.playerGoesFirst ? 'player' : 'enemy';
-    setStartingTeam(starting);
-
-    const result = runTrainingBattle({
-      playerUnits: setupPlayerUnits,
-      enemyUnits: setupEnemyUnits,
-      playerGoesFirst: module.playerGoesFirst,
-    });
-
-    pendingWinnerRef.current = result.winner === 'draw' ? 'draw' : result.winner;
-    setBattleTimeline(result.timeline);
-    setWinner(null);
-    setHitCells([]);
-    setHitEvents([]);
-    setMoveCells([]);
-    setMarchCells([]);
-
-    timelineIndexRef.current = 1;
-    if (result.timeline[0]) {
-      setSimulationUnits(result.timeline[0].units);
-    }
-
-    if (result.timeline.length <= 1) {
-      setWinner(result.winner === 'draw' ? 'draw' : result.winner);
-      setDemoState('finished');
-      return;
-    }
-
-    setPhase('playback');
-    setDemoState('running');
-  }, [module, previewValidation, setupEnemyUnits, setupPlayerUnits, userIdOrNull]);
-
-  // If the runner throws (config invalid), surface the exact error and keep idle.
-  useEffect(() => {
-    if (!configError) return;
-    if (demoState === 'running') {
-      resetPlayback();
-    }
-  }, [configError, demoState, resetPlayback]);
-
-  useEffect(() => {
-    if (demoState !== 'running' || battleTimeline.length === 0) {
-      if (timelineTimeoutRef.current !== null) {
-        window.clearTimeout(timelineTimeoutRef.current);
-        timelineTimeoutRef.current = null;
-      }
-      return;
-    }
-
-    const playTick = () => {
-      const tick = battleTimeline[timelineIndexRef.current];
-      if (!tick) {
-        setDemoState('finished');
-        setWinner(pendingWinnerRef.current);
-        return;
-      }
-
-      setSimulationUnits(tick.units);
-      setHitCells(tick.hits);
-      setHitEvents(tick.hitEvents);
-      setMoveCells(tick.moves);
-      setMarchCells(tick.moves.filter((_, index) => index % 2 === 0));
-
-      if (tick.winner) {
-        setWinner(tick.winner);
-        setDemoState('finished');
-        return;
-      }
-
-      if (timelineIndexRef.current >= battleTimeline.length - 1) {
-        setWinner(pendingWinnerRef.current);
-        setDemoState('finished');
-        return;
-      }
-
-      timelineIndexRef.current += 1;
-      const upcomingTick = battleTimeline[timelineIndexRef.current];
-      const tickDuration = upcomingTick && upcomingTick.hitEvents.length > 0
-        ? calculateTickDuration(upcomingTick.hitEvents, upcomingTick.units)
-        : DEFAULT_TICK_MS;
-
-      timelineTimeoutRef.current = window.setTimeout(playTick, Math.max(tickDuration, MIN_TICK_MS));
-    };
-
-    timelineTimeoutRef.current = window.setTimeout(playTick, DEFAULT_TICK_MS);
-
-    return () => {
-      if (timelineTimeoutRef.current !== null) {
-        window.clearTimeout(timelineTimeoutRef.current);
-        timelineTimeoutRef.current = null;
-      }
-    };
-  }, [battleTimeline, demoState]);
-
-  useEffect(() => {
-    if (!module) return;
-    if (demoState !== 'finished') return;
-    if (rewardAppliedRef.current) return;
     if (winner !== 'player') return;
-
-    rewardAppliedRef.current = true;
-
-    const alreadyCompleted = hasCompleted(module.id, userIdOrNull);
     if (alreadyCompleted) {
       setRewardGranted(0);
       return;
     }
 
-    const applyReward = async () => {
-      const reward = module.rewardCredits;
-      if (!reward || reward <= 0) {
-        markCompleted(module.id, userIdOrNull);
-        setRewardGranted(0);
-        return;
-      }
+    const reward = module.rewardCredits;
+    if (!reward || reward <= 0) {
+      markCompleted(module.id, userId);
+      setRewardGranted(0);
+      return;
+    }
 
-      try {
-        if (!userIdOrNull) {
-          addGuestCredits(reward);
-        } else {
-          const currentCredits = player?.current_credits ?? 0;
-          const nextCredits = currentCredits + reward;
+    try {
+      if (!userId) {
+        addGuestCredits(reward);
+        markCompleted(module.id, null);
+      } else {
+        const currentCredits = player?.current_credits ?? 0;
+        const nextCredits = currentCredits + reward;
+        const { error } = await supabase
+          .from('players')
+          .update({ current_credits: nextCredits })
+          .eq('id', userId);
 
-          const { error } = await supabase
-            .from('players')
-            .update({ current_credits: nextCredits })
-            .eq('id', userIdOrNull);
-
-          if (error) {
-            throw error;
-          }
-
-          setPlayerCredits(nextCredits);
-          refreshPlayer();
+        if (error) {
+          throw error;
         }
 
-        markCompleted(module.id, userIdOrNull);
-        setRewardGranted(reward);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to apply rewards';
-        setRewardGranted(0);
-        setRewardError(message);
+        setPlayerCredits(nextCredits);
+        refreshPlayer();
+        markCompleted(module.id, userId);
       }
-    };
 
-    void applyReward();
-  }, [demoState, module, player?.current_credits, refreshPlayer, setPlayerCredits, userIdOrNull, winner]);
+      setRewardGranted(reward);
+      setRewardError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to apply rewards';
+      setRewardError(message);
+      setRewardGranted(0);
+    }
+  }, [alreadyCompleted, module, player?.current_credits, refreshPlayer, setPlayerCredits, userId]);
 
-  // Early return check AFTER all hooks (React hooks rules)
+  const handleStartBattle = useCallback(async () => {
+    if (!module) return;
+    const validation = validateSetup();
+    if (!validation.ok) {
+      setConfigError(validation.message);
+      return;
+    }
+
+    setNotice('Launching training battle...');
+
+    const result = runTrainingBattle({
+      playerUnits,
+      enemyUnits,
+      playerGoesFirst: module.playerGoesFirst,
+      mode: 'training',
+      playArea: module.playArea ?? null,
+    });
+
+    await applyReward(result.winner === 'draw' ? 'draw' : result.winner);
+
+    const matchId = typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `training-${Date.now()}`;
+    const winnerSide = result.winner === 'player' ? 'A' : result.winner === 'enemy' ? 'B' : 'draw';
+
+    navigate(`/battle/${matchId}`, {
+      state: {
+        mode: 'training',
+        matchId,
+        timelineA: result.timeline,
+        timelineB: null,
+        winnerSide,
+        moduleId: module.id,
+        moduleTitle: module.title,
+        exitTo: '/training',
+        playArea: module.playArea ?? null,
+      },
+    });
+  }, [applyReward, enemyUnits, module, navigate, playerUnits, validateSetup]);
+
   if (!module) {
     return (
-      <div className="training-run-page">
-        <div className="training-run-card">
-          <h1 className="training-run-title">Drill not found</h1>
-          <Link className="training-run-link" to="/training">
+      <div className="prebattle-shell">
+        <div className="prebattle-banner">
+          <p className="banner-kicker">Training</p>
+          <h1>Drill not found</h1>
+        </div>
+        <div className="prebattle-footer">
+          <Link className="prebattle-btn" to="/training">
             Back to Training
           </Link>
         </div>
@@ -354,159 +194,111 @@ const TrainingRun = () => {
     );
   }
 
-  return (
-    <div className="training-run-page">
-      <div className="training-run-card">
-        <div className="training-run-header">
-          <h1 className="training-run-title">{module.title}</h1>
-          <div className="training-run-reward">Reward: +{module.rewardCredits} credits (one-time)</div>
-        </div>
-
-        <p className="training-run-desc">{module.description}</p>
-        <pre className="training-run-brief">{module.instructorBrief}</pre>
-
-        {phase === 'setup' && (
-          <div className="training-run-budget" role="status" aria-live="polite">
-            <div className="training-run-budget-pill">
-              Move budget: {Math.max(0, repositionsRemaining)} / {module.allowedEdits.maxRepositions}
-            </div>
-            <div className="training-run-budget-pill">Behavior edits: disabled</div>
-            {playArea && (
-              <div className="training-run-budget-pill">Active tiles highlighted on the lane</div>
-            )}
-          </div>
-        )}
-
-        {phase === 'setup' ? (
-          <div className="training-run-setup">
-            {playArea && (
-              <div className="training-run-playarea-legend" aria-label="Play area">
-                Active area: {playArea.cols}×{playArea.rowsPerSide} per side (cols {playArea.colStart + 1}–{playArea.colStart + playArea.cols})
-              </div>
-            )}
-
-            {configError && (
-              <div className="training-run-config-error" role="alert">
-                {configError}
-              </div>
-            )}
-
-            <BoardSetupPanel
-              mode="training"
-              trainingBoard="player"
-              playerUnits={setupPlayerUnits}
-              enemyUnits={setupEnemyUnits}
-              onChange={(nextPlayer, nextEnemy) => {
-                setSetupPlayerUnits(nextPlayer);
-                setSetupEnemyUnits(nextEnemy);
-              }}
-              activeArea={playArea ?? undefined}
-              allowedEdits={{ repositions: repositionsRemaining, behaviorChanges: behaviorChangesRemaining }}
-              locks={{ restrictToActiveArea: Boolean(playArea), restrictToOwnZone: true, disallowAddRemove: true, enemyLocked: true }}
-              onRepositionUsed={() => setRepositionsRemaining((prev) => Math.max(0, prev - 1))}
-              onBehaviorChangeUsed={() => setBehaviorChangesRemaining((prev) => Math.max(0, prev - 1))}
-              canEditBehavior={(unit) => {
-                if (!module) return false;
-                const allowedIds = new Set(module.allowedEdits.behaviorChangeUnitIds.map((id) => id.toLowerCase()));
-                return unit.team === 'player' && allowedIds.has(unit.id.toLowerCase());
-              }}
-            />
-          </div>
-        ) : (
-          <div className="training-run-stage">
-            {playArea && (
-              <div className="training-run-playarea-legend" aria-label="Play area">
-                Active area: {playArea.cols}×{playArea.rowsPerSide} per side (cols {playArea.colStart + 1}–{playArea.colStart + playArea.cols})
-              </div>
-            )}
-
-            {configError && (
-              <div className="training-run-config-error" role="alert">
-                {configError}
-              </div>
-            )}
-
-            <Suspense
-              fallback={
-                <div className="training-run-stage-loading" role="status" aria-live="polite">
-                  Preparing battle stage…
-                </div>
-              }
-            >
-              <ThreeBattleStage
-                boardSize={BOARD_SIZE}
-                boardCols={BOARD_COLS}
-                units={safeStageUnits}
-                hitCells={demoState === 'idle' ? [] : hitCells}
-                hitEvents={demoState === 'idle' ? [] : hitEvents}
-                moveCells={demoState === 'idle' ? [] : moveCells}
-                marchCells={demoState === 'idle' ? [] : marchCells}
-                demoState={demoState}
-                interactionMode="battle"
-                dragActive={false}
-                forceOwner={undefined}
-              />
-            </Suspense>
-
-            <div className="training-run-stage-meta" aria-label="Battle info">
-              <div className="training-run-stage-pill">
-                First turn: {startingTeam === 'player' ? 'Player' : 'Opponent'}
-              </div>
-              {demoState === 'running' && <div className="training-run-stage-pill">Playback running…</div>}
-              {demoState === 'finished' && winner && (
-                <div className="training-run-stage-pill">
-                  Result: {winner === 'draw' ? 'Draw' : winner === 'player' ? 'Win' : 'Loss'}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {demoState === 'finished' && winner && (
-          <div className="training-run-result" role="status">
-            <h2 className="training-run-result-title">
-              {outcome === 'win' ? 'Drill Complete' : outcome === 'lose' ? 'Drill Failed' : 'Drill Complete (Draw)'}
-            </h2>
-            <div className="training-run-result-row">
-              <div className="training-run-result-label">Outcome</div>
-              <div className="training-run-result-value">
-                {outcome === 'win' ? 'Win' : outcome === 'lose' ? 'Loss' : 'Draw'}
-              </div>
-            </div>
-            <div className="training-run-result-row">
-              <div className="training-run-result-label">Credits granted</div>
-              <div className="training-run-result-value">+{wasReplayRef.current ? 0 : rewardGranted}</div>
-            </div>
-            {rewardError && <div className="training-run-result-error">Reward error: {rewardError}</div>}
-            <div className="training-run-result-actions">
-              <Link className="training-run-link" to="/training">
-                Back to Training
-              </Link>
-              <button type="button" className="training-run-btn primary" onClick={resetDrill}>
-                Replay Drill
-              </button>
-            </div>
-          </div>
-        )}
-
-        <div className="training-run-actions">
-          <button
-            type="button"
-            className={`training-run-btn ${demoState !== 'running' ? 'primary' : ''}`}
-            onClick={startDrill}
-            disabled={demoState === 'running' || Boolean(configError)}
-          >
-            {demoState === 'running' ? 'Running…' : demoState === 'finished' ? 'Restart Drill' : 'Start Drill'}
-          </button>
-          <button type="button" className="training-run-btn" onClick={resetDrill} disabled={demoState === 'running'}>
-            Reset Drill
-          </button>
-          <Link className="training-run-link" to="/training">
-            Back
-          </Link>
-        </div>
+  const metaCards = (
+    <>
+      <div className="meta-card">
+        <p className="meta-label">Drill</p>
+        <h3>{module.title}</h3>
+        <p className="meta-subtext">Reward: +{module.rewardCredits} credits</p>
       </div>
-    </div>
+      <div className="meta-card">
+        <p className="meta-label">Status</p>
+        <h3>{alreadyCompleted ? 'Completed' : 'Ready'}</h3>
+        <p className="meta-subtext">First turn: {startingTeam === 'player' ? 'Player' : 'Opponent'}</p>
+      </div>
+    </>
+  );
+
+  const controlPanel = (
+    <>
+      <div className="control-card-header">
+        <p className="board-label">Instructor Brief</p>
+        <h2>{module.title}</h2>
+        <p className="board-status">{module.description}</p>
+      </div>
+
+      <div className="prebattle-move-summary">
+        <h3>One-time Reward</h3>
+        <p>{alreadyCompleted ? 'Already claimed' : `+${module.rewardCredits} credits on first win`}</p>
+      </div>
+
+      <div className="prebattle-status-pills">
+        <span className="prebattle-status-pill active">
+          Move budget: {Math.max(0, repositionsRemaining)} / {module.allowedEdits.maxRepositions}
+        </span>
+        <span className="prebattle-status-pill muted">
+          Behaviors: {module.allowedEdits.maxBehaviorChanges > 0 ? module.allowedEdits.maxBehaviorChanges : 'disabled'}
+        </span>
+      </div>
+
+      {playArea && (
+        <div className="prebattle-move-summary">
+          <h3>Active Area</h3>
+          <p>
+            {playArea.cols}x{playArea.rowsPerSide} per side (cols {playArea.colStart + 1}-{playArea.colStart + playArea.cols})
+          </p>
+        </div>
+      )}
+
+      {configError && <p className="prebattle-control-error">{configError}</p>}
+      {rewardError && <p className="prebattle-control-error">{rewardError}</p>}
+      {rewardGranted > 0 && (
+        <div className="prebattle-notice" role="status">
+          Reward granted: +{rewardGranted} credits
+        </div>
+      )}
+    </>
+  );
+
+  const footer = (
+    <>
+      <Link className="prebattle-btn ghost" to="/training">
+        Back to Training
+      </Link>
+      <button type="button" className="prebattle-btn" onClick={resetFromModule}>
+        Reset Drill
+      </button>
+      <button
+        type="button"
+        className="prebattle-btn accent"
+        onClick={handleStartBattle}
+      >
+        {alreadyCompleted ? 'Replay Battle' : 'Start Battle'}
+      </button>
+    </>
+  );
+
+  return (
+    <PrebattleLayout
+      banner={{
+        kicker: 'Pre-Battle Directive',
+        title: 'Training Drill',
+        subtitle: module.title
+      }}
+      meta={metaCards}
+      alerts={notice ? <div className="prebattle-notice">{notice}</div> : null}
+      stage={(
+        <BoardSetupPanel
+          mode="training"
+          trainingBoard="player"
+          playerUnits={playerUnits}
+          enemyUnits={enemyUnits}
+          onChange={handleBoardChange}
+          allowedEdits={{ repositions: repositionsRemaining, behaviorChanges: behaviorChangesRemaining }}
+          locks={{ restrictToActiveArea: Boolean(playArea), restrictToOwnZone: true, disallowAddRemove: true, enemyLocked: true }}
+          activeArea={playArea ?? undefined}
+          onRepositionUsed={() => setRepositionsRemaining((prev) => Math.max(0, prev - 1))}
+          onBehaviorChangeUsed={() => setBehaviorChangesRemaining((prev) => Math.max(0, prev - 1))}
+          canEditBehavior={(unit) => {
+            if (!module) return false;
+            const allowedIds = new Set(module.allowedEdits.behaviorChangeUnitIds.map((unitId) => unitId.toLowerCase()));
+            return unit.team === 'player' && allowedIds.has(unit.id.toLowerCase());
+          }}
+        />
+      )}
+      control={controlPanel}
+      footer={footer}
+    />
   );
 };
 

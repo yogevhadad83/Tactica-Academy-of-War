@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useNavigate, useParams } from 'react-router-dom';
 import './PvpMatch.css';
 import BoardSetupPanel from '../components/BoardSetupPanel';
+import PrebattleLayout from '../components/PrebattleLayout';
 import { useAuth } from '../context/AuthContext';
 import { useUnitCatalog, type UnitCatalogEntry } from '../hooks/useUnitCatalog';
 import { BOARD_COLS, BOARD_SIZE, PLAYER_ZONE_START } from '../engine/battleEngine';
@@ -808,74 +809,75 @@ const PvpMatch = () => {
         : timelineReady
           ? 'Playing server timeline…'
           : 'Awaiting server timeline…';
+
+    const banner = {
+      kicker: 'Battlefield',
+      title: 'PvP Battle',
+      subtitle: 'Status: IN_PROGRESS'
+    } as const;
+
+    const alerts = (
+      <>
+        {displayError && <div className="prebattle-error">⚠️ {displayError}</div>}
+        {notice && <div className="prebattle-notice">{notice}</div>}
+      </>
+    );
+
+    const stage = (
+      <Suspense
+        fallback={
+          <div className="stage-loading" role="status" aria-live="polite">
+            Preparing tactical canvas…
+          </div>
+        }
+      >
+        <ThreeBattleStage
+          boardSize={BOARD_SIZE}
+          boardCols={BOARD_COLS}
+          units={simulationUnits}
+          hitCells={hitCells}
+          hitEvents={hitEvents}
+          moveCells={moveCells}
+          marchCells={marchCells}
+          demoState={battleDemoState === 'running' ? 'running' : battleDemoState === 'finished' ? 'finished' : 'idle'}
+          interactionMode="battle"
+          dragActive={false}
+        />
+      </Suspense>
+    );
+
+    const control = (
+      <>
+        <div className="control-card-header">
+          <p className="board-label">Battle Status</p>
+          <h2>{playbackHeadline}</h2>
+          <p className="board-status">{playbackStatus}</p>
+        </div>
+
+        <div className="prebattle-opponent-meta">
+          <h3>Match</h3>
+          <p className="board-status">{bundle.match.id.slice(0, 8)}…</p>
+          <p className="board-status muted">You: {yourParticipant.display_name ?? 'Commander'}</p>
+          <p className="board-status muted">Opponent: {opponentParticipant?.display_name ?? 'Commander'}</p>
+        </div>
+      </>
+    );
+
+    const footer = (
+      <>
+        <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle} disabled={matchTerminated}>
+          Back to Lobby
+        </button>
+        <button type="button" className="prebattle-btn accent" onClick={handleOpenTheater}>
+          Open Battle Theater
+        </button>
+      </>
+    );
+
     return (
       <>
         {toast}
-        <div className="prebattle-shell">
-          <div className="prebattle-banner">
-            <p className="banner-kicker">Battlefield</p>
-            <h1>PvP BATTLE</h1>
-            <p>Status: IN_PROGRESS</p>
-          </div>
-
-          {displayError && <div className="prebattle-error">⚠️ {displayError}</div>}
-          {notice && <div className="prebattle-notice">{notice}</div>}
-
-          <div className="prebattle-stage-section">
-            <div className="prebattle-board-wrapper">
-              <Suspense
-                fallback={
-                  <div className="stage-loading" role="status" aria-live="polite">
-                    Preparing tactical canvas…
-                  </div>
-                }
-              >
-                <ThreeBattleStage
-                  boardSize={BOARD_SIZE}
-                  boardCols={BOARD_COLS}
-                  units={simulationUnits}
-                  hitCells={hitCells}
-                  hitEvents={hitEvents}
-                  moveCells={moveCells}
-                  marchCells={marchCells}
-                  demoState={battleDemoState === 'running' ? 'running' : battleDemoState === 'finished' ? 'finished' : 'idle'}
-                  interactionMode="battle"
-                  dragActive={false}
-                />
-              </Suspense>
-            </div>
-
-            <aside className="prebattle-control-card">
-              <div className="control-card-header">
-                <p className="board-label">Battle Status</p>
-                <h2>{playbackHeadline}</h2>
-                <p className="board-status">{playbackStatus}</p>
-              </div>
-
-              <div className="prebattle-opponent-meta">
-                <h3>Match</h3>
-                <p className="board-status">{bundle.match.id.slice(0, 8)}…</p>
-                <p className="board-status muted">You: {yourParticipant.display_name ?? 'Commander'}</p>
-                <p className="board-status muted">Opponent: {opponentParticipant?.display_name ?? 'Commander'}</p>
-              </div>
-            </aside>
-          </div>
-
-          <div className="prebattle-footer">
-            <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle}
-              disabled={matchTerminated}
-            >
-              Back to Lobby
-            </button>
-            <button
-              type="button"
-              className="prebattle-btn accent"
-              onClick={handleOpenTheater}
-            >
-              Open Battle Theater
-            </button>
-          </div>
-        </div>
+        <PrebattleLayout banner={banner} alerts={alerts} stage={stage} control={control} footer={footer} />
       </>
     );
   }
@@ -883,47 +885,45 @@ const PvpMatch = () => {
   return (
     <>
       {toast}
-      <div className="prebattle-shell">
-        <div className="prebattle-banner">
-          <p className="banner-kicker">Pre-Battle Directive</p>
-          <h1>PRE-BATTLE: ONE MOVE EACH</h1>
-          <p>Challenger acts first, defender responds. One precise reposition per commander.</p>
-        </div>
-
-        <div className="prebattle-meta-row">
-          <div className="meta-card">
-            <p className="meta-label">Match</p>
-            <h3>{bundle.match.id.slice(0, 8)}…</h3>
-            <p className="meta-subtext">Status: {bundle.match.status}</p>
-            <p className="meta-subtext">Created: {new Date(bundle.match.created_at).toLocaleString()}</p>
-          </div>
-          <div className="meta-card">
-            <p className="meta-label">Turn State</p>
-            <h3>{turnBanner}</h3>
-            <p className="meta-subtext">
-              {isMyTurn ? 'Your move window is open.' : youSubmitted ? 'Move submitted. Awaiting opponent.' : turn === 'LOCKED' ? 'Both moves locked.' : 'Stand by for your cue.'}
-            </p>
-          </div>
-        </div>
-
-        {displayError && bundle && <div className="prebattle-error">⚠️ {displayError}</div>}
-        {notice && <div className="prebattle-notice">{notice}</div>}
-
-        <div className="prebattle-stage-section">
-          <div className="prebattle-board-wrapper">
-            <BoardSetupPanel
-              mode="training"
-              trainingBoard="player"
-              playerUnits={playerUnits}
-              enemyUnits={enemyUnits}
-              onChange={handleBoardChange}
-              allowedEdits={{ repositions: canInteract ? 1 : 0, behaviorChanges: 0 }}
-              locks={{ restrictToActiveArea: false, restrictToOwnZone: true, disallowAddRemove: true, enemyLocked: true }}
-              canEditBehavior={() => false}
-            />
-          </div>
-
-          <aside className="prebattle-control-card">
+      <PrebattleLayout
+        banner={{ kicker: 'Pre-Battle Directive', title: 'PRE-BATTLE: ONE MOVE EACH', subtitle: 'Challenger acts first, defender responds. One precise reposition per commander.' }}
+        meta={(
+          <>
+            <div className="meta-card">
+              <p className="meta-label">Match</p>
+              <h3>{bundle.match.id.slice(0, 8)}…</h3>
+              <p className="meta-subtext">Status: {bundle.match.status}</p>
+              <p className="meta-subtext">Created: {new Date(bundle.match.created_at).toLocaleString()}</p>
+            </div>
+            <div className="meta-card">
+              <p className="meta-label">Turn State</p>
+              <h3>{turnBanner}</h3>
+              <p className="meta-subtext">
+                {isMyTurn ? 'Your move window is open.' : youSubmitted ? 'Move submitted. Awaiting opponent.' : turn === 'LOCKED' ? 'Both moves locked.' : 'Stand by for your cue.'}
+              </p>
+            </div>
+          </>
+        )}
+        alerts={(
+          <>
+            {displayError && bundle && <div className="prebattle-error">⚠️ {displayError}</div>}
+            {notice && <div className="prebattle-notice">{notice}</div>}
+          </>
+        )}
+        stage={(
+          <BoardSetupPanel
+            mode="training"
+            trainingBoard="player"
+            playerUnits={playerUnits}
+            enemyUnits={enemyUnits}
+            onChange={handleBoardChange}
+            allowedEdits={{ repositions: canInteract ? 1 : 0, behaviorChanges: 0 }}
+            locks={{ restrictToActiveArea: false, restrictToOwnZone: true, disallowAddRemove: true, enemyLocked: true }}
+            canEditBehavior={() => false}
+          />
+        )}
+        control={(
+          <>
             <div className="control-card-header">
               <p className="board-label">Command Summary</p>
               <h2>{yourParticipant.display_name ?? 'You'}</h2>
@@ -975,34 +975,30 @@ const PvpMatch = () => {
                 {opponentSubmitted ? 'Opponent move locked.' : 'Waiting for opponent move…'}
               </p>
             </div>
-          </aside>
-        </div>
-
-        <div className="prebattle-footer">
-          <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle}>
-            Back to Lobby
-          </button>
-          <button type="button" className="prebattle-btn danger" onClick={handleAbortMatch} disabled={aborting}>
-            {aborting ? 'Aborting…' : 'Abort battle'}
-          </button>
-          {allSubmitted && (
-            <button
-              type="button"
-              className="prebattle-btn accent"
-              onClick={handleStartBattle}
-              disabled={submitting}
-            >
-              {submitting ? 'Starting…' : 'START BATTLE'}
-            </button>
-          )}
-        </div>
-
-        {allSubmitted && (
-          <p className="prebattle-footer-note">
-            Both players ready. Click START BATTLE to proceed.
-          </p>
+          </>
         )}
-      </div>
+        footer={(
+          <>
+            <button type="button" className="prebattle-btn ghost" onClick={handleBackToLobbyAfterBattle}>
+              Back to Lobby
+            </button>
+            <button type="button" className="prebattle-btn danger" onClick={handleAbortMatch} disabled={aborting}>
+              {aborting ? 'Aborting…' : 'Abort battle'}
+            </button>
+            {allSubmitted && (
+              <button
+                type="button"
+                className="prebattle-btn accent"
+                onClick={handleStartBattle}
+                disabled={submitting}
+              >
+                {submitting ? 'Starting…' : 'START BATTLE'}
+              </button>
+            )}
+          </>
+        )}
+        footerNote={allSubmitted ? 'Both players ready. Click START BATTLE to proceed.' : null}
+      />
     </>
   );
 };

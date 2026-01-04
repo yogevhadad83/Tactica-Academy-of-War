@@ -1,7 +1,7 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { usePlayer as usePlayerHook } from '../hooks/usePlayer';
 
-const PlayerContext = createContext<ReturnType<typeof usePlayerHook> | undefined>(undefined);
+export const PlayerContext = createContext<ReturnType<typeof usePlayerHook> | undefined>(undefined);
 
 export const PlayerProvider = ({ children }: { children: ReactNode }) => {
   const playerState = usePlayerHook();
