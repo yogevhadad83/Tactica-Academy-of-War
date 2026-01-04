@@ -37,6 +37,7 @@ const allowedOrigins: Array<string | RegExp> = [
   allowedOrigin,
   'http://localhost:5173',
   'http://127.0.0.1:5173',
+  'https://tactica-ui.onrender.com', // Production frontend
   /^https:\/\/.+\.app\.github\.dev$/
 ];
 

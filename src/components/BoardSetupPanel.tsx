@@ -4,6 +4,7 @@ import { boardKey } from '../constants/board';
 import { BOARD_COLS, BOARD_SIZE, PLAYER_ZONE_START } from '../engine/battleEngine';
 import type { ArmyUnitInstance, PlacedUnit, UnitLogic } from '../types';
 import type { TileOccupant } from './createTacticalBoard';
+import { mirrorOpponentBoardForDisplay } from '../utils/mirrorOpponentBoard';
 import '../pages/BoardView.css';
 
 const ThreeBattleStage = lazy(() => import('./ThreeBattleStage'));
@@ -814,28 +815,18 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
   const enemyPreviewUnits = useMemo(() => {
     if (mode !== 'training') return [] as PlacedUnit[];
     // Enemy units in the full board occupy rows 0-5 (enemy zone).
-    // For the 6-row opponent-only preview, we display them directly without mirroring
+    // For the 6-row opponent-only preview, we mirror them vertically
     // so the front row (row 5) appears at the bottom closest to the camera.
     const enemyUsesPlanningCoords =
       props.enemyUnits.length > 0 && props.enemyUnits.every((unit) => unit.position.row >= 0 && unit.position.row < PLANNING_ROWS);
-    const enemyRowOffset = enemyUsesPlanningCoords ? 0 : 0; // Enemy zone starts at row 0
+    const enemyRowOffset = enemyUsesPlanningCoords ? 0 : PLANNING_ROW_OFFSET; // Shift from enemy zone (rows 6-11) to planning coords (rows 0-5)
 
-    return props.enemyUnits
-      .map((u) => ({
-        ...u,
-        team: 'enemy' as const,
-        position: {
-          ...u.position,
-          row: u.position.row - enemyRowOffset,
-        },
-      }))
-      .filter(
-        (u) =>
-          u.position.row >= 0 &&
-          u.position.row < PLANNING_ROWS &&
-          u.position.col >= 0 &&
-          u.position.col < PLANNING_COLS
-      );
+    return mirrorOpponentBoardForDisplay(props.enemyUnits, {
+      boardRows: PLANNING_ROWS,
+      boardCols: PLANNING_COLS,
+      rowOffset: enemyRowOffset,
+      forceTeam: 'enemy'
+    });
   }, [mode, props]);
 
   return (
