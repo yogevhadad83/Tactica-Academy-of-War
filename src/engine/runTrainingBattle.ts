@@ -71,8 +71,8 @@ export function runTrainingBattle(params: {
   let currentTeam: Team = startingTeam;
   let turnNumber = 1;
 
-  const checkPlayAreaVictory = () => {
-    if (!params.playArea) return null as TrainingBattleWinner | null;
+  const checkPlayAreaVictory = (): Team | null => {
+    if (!params.playArea) return null;
     const { cols, colStart, rowsPerSide, playerRowStart, enemyRowStart } = params.playArea;
     const playerBackEdge = playerRowStart + rowsPerSide; // enemy crossing here means enemy wins
     const enemyBackEdge = enemyRowStart; // player crossing above this means player wins
@@ -110,7 +110,7 @@ export function runTrainingBattle(params: {
       // Don't add the tick that moved outside - end at the last valid position
       const lastFrame = timeline[timeline.length - 1];
       if (!lastFrame.winner) {
-        lastFrame.winner = laneWinner as TrainingBattleWinner;
+        lastFrame.winner = laneWinner;
       }
       return { winner: laneWinner, timeline };
     }
