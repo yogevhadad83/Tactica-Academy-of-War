@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import './BattleTheater.css';
 import { BOARD_COLS, BOARD_SIZE } from '../engine/battleEngine';
+import { boardKey } from '../constants/board';
 import type { BattleTickResult } from '../engine/battleEngine';
 import type { PlacedUnit } from '../types';
 import { calculateTickDuration } from '../components/units/useUnitLayer';
@@ -11,6 +12,7 @@ import type { MatchSide, WinnerSide } from '../types/supabase';
 import { useMatchTimeline } from '../hooks/useMatchTimeline';
 import { useFullscreen } from '../hooks/useFullscreen';
 import BattleResultOverlay from '../components/BattleResultOverlay';
+import type { TrainingModule } from '../data/trainingDrills';
 
 const ThreeBattleStage = lazy(() => import('../components/ThreeBattleStage'));
 
@@ -20,6 +22,18 @@ const MIN_TICK_MS = 800;
 type PlaybackState = 'idle' | 'playing' | 'paused' | 'finished';
 
 type ViewerOutcome = 'player' | 'enemy' | 'draw' | null;
+
+type DemoOrTrainingState = {
+  mode?: 'demo' | 'training';
+  matchId?: string;
+  timelineA?: BattleTickResult[];
+  timelineB?: BattleTickResult[] | null;
+  winnerSide?: WinnerSide | 'draw';
+  moduleId?: string;
+  moduleTitle?: string;
+  exitTo?: string;
+  playArea?: TrainingModule['playArea'] | null;
+};
 
 const mapWinnerSideToViewer = (side: WinnerSide | null, viewerSide: MatchSide | null): ViewerOutcome => {
   if (!side || side === 'draw' || !viewerSide) return 'draw';
@@ -31,6 +45,10 @@ const formatParticipant = (bundle: MatchBundle | null, side: MatchSide) =>
 
 const BattleTheater = () => {
   const { matchId } = useParams<{ matchId: string }>();
+  const location = useLocation();
+  const demoState = (location.state as DemoOrTrainingState | null | undefined) ?? null;
+  const isDemo = demoState?.mode === 'demo';
+  const isTraining = demoState?.mode === 'training';
   const navigate = useNavigate();
   const { user } = useAuth();
   const [bundle, setBundle] = useState<MatchBundle | null>(null);
@@ -50,7 +68,20 @@ const BattleTheater = () => {
   const [controlMessage, setControlMessage] = useState<string | null>(null);
   const completingRef = useRef(false);
 
-  const { timelineA, timelineB, winnerSide, loading: timelineLoading, error: timelineError, refresh } = useMatchTimeline(matchId);
+  const {
+    timelineA: fetchedTimelineA,
+    timelineB: fetchedTimelineB,
+    winnerSide: fetchedWinnerSide,
+    loading: fetchedTimelineLoading,
+    error: fetchedTimelineError,
+    refresh: fetchTimeline,
+  } = useMatchTimeline(isDemo || isTraining ? null : matchId);
+  const timelineA = isDemo || isTraining ? demoState?.timelineA ?? null : fetchedTimelineA;
+  const timelineB = isDemo || isTraining ? demoState?.timelineB ?? null : fetchedTimelineB;
+  const winnerSide = isDemo || isTraining ? ((demoState?.winnerSide ?? null) as WinnerSide | null) : fetchedWinnerSide;
+  const timelineLoading = isDemo || isTraining ? false : fetchedTimelineLoading;
+  const timelineError = isDemo || isTraining ? null : fetchedTimelineError;
+  const refresh = isDemo || isTraining ? () => {} : fetchTimeline;
   const { isFullscreen, isSupported: fullscreenSupported, error: fullscreenError, toggle: toggleFullscreen, exit: exitFullscreen } = useFullscreen();
 
   // Lock body scroll while in theater
@@ -65,7 +96,7 @@ const BattleTheater = () => {
   }, []);
 
   useEffect(() => {
-    if (!matchId) return;
+    if (!matchId || isDemo || isTraining) return;
     let cancelled = false;
     setBundleError(null);
     fetchMatchBundle(matchId)
@@ -80,13 +111,14 @@ const BattleTheater = () => {
     return () => {
       cancelled = true;
     };
-  }, [matchId]);
+  }, [isDemo, isTraining, matchId]);
 
   const viewerSide = useMemo<MatchSide | null>(() => {
+    if (isDemo || isTraining) return 'A';
     if (!bundle || !user) return null;
     const participant = bundle.participants.find((p) => p.player_id === user.id);
     return participant?.side ?? null;
-  }, [bundle, user]);
+  }, [bundle, isDemo, isTraining, user]);
 
   const viewerTimeline = useMemo(() => {
     if (viewerSide === 'A') return timelineA;
@@ -95,6 +127,29 @@ const BattleTheater = () => {
   }, [timelineA, timelineB, viewerSide]);
 
   const pendingWinner = useMemo(() => mapWinnerSideToViewer(winnerSide, viewerSide), [viewerSide, winnerSide]);
+
+  const trainingExitTo = demoState?.exitTo ?? '/training';
+  const trainingPlayArea = isTraining ? demoState?.playArea ?? null : null;
+
+  const disabledCells = useMemo(() => {
+    if (!isTraining || !trainingPlayArea) return [] as string[];
+    const { cols, colStart, rowsPerSide, playerRowStart, enemyRowStart } = trainingPlayArea;
+    const cells: string[] = [];
+
+    for (let row = 0; row < BOARD_SIZE; row += 1) {
+      for (let col = 0; col < BOARD_COLS; col += 1) {
+        const inCols = col >= colStart && col < colStart + cols;
+        const inEnemyRows = row >= enemyRowStart && row < enemyRowStart + rowsPerSide;
+        const inPlayerRows = row >= playerRowStart && row < playerRowStart + rowsPerSide;
+        const enabled = inCols && (inEnemyRows || inPlayerRows);
+        if (!enabled) {
+          cells.push(boardKey(row, col));
+        }
+      }
+    }
+
+    return cells;
+  }, [isTraining, trainingPlayArea]);
 
   const applyTick = useCallback((tick: BattleTickResult | undefined) => {
     if (!tick) return;
@@ -189,6 +244,7 @@ const BattleTheater = () => {
   }, [toggleFullscreen]);
 
   const settleMatch = useCallback(async () => {
+    if (isDemo || isTraining) return;
     if (completingRef.current) return;
     if (!bundle) return;
     if (bundle.match.status === 'COMPLETED') return;
@@ -200,14 +256,26 @@ const BattleTheater = () => {
     } finally {
       completingRef.current = false;
     }
-  }, [bundle]);
+  }, [bundle, isDemo, isTraining]);
 
   const handleBack = async () => {
+    if (isDemo) {
+      navigate('/war-room');
+      return;
+    }
+    if (isTraining) {
+      navigate(trainingExitTo);
+      return;
+    }
     await settleMatch();
     navigate('/academy');
   };
 
   const handleAfterAction = async () => {
+    if (isDemo || isTraining) {
+      await handleBack();
+      return;
+    }
     if (!matchId) return;
     await settleMatch();
     navigate(`/after-action/${matchId}`);
@@ -238,25 +306,40 @@ const BattleTheater = () => {
   }, [fullscreenError]);
 
   const timelineReady = Boolean(viewerTimeline && viewerTimeline.length);
-  const matchLabel = matchId ? `Match ${matchId.slice(0, 8)}...` : 'Match';
+  const displayMatchId = isDemo || isTraining ? demoState?.matchId ?? matchId ?? undefined : matchId;
+  const matchLabel = isTraining
+    ? demoState?.moduleTitle ?? 'Training Battle'
+    : isDemo
+      ? 'Demo Battle'
+      : displayMatchId
+        ? `Match ${displayMatchId.slice(0, 8)}...`
+        : 'Match';
   const outcome = winner ?? pendingWinner ?? 'draw';
-  const winnerLabel = outcome === 'draw'
-    ? 'Stalemate'
-    : outcome === 'player'
-      ? `${formatParticipant(bundle, viewerSide ?? 'A')} prevailed`
-      : `${formatParticipant(bundle, viewerSide === 'A' ? 'B' : viewerSide === 'B' ? 'A' : 'B')} prevailed`;
+  const winnerLabel = isTraining
+    ? outcome === 'draw'
+      ? 'Training result: Draw'
+      : outcome === 'player'
+        ? 'Cadet prevailed'
+        : 'Opponent prevailed'
+    : outcome === 'draw'
+      ? 'Stalemate'
+      : outcome === 'player'
+        ? `${formatParticipant(bundle, viewerSide ?? 'A')} prevailed`
+        : `${formatParticipant(bundle, viewerSide === 'A' ? 'B' : viewerSide === 'B' ? 'A' : 'B')} prevailed`;
   const summaryLines = [
-    winnerLabel,
+    isTraining && demoState?.moduleTitle ? `Training: ${demoState.moduleTitle}` : winnerLabel,
     `${viewerTimeline?.length ?? 0} frames recorded`,
   ];
+  const backLabel = isTraining ? 'Back to Training' : isDemo ? 'Back to War Room' : 'Back to Academy';
+  const backButtonLabel = isTraining ? '← Training' : isDemo ? '← War Room' : '← Back';
 
   return (
     <div className="battle-theater-shell" ref={containerRef}>
       <div className="battle-theater-inner">
         <header className="battle-theater-header">
           <div className="battle-theater-left">
-            <button type="button" className="battle-theater-back" onClick={handleBack} aria-label="Back to Academy">
-              ← Back
+            <button type="button" className="battle-theater-back" onClick={handleBack} aria-label={backLabel}>
+              {backButtonLabel}
             </button>
             <div className="battle-theater-title">
               <h1>Battle Theater</h1>
@@ -309,6 +392,7 @@ const BattleTheater = () => {
                   hitEvents={hitEvents}
                   moveCells={moveCells}
                   marchCells={marchCells}
+                  disabledCells={disabledCells}
                   demoState={playbackState === 'playing' ? 'running' : playbackState === 'finished' ? 'finished' : 'idle'}
                   interactionMode="battle"
                 />
@@ -351,11 +435,13 @@ const BattleTheater = () => {
         open={showResult && Boolean(outcome)}
         status={outcome === 'enemy' ? 'defeat' : outcome === 'player' ? 'victory' : 'draw'}
         winnerLabel={winnerLabel}
-        matchId={matchId}
+        matchId={displayMatchId}
         summaryLines={summaryLines}
         onAfterAction={handleAfterAction}
+        showAfterAction={!isDemo}
         onBack={handleBack}
         onReplay={handleReplay}
+        backLabel={backLabel}
       />
     </div>
   );

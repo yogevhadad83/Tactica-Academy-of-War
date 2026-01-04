@@ -10,7 +10,6 @@ import { AudioProvider, useAudio } from './context/AudioContext';
 const Home = lazy(() => import('./pages/Home'));
 const Academy = lazy(() => import('./pages/Academy'));
 const ArmyBuilder = lazy(() => import('./pages/ArmyBuilder'));
-const BoardView = lazy(() => import('./pages/BoardView'));
 const WarRoom = lazy(() => import('./pages/WarRoom'));
 const Login = lazy(() => import('./pages/Login'));
 const Signup = lazy(() => import('./pages/Signup'));
@@ -201,7 +200,6 @@ function AppContent() {
                 <Route path="home" element={<RouteLoader><Home /></RouteLoader>} />
                 <Route path="army-builder" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
                 <Route path="quartermaster" element={<RouteLoader><ArmyBuilder /></RouteLoader>} />
-                <Route path="board" element={<RouteLoader><BoardView /></RouteLoader>} />
                 <Route path="pvp" element={<RouteLoader><PvpLobby /></RouteLoader>} />
                 <Route path="pvp/match/:matchId" element={<RouteLoader><PvpMatch /></RouteLoader>} />
                 <Route path="queue" element={<Navigate to="/pvp" replace />} />

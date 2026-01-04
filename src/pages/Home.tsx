@@ -13,8 +13,8 @@ const Home = () => {
         <span>⚔️ Build Army</span>
         <p>Assemble elite squads without leaving the browser.</p>
       </Link>
-      <Link to="/board" className="quick-link-card">
-        <span>🎯 Board</span>
+      <Link to="/war-room" className="quick-link-card">
+        <span>🎯 War Room</span>
         <p>Place units on the 12×8 battlefield.</p>
       </Link>
     </div>
@@ -65,7 +65,7 @@ const Home = () => {
           <p>Assemble your front line of Recruits, Knights, Archers, Beasts, Mages, Zombies, and Giants.</p>
         </Link>
 
-        <Link to="/board" className="menu-card">
+        <Link to="/war-room" className="menu-card">
           <div className="menu-icon">🎮</div>
           <h2>Battle Board</h2>
           <p>Preview placements on the 12×8 battlefield.</p>
