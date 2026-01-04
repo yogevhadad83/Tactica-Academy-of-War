@@ -448,32 +448,6 @@ const TrainingRun = () => {
               />
             </Suspense>
 
-            {playArea && (
-              <div className="training-run-playarea-mask" aria-hidden="true">
-                {Array.from({ length: BOARD_SIZE * BOARD_COLS }).map((_, index) => {
-                  const row = Math.floor(index / BOARD_COLS);
-                  const col = index % BOARD_COLS;
-                  const outside = !isInsidePlayArea(row, col);
-                  return <div key={`${row}-${col}`} className={outside ? 'mask-cell outside' : 'mask-cell inside'} />;
-                })}
-              </div>
-            )}
-
-            {playArea && (
-              <div className="training-run-active-tiles" aria-hidden="true">
-                {Array.from({ length: BOARD_SIZE * BOARD_COLS }).map((_, index) => {
-                  const row = Math.floor(index / BOARD_COLS);
-                  const col = index % BOARD_COLS;
-                  const inPlayerActive =
-                    row >= playArea.playerRowStart &&
-                    row < playArea.playerRowStart + playArea.rowsPerSide &&
-                    col >= playArea.colStart &&
-                    col < playArea.colStart + playArea.cols;
-                  return <div key={`highlight-${row}-${col}`} className={inPlayerActive ? 'active-tile player' : 'active-tile'} />;
-                })}
-              </div>
-            )}
-
             <div className="training-run-stage-meta" aria-label="Battle info">
               <div className="training-run-stage-pill">
                 First turn: {startingTeam === 'player' ? 'Player' : 'Opponent'}
