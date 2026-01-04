@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { usePlayerContext } from '../context/PlayerContext';
 import { supabase } from '../lib/supabaseClient';
@@ -10,7 +10,7 @@ import type { PlacedUnit } from '../types';
 import type { DemoState } from '../types/battle';
 import { calculateTickDuration } from '../components/units/useUnitLayer';
 import { runTrainingBattle } from '../engine/runTrainingBattle';
-import { addGuestCredits, getTrainingState, hasCompleted, markCompleted } from '../utils/trainingProgress';
+import { addGuestCredits, hasCompleted, markCompleted } from '../utils/trainingProgress';
 import { validatePlacementsInBounds } from '../utils/validatePlacementsInBounds';
 import BoardSetupPanel from '../components/BoardSetupPanel';
 import './TrainingRun.css';
@@ -24,7 +24,6 @@ type OutcomeState = 'win' | 'lose' | 'draw' | 'pending';
 
 const TrainingRun = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const userIdOrNull = user?.id ?? null;
   const { player, setPlayerCredits, refresh: refreshPlayer } = usePlayerContext();
@@ -43,7 +42,6 @@ const TrainingRun = () => {
   const [rewardGranted, setRewardGranted] = useState<number>(0);
   const [rewardError, setRewardError] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
-  const [progressVersion, setProgressVersion] = useState(0);
 
   const [setupPlayerUnits, setSetupPlayerUnits] = useState<PlacedUnit[]>([]);
   const [setupEnemyUnits, setSetupEnemyUnits] = useState<PlacedUnit[]>([]);
@@ -56,14 +54,7 @@ const TrainingRun = () => {
   const wasReplayRef = useRef(false);
   const pendingWinnerRef = useRef<Team | 'draw'>('draw');
 
-  const trainingState = useMemo(() => getTrainingState(userIdOrNull), [userIdOrNull, progressVersion]);
-  const completed = useMemo(() => new Set(trainingState.completedModuleIds), [trainingState.completedModuleIds]);
-
-  const nextIncompleteModule = useMemo(() => {
-    return trainingDrills.find((m) => !completed.has(m.id)) ?? null;
-  }, [completed]);
-
-  useEffect(() => {
+  const hydrateFromModule = useCallback(() => {
     if (!module) return;
     setPhase('setup');
     setDemoState('idle');
@@ -97,6 +88,10 @@ const TrainingRun = () => {
     setRepositionsRemaining(module.allowedEdits.maxRepositions);
     setBehaviorChangesRemaining(module.allowedEdits.maxBehaviorChanges);
   }, [module]);
+
+  useEffect(() => {
+    hydrateFromModule();
+  }, [hydrateFromModule]);
 
   const previewUnits = useMemo(() => {
     if (!module) return [] as PlacedUnit[];
@@ -175,6 +170,11 @@ const TrainingRun = () => {
 
     setPhase('setup');
   }, []);
+
+  const resetDrill = useCallback(() => {
+    resetPlayback();
+    hydrateFromModule();
+  }, [hydrateFromModule, resetPlayback]);
 
   const startDrill = useCallback(() => {
     if (!module) return;
@@ -304,7 +304,6 @@ const TrainingRun = () => {
       const reward = module.rewardCredits;
       if (!reward || reward <= 0) {
         markCompleted(module.id, userIdOrNull);
-        setProgressVersion((v) => v + 1);
         setRewardGranted(0);
         return;
       }
@@ -330,7 +329,6 @@ const TrainingRun = () => {
         }
 
         markCompleted(module.id, userIdOrNull);
-        setProgressVersion((v) => v + 1);
         setRewardGranted(reward);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to apply rewards';
@@ -341,14 +339,6 @@ const TrainingRun = () => {
 
     void applyReward();
   }, [demoState, module, player?.current_credits, refreshPlayer, setPlayerCredits, userIdOrNull, winner]);
-
-  const goNext = useCallback(() => {
-    if (!nextIncompleteModule) {
-      navigate('/training');
-      return;
-    }
-    navigate(`/training/${nextIncompleteModule.id}`);
-  }, [navigate, nextIncompleteModule]);
 
   // Early return check AFTER all hooks (React hooks rules)
   if (!module) {
@@ -374,6 +364,18 @@ const TrainingRun = () => {
 
         <p className="training-run-desc">{module.description}</p>
         <pre className="training-run-brief">{module.instructorBrief}</pre>
+
+        {phase === 'setup' && (
+          <div className="training-run-budget" role="status" aria-live="polite">
+            <div className="training-run-budget-pill">
+              Move budget: {Math.max(0, repositionsRemaining)} / {module.allowedEdits.maxRepositions}
+            </div>
+            <div className="training-run-budget-pill">Behavior edits: disabled</div>
+            {playArea && (
+              <div className="training-run-budget-pill">Active tiles highlighted on the lane</div>
+            )}
+          </div>
+        )}
 
         {phase === 'setup' ? (
           <div className="training-run-setup">
@@ -446,17 +448,6 @@ const TrainingRun = () => {
               />
             </Suspense>
 
-            {playArea && (
-              <div className="training-run-playarea-mask" aria-hidden="true">
-                {Array.from({ length: BOARD_SIZE * BOARD_COLS }).map((_, index) => {
-                  const row = Math.floor(index / BOARD_COLS);
-                  const col = index % BOARD_COLS;
-                  const outside = !isInsidePlayArea(row, col);
-                  return <div key={`${row}-${col}`} className={outside ? 'mask-cell outside' : 'mask-cell inside'} />;
-                })}
-              </div>
-            )}
-
             <div className="training-run-stage-meta" aria-label="Battle info">
               <div className="training-run-stage-pill">
                 First turn: {startingTeam === 'player' ? 'Player' : 'Opponent'}
@@ -491,8 +482,8 @@ const TrainingRun = () => {
               <Link className="training-run-link" to="/training">
                 Back to Training
               </Link>
-              <button type="button" className="training-run-btn primary" onClick={goNext}>
-                Next Drill
+              <button type="button" className="training-run-btn primary" onClick={resetDrill}>
+                Replay Drill
               </button>
             </div>
           </div>
@@ -507,11 +498,9 @@ const TrainingRun = () => {
           >
             {demoState === 'running' ? 'Running…' : demoState === 'finished' ? 'Restart Drill' : 'Start Drill'}
           </button>
-          {phase === 'playback' && demoState !== 'idle' && (
-            <button type="button" className="training-run-btn" onClick={resetPlayback}>
-              Reset
-            </button>
-          )}
+          <button type="button" className="training-run-btn" onClick={resetDrill} disabled={demoState === 'running'}>
+            Reset Drill
+          </button>
           <Link className="training-run-link" to="/training">
             Back
           </Link>

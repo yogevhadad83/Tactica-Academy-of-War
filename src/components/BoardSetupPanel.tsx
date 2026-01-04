@@ -571,6 +571,21 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
     return result;
   }, [canPlaceOnTile, mode, stageBoardCols, stageBoardRows, trainingBoard, trainingPlayerRowOffset]);
 
+  const enemyPreviewDisabledCells = useMemo(() => {
+    if (mode !== 'training') return [] as string[];
+    if (trainingBoard !== 'player') return [] as string[];
+
+    const result: string[] = [];
+    for (let r = 0; r < PLANNING_ROWS; r += 1) {
+      for (let c = 0; c < PLANNING_COLS; c += 1) {
+        if (!canPlaceOnTile('enemy', r, c)) {
+          result.push(boardKey(r, c));
+        }
+      }
+    }
+    return result;
+  }, [canPlaceOnTile, mode, trainingBoard]);
+
   const handleTileClick = useCallback(
     ({ row, col }: { row: number; col: number; occupied: TileOccupant | null }) => {
       if (mode === 'pvp') {
@@ -798,23 +813,22 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
 
   const enemyPreviewUnits = useMemo(() => {
     if (mode !== 'training') return [] as PlacedUnit[];
+    // Enemy units in the full board occupy rows 0-5 (enemy zone).
+    // For the 6-row opponent-only preview, we display them directly without mirroring
+    // so the front row (row 5) appears at the bottom closest to the camera.
     const enemyUsesPlanningCoords =
       props.enemyUnits.length > 0 && props.enemyUnits.every((unit) => unit.position.row >= 0 && unit.position.row < PLANNING_ROWS);
-    const enemyRowOffset = enemyUsesPlanningCoords ? 0 : PLANNING_ROW_OFFSET;
-    const mirrorRow = (row: number) => PLANNING_ROWS - 1 - row;
+    const enemyRowOffset = enemyUsesPlanningCoords ? 0 : 0; // Enemy zone starts at row 0
 
     return props.enemyUnits
-      .map((u) => {
-        const planningRow = u.position.row - enemyRowOffset;
-        return {
-          ...u,
-          team: 'enemy' as const,
-          position: {
-            ...u.position,
-            row: mirrorRow(planningRow)
-          }
-        };
-      })
+      .map((u) => ({
+        ...u,
+        team: 'enemy' as const,
+        position: {
+          ...u.position,
+          row: u.position.row - enemyRowOffset,
+        },
+      }))
       .filter(
         (u) =>
           u.position.row >= 0 &&
@@ -938,6 +952,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
                 moveCells={[]}
                 marchCells={[]}
                 demoState="idle"
+                disabledCells={enemyPreviewDisabledCells}
                 interactionMode="planning"
                 dragActive={false}
                 forceOwner="red"

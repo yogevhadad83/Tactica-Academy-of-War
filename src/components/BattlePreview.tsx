@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useMemo, useState } from 'react';
 import { BOARD_COLS, BOARD_SIZE } from '../engine/battleEngine';
 import type { PlacedUnit } from '../types';
 import type { PreviewChange } from '../hooks/useGameServer';
+import { mirrorOpponentBoardForDisplay } from '../utils/mirrorOpponentBoard';
 import '../pages/BoardView.css';
 
 const ThreeBattleStage = lazy(() => import('./ThreeBattleStage'));
@@ -37,14 +38,15 @@ const BattlePreview = ({
     [yourBoard]
   );
 
-  const mirroredOpponentBoard = useMemo(() => {
-    const maxRow = boardSize - 1;
-    return opponentBoard.map((unit) => ({
-      ...unit,
-      team: 'enemy' as const,
-      position: { ...unit.position, row: maxRow - unit.position.row }
-    }));
-  }, [boardSize, opponentBoard]);
+  const mirroredOpponentBoard = useMemo(
+    () =>
+      mirrorOpponentBoardForDisplay(opponentBoard, {
+        boardRows: boardSize,
+        boardCols,
+        forceTeam: 'enemy'
+      }),
+    [boardCols, boardSize, opponentBoard]
+  );
 
   const turn = yourRole === 'A' ? 'Challenger' : 'Defender';
   const turnStatus = isYourTurn ? `${turn}'s Turn — Make One Change` : `Waiting for ${opponentName}...`;
