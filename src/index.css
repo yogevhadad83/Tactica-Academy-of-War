@@ -8,15 +8,15 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --tactica-bg: #f7fafc;
-  --tactica-card: #ffffff;
-  --tactica-border: #e2e8f0;
-  --tactica-border-strong: #cbd5f5;
-  --tactica-purple: #667eea;
-  --tactica-purple-dark: #4c2c92;
-  --tactica-purple-soft: #e0d8ff;
-  --tactica-text: #2d3748;
-  --tactica-muted: #718096;
+  --tactica-bg: #0f1419;
+  --tactica-card: #181d23;
+  --tactica-border: #252a32;
+  --tactica-border-strong: #2d3239;
+  --tactica-purple: #5b9fd9; /* Plasma blue */
+  --tactica-purple-dark: #3a6a94;
+  --tactica-purple-soft: #2a3d4f;
+  --tactica-text: #d4dae0;
+  --tactica-muted: #8b9299;
 
   /* Shared UI tokens mapped to the Archives palette */
   --surface-lowest: var(--surface);

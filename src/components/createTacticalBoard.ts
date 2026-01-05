@@ -49,26 +49,26 @@ export interface TacticalBoard {
 
 const ownerPalettes: Record<TileOwner, { base: THREE.Color; emissive: THREE.Color; glow: THREE.Color; stroke: string }> = {
   blue: {
-    base: new THREE.Color(0x0a1627),
-    emissive: new THREE.Color(0x1d4ed8),
-    glow: new THREE.Color(0x3b82f6),
-    stroke: '#143055'
+    base: new THREE.Color(0x1a1e24), // Basalt surface
+    emissive: new THREE.Color(0x5b9fd9), // Plasma blue
+    glow: new THREE.Color(0x7ab8e8),
+    stroke: '#2a3d4f'
   },
   red: {
-    base: new THREE.Color(0x1e0b11),
-    emissive: new THREE.Color(0xdc2626),
-    glow: new THREE.Color(0xfb7185),
-    stroke: '#4d1a24'
+    base: new THREE.Color(0x1a1e24), // Basalt surface (same base)
+    emissive: new THREE.Color(0xc24a47), // Ember red (muted)
+    glow: new THREE.Color(0xd96863),
+    stroke: '#3d2826'
   }
 };
 
 const tileEffectPalette: Record<Exclude<Exclude<TileEffect, 'disabled'>, null>, { color: THREE.Color; intensity: number }> = {
-  hit: { color: new THREE.Color(0xff5f6d), intensity: 1.15 },
-  move: { color: new THREE.Color(0x38bdf8), intensity: 0.85 },
-  march: { color: new THREE.Color(0xfcd34d), intensity: 0.75 },
-  'hover-valid': { color: new THREE.Color(0xfacc15), intensity: 0.95 },
-  'hover-blocked': { color: new THREE.Color(0xf87171), intensity: 1.05 },
-  'hover-inspect': { color: new THREE.Color(0x60a5fa), intensity: 0.9 }
+  hit: { color: new THREE.Color(0xd97742), intensity: 1.15 }, // Magma warm for impacts
+  move: { color: new THREE.Color(0x5b9fd9), intensity: 0.85 }, // Plasma blue for movement
+  march: { color: new THREE.Color(0x8a6e45), intensity: 0.75 }, // Tarnished brass for march
+  'hover-valid': { color: new THREE.Color(0x7ab8e8), intensity: 0.95 }, // Bright plasma
+  'hover-blocked': { color: new THREE.Color(0xc24a47), intensity: 1.05 }, // Ember red
+  'hover-inspect': { color: new THREE.Color(0x5b9fd9), intensity: 0.9 } // Plasma blue
 };
 
 const tileTextureCache = new Map<TileOwner, THREE.CanvasTexture>();
@@ -85,10 +85,10 @@ const createTileSurfaceTexture = (owner: TileOwner) => {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Failed to get 2D context for tile texture');
 
-  ctx.fillStyle = '#050910';
+  ctx.fillStyle = '#0f1419'; // Deep void background
   ctx.fillRect(0, 0, size, size);
   ctx.strokeStyle = ownerPalettes[owner].stroke;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1.5; // Slightly thicker grout lines
   const spacing = size / 4;
   for (let i = 0; i <= size; i += spacing) {
     ctx.beginPath();
@@ -157,11 +157,11 @@ const refreshTileAppearance = (tile: SciFiTile) => {
   }
 
   if (tile.disabled || tile.effect === 'disabled') {
-    baseColor = baseColor.multiplyScalar(0.45);
-    emissive = new THREE.Color(0x0b1220);
-    emissiveIntensity = 0.12;
-    glowColor = new THREE.Color(0x0b1220);
-    glowOpacity = 0.08;
+    baseColor = baseColor.multiplyScalar(0.4); // Deeper desaturation
+    emissive = new THREE.Color(0x0a0d11); // Darkest void
+    emissiveIntensity = 0.08;
+    glowColor = new THREE.Color(0x0a0d11);
+    glowOpacity = 0.05; // Ash overlay effect
     opacity = 0.2;
   }
 
@@ -177,12 +177,11 @@ const createTileMesh = (owner: TileOwner, tileSize: number, tileThickness: numbe
   const geometry = new THREE.BoxGeometry(tileSize, tileThickness, tileSize);
   const material = new THREE.MeshStandardMaterial({
     color: ownerPalettes[owner].base,
-    metalness: 0.55,
-    roughness: 0.35,
+    metalness: 0.75, // Black iron/obsidian quality
+    roughness: 0.45, // Carved basalt texture
     emissive: ownerPalettes[owner].emissive.clone(),
     emissiveIntensity: 0.3,
     transparent: true,
-    // Change 3: More transparent tiles (was 0.88)
     opacity: 0.6,
     map: createTileSurfaceTexture(owner)
   });
@@ -223,9 +222,9 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
   // Change 1: Reduced platform overhang for thinner border
   const platformGeometry = new THREE.BoxGeometry(boardExtentCols * 1.04, platformHeight, boardExtentRows * 1.04);
   const platformMaterial = new THREE.MeshStandardMaterial({
-    color: 0x050b14,
-    metalness: 0.8,
-    roughness: 0.25
+    color: 0x0a0d11, // Darkest void
+    metalness: 0.85, // Polished obsidian
+    roughness: 0.2
   });
   const platform = new THREE.Mesh(platformGeometry, platformMaterial);
   platform.position.y = -platformHeight / 2;
@@ -236,10 +235,10 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
   // Change 1: Reduced lip overhang for thinner border
   const lipGeometry = new THREE.BoxGeometry(boardExtentCols * 1.06, lipHeight, boardExtentRows * 1.06);
   const lipMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0d1b2a,
-    emissive: new THREE.Color(0x0ea5e9),
-    emissiveIntensity: 0.65,
-    metalness: 0.7,
+    color: 0x1a1e24, // Basalt
+    emissive: new THREE.Color(0x5b9fd9), // Plasma blue edge
+    emissiveIntensity: 0.5,
+    metalness: 0.8,
     roughness: 0.3
   });
   const lip = new THREE.Mesh(lipGeometry, lipMaterial);
@@ -249,11 +248,11 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
 
   const edgeDetailGeometry = new THREE.BoxGeometry(cellSize * 0.6, lipHeight * 2, cellSize * 0.6);
   const edgeDetailMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0f172a,
-    emissive: new THREE.Color(0x14b8a6),
-    emissiveIntensity: 0.4,
-    metalness: 0.65,
-    roughness: 0.35
+    color: 0x1a1e24, // Basalt
+    emissive: new THREE.Color(0x8a6e45), // Tarnished brass
+    emissiveIntensity: 0.35,
+    metalness: 0.7,
+    roughness: 0.4
   });
   const detailOffsetRows = boardExtentRows * 0.55;
   const detailOffsetCols = boardExtentCols * 0.55;

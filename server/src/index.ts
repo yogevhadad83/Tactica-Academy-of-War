@@ -481,7 +481,9 @@ wss.on('connection', (socket: WebSocket) => {
 
   socket.on('message', (data: Buffer) => {
     try {
-      const message: ClientToServer = JSON.parse(data.toString());
+      const rawMessage = data.toString();
+      console.log('[Server] Received raw message length:', rawMessage.length);
+      const message: ClientToServer = JSON.parse(rawMessage);
       console.log('Received message:', message.type);
 
       switch (message.type) {
@@ -875,6 +877,10 @@ wss.on('connection', (socket: WebSocket) => {
       }
     } catch (error) {
       console.error('Error processing message:', error);
+      if (error instanceof Error) {
+        console.error('Error stack:', error.stack);
+        console.error('Error message:', error.message);
+      }
       send(socket, {
         type: 'error',
         message: 'Invalid message format',

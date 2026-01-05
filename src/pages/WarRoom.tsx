@@ -302,6 +302,7 @@ const WarRoom = () => {
     console.log('[WarRoom] Starting test plan with', placedUnits.length, 'units');
     setTestingPlan(true);
     const armyConfig = placementToArmyConfig(placedUnits);
+    console.log('[WarRoom] Army config to send:', JSON.stringify(armyConfig, null, 2));
     startDemoBattle(armyConfig);
   }, [multiplayerStatus, placedUnits, startDemoBattle]);
 

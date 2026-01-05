@@ -1,15 +1,15 @@
 .archive-card {
-  background: var(--archive-card-bg);
+  background: var(--archive-card-bg); /* Stone plate */
   border: 1px solid var(--archive-card-border);
-  border-radius: 2px;
+  border-radius: 2px; /* Gothic sharp */
   padding: 1.5rem;
-  box-shadow: 0 1px 3px var(--shadow);
-  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px var(--shadow);
+  transition: all 0.18s ease; /* 150-220ms */
 }
 
 .archive-card:hover {
   background: var(--archive-card-hover);
-  box-shadow: 0 2px 6px var(--shadow-strong);
+  box-shadow: 0 3px 8px var(--shadow-strong);
   cursor: pointer;
 }
 
@@ -19,7 +19,7 @@
 
 .archive-card.primary {
   border-width: 2px;
-  border-color: var(--accent-seal);
+  border-color: var(--accent-seal); /* Magma emphasis */
 }
 
 .archive-card h2,

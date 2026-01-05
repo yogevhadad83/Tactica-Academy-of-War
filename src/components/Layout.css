@@ -11,7 +11,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 1px 3px var(--shadow);
+  box-shadow: 0 2px 6px var(--shadow);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -38,9 +38,9 @@
   color: var(--ink);
   text-decoration: none;
   padding: 0.75rem 1.25rem;
-  border-radius: 2px;
+  border-radius: 2px; /* Gothic sharp corners */
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease; /* 150-220ms */
   background: var(--surface);
   border-bottom: 2px solid transparent;
 }
@@ -57,12 +57,12 @@
 
 .nav-link:hover {
   background: var(--archive-card-hover);
-  border-bottom-color: var(--accent-brass);
+  border-bottom-color: var(--plasma-blue); /* Plasma blue guidance */
 }
 
 .nav-link.active {
   background: var(--surface-2);
-  border-bottom-color: var(--accent-seal);
+  border-bottom-color: var(--accent-seal); /* Magma warm emphasis */
   box-shadow: none;
 }
 

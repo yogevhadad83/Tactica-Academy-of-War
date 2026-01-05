@@ -1,20 +1,36 @@
+/* Void-Gothic Academy Design Bible v0.2 */
 :root {
-  --surface: #f8f1e4;
-  --surface-2: #f1e6d7;
-  --surface-low: #fdf8f0;
-  --rule: #d9c8b4;
-  --ink: #2a241c;
-  --ink-muted: #766b5f;
-  --accent-seal: #7a3b2e;
-  --accent-brass: #b8893b;
-  --archive-card-bg: #fbf6ed;
-  --archive-card-border: #e2d7c7;
-  --archive-card-hover: #f3e9d9;
-  --shadow: rgba(42, 36, 28, 0.12);
-  --shadow-strong: rgba(42, 36, 28, 0.2);
-  --divider-color: #e6ddcf;
-  --divider-accent: #c8a46b;
-  --stamp-bg: #8b4a3a;
-  --stamp-text: #fdf7ef;
-  --stamp-hover: #9c5948;
+  /* Base - Deep void and basalt surfaces */
+  --surface: #0f1419; /* Deep void BG with blue-gray lift */
+  --surface-2: #1a1e24; /* Basalt surface */
+  --surface-low: #0a0d11; /* Darkest void */
+  --rule: #2a2f38; /* Panel dividers - subtle */
+  
+  /* Text - Cold moonlight on stone */
+  --ink: #d4dae0; /* Main text - cold highlight */
+  --ink-muted: #8b9299; /* Muted text - ash gray */
+  
+  /* Accents - Plasma Blue & Magma Orange */
+  --accent-seal: #d97742; /* Magma warm - victory, emphasis */
+  --accent-brass: #8a6e45; /* Tarnished brass - ornament metal */
+  --plasma-blue: #5b9fd9; /* Plasma cool - player side, focus */
+  --ember-red: #c24a47; /* Enemy ember red - muted threat */
+  
+  /* Card surfaces - Stone plates */
+  --archive-card-bg: #181d23;
+  --archive-card-border: #252a32;
+  --archive-card-hover: #1f252c;
+  
+  /* Shadows - Void depth */
+  --shadow: rgba(0, 0, 0, 0.4);
+  --shadow-strong: rgba(0, 0, 0, 0.65);
+  
+  /* Dividers - Carved stone */
+  --divider-color: #2d3239;
+  --divider-accent: #8a6e45;
+  
+  /* Buttons - Embossed stone/iron */
+  --stamp-bg: #d97742; /* Magma primary action */
+  --stamp-text: #0f1419; /* Dark text on warm */
+  --stamp-hover: #e28754;
 }

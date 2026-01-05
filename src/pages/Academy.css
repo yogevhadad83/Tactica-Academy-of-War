@@ -8,15 +8,15 @@
 
 /* Banner for unauthenticated users */
 .academy-banner {
-  background: var(--accent-seal);
+  background: var(--accent-seal); /* Magma warm */
   color: var(--stamp-text);
   padding: 1rem 1.5rem;
   margin-bottom: 2rem;
-  border-radius: 2px;
+  border-radius: 2px; /* Gothic sharp */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 2px 4px var(--shadow);
+  box-shadow: 0 2px 6px var(--shadow);
 }
 
 .academy-banner-actions {
@@ -31,7 +31,7 @@
   border: 1px solid var(--stamp-text);
   border-radius: 2px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease; /* 150-220ms */
 }
 
 .academy-banner-link.primary {
@@ -40,7 +40,7 @@
 }
 
 .academy-banner-link:hover {
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
 /* Header */
@@ -80,6 +80,7 @@
   letter-spacing: 0.05em;
   border-bottom: 2px solid var(--rule);
   padding-bottom: 0.5rem;
+  /* Ceremonial plaque - could add ornate border here */
 }
 
 /* Next Orders */
@@ -90,7 +91,7 @@
 .next-orders-card:hover {
   cursor: default;
   background: var(--archive-card-bg);
-  box-shadow: 0 1px 3px var(--shadow);
+  box-shadow: 0 2px 4px var(--shadow);
 }
 
 .next-orders-content {
@@ -150,7 +151,7 @@
 .status-card:hover {
   cursor: default;
   background: var(--archive-card-bg);
-  box-shadow: 0 1px 3px var(--shadow);
+  box-shadow: 0 2px 4px var(--shadow);
 }
 
 .status-label {

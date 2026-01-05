@@ -118,7 +118,13 @@ export function useGameServer(username: string | null) {
   // Send message helper
   const sendMessage = useCallback((message: ClientToServer) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
+      try {
+        const jsonString = JSON.stringify(message);
+        console.log('[useGameServer] Sending message:', message.type, 'size:', jsonString.length);
+        wsRef.current.send(jsonString);
+      } catch (error) {
+        console.error('[useGameServer] Error stringifying message:', error, 'message:', message);
+      }
     } else {
       console.error('WebSocket is not connected');
     }
@@ -150,7 +156,12 @@ export function useGameServer(username: string | null) {
 
   const startDemoBattle = useCallback(
     (armyConfig: ArmyConfig) => {
-      sendMessage({ type: 'demo_battle', army: armyConfig });
+      console.log('[useGameServer] Starting demo battle with army:', armyConfig);
+      try {
+        sendMessage({ type: 'demo_battle', army: armyConfig });
+      } catch (error) {
+        console.error('[useGameServer] Error sending demo_battle message:', error);
+      }
     },
     [sendMessage]
   );

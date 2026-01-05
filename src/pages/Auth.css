@@ -5,11 +5,11 @@
 }
 
 .auth-card {
-  background: var(--tactica-card);
+  background: var(--tactica-card); /* Basalt plate */
   border: 1px solid var(--tactica-border);
-  border-radius: 16px;
+  border-radius: 2px; /* Gothic sharp, not modern rounded */
   padding: 2rem;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 8px 24px var(--shadow);
 }
 
 .auth-card h1 {
@@ -37,22 +37,31 @@
   width: 100%;
   padding: 0.75rem 1rem;
   border: 1px solid var(--tactica-border);
-  border-radius: 10px;
+  border-radius: 2px; /* Gothic sharp */
   font-size: 1rem;
+  background: var(--tactica-bg);
+  color: var(--tactica-text);
+  transition: border-color 0.18s ease;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--tactica-purple); /* Plasma blue focus */
 }
 
 .auth-form button {
   padding: 0.85rem;
-  border: none;
-  border-radius: 10px;
-  background: var(--tactica-purple);
-  color: white;
+  border: 1px solid rgba(91, 159, 217, 0.4);
+  border-radius: 2px; /* Gothic */
+  background: var(--tactica-purple); /* Plasma blue */
+  color: #0f1419;
   font-weight: 600;
   font-size: 1rem;
+  transition: background 0.18s ease; /* 150-220ms */
 }
 
 .auth-form button:hover {
-  background: #5568d3;
+  background: #7ab8e8; /* Brighter plasma */
 }
 
 .auth-helper {
@@ -62,10 +71,10 @@
 }
 
 .auth-error {
-  background: rgba(244, 63, 94, 0.1);
-  border: 1px solid rgba(244, 63, 94, 0.3);
-  color: #b91c1c;
+  background: rgba(194, 74, 71, 0.15); /* Ember red */
+  border: 1px solid rgba(194, 74, 71, 0.4);
+  color: #d96863;
   padding: 0.75rem 1rem;
-  border-radius: 10px;
+  border-radius: 2px; /* Gothic */
   font-size: 0.95rem;
 }

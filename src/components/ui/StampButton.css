@@ -1,31 +1,31 @@
 .stamp-button {
-  background: var(--stamp-bg);
-  color: var(--stamp-text);
-  border: none;
+  background: var(--stamp-bg); /* Magma warm */
+  color: var(--stamp-text); /* Dark text */
+  border: 1px solid rgba(217, 119, 66, 0.6); /* Brass edge highlight */
   padding: 0.75rem 1.5rem;
   font-size: 1rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease; /* 150-220ms, no bounce */
   box-shadow: 0 2px 4px var(--shadow);
-  border-radius: 2px;
+  border-radius: 2px; /* Gothic sharp */
 }
 
 .stamp-button:hover:not(:disabled) {
   background: var(--stamp-hover);
   box-shadow: 0 3px 6px var(--shadow-strong);
-  transform: translateY(-1px);
+  /* NO transform bounce */
 }
 
 .stamp-button:active:not(:disabled) {
-  transform: translateY(0);
+  /* Brief stamp effect */
   box-shadow: 0 1px 3px var(--shadow);
 }
 
 .stamp-button:disabled {
-  opacity: 0.5;
+  opacity: 0.4; /* Ash overlay */
   cursor: not-allowed;
 }
 
@@ -37,5 +37,5 @@
 
 .stamp-button.secondary:hover:not(:disabled) {
   background: var(--surface-2);
-  border-color: var(--accent-brass);
+  border-color: var(--plasma-blue); /* Plasma edge */
 }

@@ -2,7 +2,7 @@
  * AUTO-GENERATED FILE - DO NOT EDIT MANUALLY
  * 
  * Animation metadata extracted from GLB model files.
- * Generated: 2026-01-05T07:56:21.728Z
+ * Generated: 2026-01-05T20:42:56.267Z
  * 
  * To regenerate, run: npx tsx scripts/extract-animation-metadata.ts
  */
@@ -51,8 +51,6 @@ export const RAW_ANIMATION_DATA: Record<string, Record<string, AnimationMetadata
     'Impact_0': { name: 'Impact_0', durationMs: 1000 },
     'Kill_0': { name: 'Kill_0', durationMs: 2700 },
     'Walk_0': { name: 'Walk_0', durationMs: 1133 },
-  },
-  'castle': {
   },
   'knight': {
     'Armature|mixamo.com|Layer0': { name: 'Armature|mixamo.com|Layer0', durationMs: 67 },
