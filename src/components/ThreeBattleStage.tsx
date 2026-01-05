@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CELL_SIZE } from '../constants/board';
 import type { DemoState, HitEvent } from '../types/battle';
 import type { PlacedUnit } from '../types';
@@ -18,7 +19,7 @@ const CAMERA_CLOSE_DISTANCE_FACTOR = 0.52;
 const CAMERA_CLOSE_HEIGHT_FACTOR = 0.74;
 const PLANNING_CAMERA_DISTANCE_FACTOR = 0.96;
 const CAMERA_LERP_FACTOR = 0.12;
-const CAMERA_APPROACH_DURATION = 900;
+const CAMERA_APPROACH_DURATION = 2400; // Slower cinematic approach
 
 // Legacy tuning constants kept for reference (no longer used in planning view)
 // const LOCKED_DISTANCE_FACTOR = 1.55;
@@ -81,6 +82,7 @@ const ThreeBattleStage = ({
   const animationRef = useRef<number | null>(null);
   const pmremRef = useRef<THREE.PMREMGenerator | null>(null);
   const envTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
+  const castleGroupRef = useRef<THREE.Group | null>(null);
   const flightModeRef = useRef(false);
   const cameraModeRef = useRef<'idle' | 'locked'>('idle');
   const lockedCameraBasePositionRef = useRef(
@@ -96,6 +98,7 @@ const ThreeBattleStage = ({
   const lockedCameraPositionRef = useRef(
     new THREE.Vector3(0, LOCKED_CAMERA_HEIGHT, LOCKED_CAMERA_DISTANCE)
   );
+  const cameraApproachStartRef = useRef(new THREE.Vector3()); // Starting position for cinematic approach
   const cameraApproachRef = useRef({ active: false, start: 0, progress: 0 });
   const pendingApproachRef = useRef(false);
   const planningCameraPositionRef = useRef(
@@ -175,13 +178,27 @@ const ThreeBattleStage = ({
       zoomCameraPositionRef.current.set(1.8, topDownHeight * 0.68, boardCenterZ + topDownDistance * 0.42);
     } else {
       const sideOffset = Math.max(boardSpan * 0.5, 12); // Right side view (Blue Left, Red Right)
-      const battleDistance = Math.max(16, boardSpan * 0.35); // Closer
-      const battleHeight = Math.max(18, boardSpan * 0.35); // Lower
+      const battleDistance = Math.max(10, boardSpan * 0.22); // Much closer to the board
+      const battleHeight = Math.max(16, boardSpan * 0.3); // Slightly lower to fill viewport
       lockedCameraTargetRef.current.set(0, -6, boardCenterZ); // Centered target
       planningCameraPositionRef.current.set(sideOffset * 0.72, battleHeight * 0.88, boardCenterZ + battleDistance * 0.75);
-      lockedCameraBasePositionRef.current.set(sideOffset, battleHeight, boardCenterZ + battleDistance);
-      lockedCameraClosePositionRef.current.set(sideOffset * 0.82, battleHeight * 0.72, boardCenterZ + battleDistance * 0.55);
-      zoomCameraPositionRef.current.set(sideOffset * 0.48, battleHeight * 0.52, boardCenterZ + battleDistance * 0.32);
+      const baseSideOffset = sideOffset * 1.1; // Slightly right, keep board centered
+      lockedCameraBasePositionRef.current.set(baseSideOffset, battleHeight, boardCenterZ + battleDistance);
+      lockedCameraClosePositionRef.current.set(baseSideOffset * 0.82, battleHeight * 0.72, boardCenterZ + battleDistance * 0.55);
+      zoomCameraPositionRef.current.set(baseSideOffset * 0.48, battleHeight * 0.52, boardCenterZ + battleDistance * 0.32);
+      
+      // Start from further away - positioned behind and slightly left of final position
+      // The straight lerp from start to end creates a natural arc appearance
+      const startX = baseSideOffset * 1.15; // Start a bit right of final
+      const startY = battleHeight * 1.3; // Lower start
+      const startZ = boardCenterZ + battleDistance * 1.4; // Start much closer
+      cameraApproachStartRef.current.set(startX, startY, startZ);
+      lockedCameraPositionRef.current.copy(cameraApproachStartRef.current);
+      
+      // Automatically begin camera approach when in battle mode
+      if (typeof window !== 'undefined') {
+        pendingApproachRef.current = true;
+      }
     }
 
     lockedCameraPositionRef.current.copy(lockedCameraBasePositionRef.current);
@@ -191,6 +208,19 @@ const ThreeBattleStage = ({
   useEffect(() => {
     ensureAssetsForUnits(units);
   }, [ensureAssetsForUnits, units]);
+
+  // Trigger camera approach when entering battle mode
+  useEffect(() => {
+    if (interactionMode === 'battle' && pendingApproachRef.current && cameraRef.current) {
+      // Delay approach slightly to allow scene to load
+      const timeout = setTimeout(() => {
+        if (pendingApproachRef.current) {
+          beginCameraApproach();
+        }
+      }, 500);
+      return () => clearTimeout(timeout);
+    }
+  }, [interactionMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -239,15 +269,19 @@ const ThreeBattleStage = ({
     const keyLight = new THREE.DirectionalLight(0x93c5fd, 2.1);
     keyLight.position.set(-20, 32, 38);
     keyLight.castShadow = true;
-    keyLight.shadow.mapSize.width = 2048;
-    keyLight.shadow.mapSize.height = 2048;
+    keyLight.shadow.mapSize.width = 4096;
+    keyLight.shadow.mapSize.height = 4096;
     keyLight.shadow.camera.near = 10;
     keyLight.shadow.camera.far = 140;
-    const shadowRange = Math.max(extentX, extentZ) * 1.2;
+    const shadowRange = Math.max(extentX, extentZ) * 1.5;
     keyLight.shadow.camera.left = -shadowRange;
     keyLight.shadow.camera.right = shadowRange;
     keyLight.shadow.camera.top = shadowRange;
     keyLight.shadow.camera.bottom = -shadowRange;
+    keyLight.shadow.bias = -0.0001;
+    // Position shadow camera to look at the board/castle area
+    keyLight.target.position.set(0, 0, -15);
+    scene.add(keyLight.target);
     scene.add(keyLight);
 
     const fillLight = new THREE.DirectionalLight(0xffe7c2, 0.55);
@@ -257,8 +291,66 @@ const ThreeBattleStage = ({
     const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE, forceOwner });
     tacticalBoardRef.current = tacticalBoard;
     tileMeshesRef.current = Array.from(tacticalBoard.tiles.values()).map((tile) => tile.mesh);
-    tacticalBoard.group.position.set(0, 0, -15);
+    tacticalBoard.group.position.set(0, 0.04, -15); // Lowered by tile thickness (0.16)
+    tacticalBoard.group.rotation.x = 0; // No tilt
+    tacticalBoard.group.rotation.z = 0; // No roll
     scene.add(tacticalBoard.group);
+
+    const castleGroup = new THREE.Group();
+    castleGroup.name = 'CastleEnvironment';
+    castleGroup.position.set(0, 0, -15);
+    castleGroupRef.current = castleGroup;
+    scene.add(castleGroup);
+
+    // Only render arena in battle mode, not in planning or preview modes
+    if (interactionMode === 'battle') {
+      const castleLoader = new GLTFLoader();
+      castleLoader.load(
+        '/models/arena.glb',
+        (gltf) => {
+          const castleScene = gltf.scene;
+          castleScene.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const mesh = child as THREE.Mesh;
+              mesh.castShadow = true;
+              mesh.receiveShadow = true;
+              const material = mesh.material;
+              if (Array.isArray(material)) {
+                material.forEach((mat) => {
+                  if ('envMapIntensity' in mat) {
+                    (mat as THREE.MeshStandardMaterial).envMapIntensity = 1.1;
+                  }
+                });
+              } else if ('envMapIntensity' in material) {
+                (material as THREE.MeshStandardMaterial).envMapIntensity = 1.1;
+              }
+            }
+          });
+
+          // Rotate 90 degrees to the left (counter-clockwise)
+          castleScene.rotation.y = -Math.PI / 2;
+
+          const boundingBox = new THREE.Box3().setFromObject(castleScene);
+          const originalSize = boundingBox.getSize(new THREE.Vector3());
+          const horizontalSize = Math.max(originalSize.x, originalSize.z);
+          const targetSpan = boardExtent * 2.88; // 20% larger than base 2.4
+          const castleScale = horizontalSize > 0 ? targetSpan / horizontalSize : 1;
+          castleScene.scale.setScalar(castleScale * 1); // Scale arena to original size (20% of 5x)
+
+          boundingBox.setFromObject(castleScene);
+          const center = boundingBox.getCenter(new THREE.Vector3());
+          castleScene.position.sub(center);
+          boundingBox.setFromObject(castleScene);
+          castleScene.position.y += -boundingBox.min.y - 17.8; // Lower arena by 2.8
+
+          castleGroup.add(castleScene);
+        },
+        undefined,
+        (error) => {
+          console.error('Failed to load arena.glb', error);
+        }
+      );
+    }
 
     const unitRoot = new THREE.Group();
     unitRoot.position.set(0, 0, -15);
@@ -302,9 +394,11 @@ const ThreeBattleStage = ({
           }
         }
         const approachAmount = easeInOutCubic(cameraApproachRef.current.progress);
+        
+        // Smooth single-motion lerp from start position to final position
         lockedCameraPositionRef.current.lerpVectors(
+          cameraApproachStartRef.current,
           lockedCameraBasePositionRef.current,
-          lockedCameraClosePositionRef.current,
           approachAmount
         );
 
@@ -530,6 +624,22 @@ const ThreeBattleStage = ({
       envTargetRef.current = null;
       pmremRef.current?.dispose();
       pmremRef.current = null;
+      if (castleGroupRef.current) {
+        scene.remove(castleGroupRef.current);
+        castleGroupRef.current.traverse((obj) => {
+          if ((obj as THREE.Mesh).isMesh) {
+            const mesh = obj as THREE.Mesh;
+            mesh.geometry.dispose();
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((mat) => mat.dispose());
+            } else {
+              mesh.material.dispose();
+            }
+          }
+        });
+        castleGroupRef.current.clear();
+        castleGroupRef.current = null;
+      }
       mount.removeChild(renderer.domElement);
     };
   }, [boardSize, boardCols, disposeAll, forceOwner, interactionMode]);

@@ -858,19 +858,6 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
             forceOwner="blue"
           />
         </Suspense>
-
-        {/* Active area mask intentionally omitted during setup - shown only during playback */}
-
-        <div className="stage-overlay">
-          <div>
-            <p className="stage-kicker">Immersive Tactical Visualizer</p>
-            <p className="stage-caption">Drag and configure units before starting.</p>
-          </div>
-          <div className="stage-pill idle">
-            <span className="pulse-dot" />
-            Setup
-          </div>
-        </div>
       </div>
 
       <div className="stage-side-dock">
