@@ -291,9 +291,9 @@ const ThreeBattleStage = ({
     const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE, forceOwner });
     tacticalBoardRef.current = tacticalBoard;
     tileMeshesRef.current = Array.from(tacticalBoard.tiles.values()).map((tile) => tile.mesh);
-    tacticalBoard.group.position.set(0, 0.04, -15); // Lowered by tile thickness (0.16)
-    tacticalBoard.group.rotation.x = 0; // No tilt
-    tacticalBoard.group.rotation.z = 0; // No roll
+    tacticalBoard.group.position.set(0, 0.04, -15);
+    tacticalBoard.group.rotation.x = 0;
+    tacticalBoard.group.rotation.z = 0;
     scene.add(tacticalBoard.group);
 
     const castleGroup = new THREE.Group();

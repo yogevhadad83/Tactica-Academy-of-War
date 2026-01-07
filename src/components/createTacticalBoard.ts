@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { boardKey, cellToWorld } from '../constants/board';
+
+import { boardKey } from '../constants/board';
 
 export type TileOwner = 'blue' | 'red';
 export type TileOccupant = TileOwner | null;
@@ -21,11 +22,8 @@ interface TacticalBoardOptions {
   forceOwner?: TileOwner;
 }
 
-interface SciFiTile {
-  mesh: THREE.Mesh<THREE.BoxGeometry, THREE.MeshStandardMaterial>;
-  glow: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-  material: THREE.MeshStandardMaterial;
-  glowMaterial: THREE.MeshBasicMaterial;
+interface Tile {
+  mesh: THREE.Mesh;
   owner: TileOwner;
   occupant: TileOccupant;
   effect: TileEffect;
@@ -35,7 +33,7 @@ interface SciFiTile {
 
 export interface TacticalBoard {
   group: THREE.Group;
-  tiles: Map<string, SciFiTile>;
+  tiles: Map<string, Tile>;
   setTileOwner: (row: number, col: number, owner: TileOwner) => void;
   setTileOccupiedBy: (row: number, col: number, occupant: TileOccupant) => void;
   setTileEffect: (row: number, col: number, effect: TileEffect) => void;
@@ -47,249 +45,234 @@ export interface TacticalBoard {
   clearHoverStates: () => void;
 }
 
-const ownerPalettes: Record<TileOwner, { base: THREE.Color; emissive: THREE.Color; glow: THREE.Color; stroke: string }> = {
-  blue: {
-    base: new THREE.Color(0x1a1e24), // Basalt surface
-    emissive: new THREE.Color(0x5b9fd9), // Plasma blue
-    glow: new THREE.Color(0x7ab8e8),
-    stroke: '#2a3d4f'
-  },
-  red: {
-    base: new THREE.Color(0x1a1e24), // Basalt surface (same base)
-    emissive: new THREE.Color(0xc24a47), // Ember red (muted)
-    glow: new THREE.Color(0xd96863),
-    stroke: '#3d2826'
-  }
+type ProjectedAtlasParams = {
+  atlas: THREE.Texture;
+  normalYThreshold?: number;
+  swapXZ?: boolean;
+  flipU?: boolean;
+  flipV?: boolean;
 };
 
-const tileEffectPalette: Record<Exclude<Exclude<TileEffect, 'disabled'>, null>, { color: THREE.Color; intensity: number }> = {
-  hit: { color: new THREE.Color(0xd97742), intensity: 1.15 }, // Magma warm for impacts
-  move: { color: new THREE.Color(0x5b9fd9), intensity: 0.85 }, // Plasma blue for movement
-  march: { color: new THREE.Color(0x8a6e45), intensity: 0.75 }, // Tarnished brass for march
-  'hover-valid': { color: new THREE.Color(0x7ab8e8), intensity: 0.95 }, // Bright plasma
-  'hover-blocked': { color: new THREE.Color(0xc24a47), intensity: 1.05 }, // Ember red
-  'hover-inspect': { color: new THREE.Color(0x5b9fd9), intensity: 0.9 } // Plasma blue
-};
+let cachedAtlasTexture: THREE.Texture | null = null;
 
-const tileTextureCache = new Map<TileOwner, THREE.CanvasTexture>();
+const getAtlasTexture = () => {
+  if (cachedAtlasTexture) return cachedAtlasTexture;
 
-const createTileSurfaceTexture = (owner: TileOwner) => {
-  if (tileTextureCache.has(owner)) {
-    return tileTextureCache.get(owner) as THREE.CanvasTexture;
-  }
-
-  const size = 64;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('Failed to get 2D context for tile texture');
-
-  ctx.fillStyle = '#0f1419'; // Deep void background
-  ctx.fillRect(0, 0, size, size);
-  ctx.strokeStyle = ownerPalettes[owner].stroke;
-  ctx.lineWidth = 1.5; // Slightly thicker grout lines
-  const spacing = size / 4;
-  for (let i = 0; i <= size; i += spacing) {
-    ctx.beginPath();
-    ctx.moveTo(i + 0.5, 0);
-    ctx.lineTo(i + 0.5, size);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, i + 0.5);
-    ctx.lineTo(size, i + 0.5);
-    ctx.stroke();
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.repeat.set(2, 2);
-  tileTextureCache.set(owner, texture);
+  const loader = new THREE.TextureLoader();
+  const texture = loader.load(
+    '/texture/board.jpg',
+    () => {
+      // Keep logs minimal per spec.
+    },
+    undefined,
+    () => {
+      // Keep logs minimal per spec.
+    }
+  );
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 16;
+  cachedAtlasTexture = texture;
   return texture;
 };
 
-const techDetailPositions = [
-  new THREE.Vector3(1, 0, 1),
-  new THREE.Vector3(-1, 0, 1),
-  new THREE.Vector3(1, 0, -1),
-  new THREE.Vector3(-1, 0, -1)
-];
+const makeProjectedAtlasMaterial = ({
+  atlas,
+  normalYThreshold = 0.6,
+  swapXZ = true,
+  flipU = false,
+  flipV = true
+}: ProjectedAtlasParams): THREE.MeshStandardMaterial => {
+  const DEBUG_UV = false;
 
-const refreshTileAppearance = (tile: SciFiTile) => {
-  const palette = ownerPalettes[tile.owner];
-
-  let baseColor = palette.base.clone();
-  let emissive = palette.emissive.clone();
-  let emissiveIntensity = 0.35;
-  let glowColor = palette.glow.clone();
-  let glowOpacity = 0.35;
-  let opacity = 0.6;
-
-  if (tile.occupant) {
-    const occupantPalette = ownerPalettes[tile.occupant];
-    emissive = occupantPalette.emissive.clone();
-    emissiveIntensity = 0.95;
-    glowColor = occupantPalette.glow.clone();
-    glowOpacity = 0.6;
-  }
-
-  if (tile.effect && tile.effect !== 'disabled') {
-    const effect = tileEffectPalette[tile.effect];
-    emissive = effect.color.clone();
-    emissiveIntensity = effect.intensity;
-    glowColor = effect.color.clone();
-    glowOpacity = 0.85;
-  }
-
-  if (tile.hoverState !== 'none') {
-    const hoverKey: Exclude<TileEffect, 'disabled' | null> =
-      tile.hoverState === 'valid'
-        ? 'hover-valid'
-        : tile.hoverState === 'blocked'
-          ? 'hover-blocked'
-          : 'hover-inspect';
-    const hoverEffect = tileEffectPalette[hoverKey];
-    emissive = hoverEffect.color.clone();
-    emissiveIntensity = hoverEffect.intensity;
-    glowColor = hoverEffect.color.clone();
-    glowOpacity = 0.95;
-  }
-
-  if (tile.disabled || tile.effect === 'disabled') {
-    baseColor = baseColor.multiplyScalar(0.4); // Deeper desaturation
-    emissive = new THREE.Color(0x0a0d11); // Darkest void
-    emissiveIntensity = 0.08;
-    glowColor = new THREE.Color(0x0a0d11);
-    glowOpacity = 0.05; // Ash overlay effect
-    opacity = 0.2;
-  }
-
-  tile.material.color.copy(baseColor);
-  tile.material.emissive.copy(emissive);
-  tile.material.emissiveIntensity = emissiveIntensity;
-  tile.material.opacity = opacity;
-  tile.glowMaterial.color.copy(glowColor);
-  tile.glowMaterial.opacity = glowOpacity;
-};
-
-const createTileMesh = (owner: TileOwner, tileSize: number, tileThickness: number) => {
-  const geometry = new THREE.BoxGeometry(tileSize, tileThickness, tileSize);
   const material = new THREE.MeshStandardMaterial({
-    color: ownerPalettes[owner].base,
-    metalness: 0.75, // Black iron/obsidian quality
-    roughness: 0.45, // Carved basalt texture
-    emissive: ownerPalettes[owner].emissive.clone(),
-    emissiveIntensity: 0.3,
-    transparent: true,
-    opacity: 0.6,
-    map: createTileSurfaceTexture(owner)
+    color: 0x1f232a,
+    roughness: 0.95,
+    metalness: 0.05
   });
-  material.map?.repeat.set(4, 4);
 
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
+  const uBoardMin = { value: new THREE.Vector2(0, 0) };
+  const uBoardSize = { value: new THREE.Vector2(1, 1) };
+  material.userData.projectedAtlasUniforms = { uBoardMin, uBoardSize };
 
-  const glowGeometry = new THREE.PlaneGeometry(tileSize * 1.04, tileSize * 1.04);
-  glowGeometry.rotateX(-Math.PI / 2);
-  const glowMaterial = new THREE.MeshBasicMaterial({
-    color: ownerPalettes[owner].glow.clone(),
-    transparent: true,
-    opacity: 0.35,
-    blending: THREE.AdditiveBlending
-  });
-  const glow = new THREE.Mesh(glowGeometry, glowMaterial);
-  glow.position.y = tileThickness * 0.55;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.projectedAtlasMap = { value: atlas };
+    shader.uniforms.uBoardMin = uBoardMin;
+    shader.uniforms.uBoardSize = uBoardSize;
 
-  const tileGroup = new THREE.Group();
-  tileGroup.add(mesh);
-  tileGroup.add(glow);
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>\n\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;\n`
+      )
+      .replace(
+        '#include <worldpos_vertex>',
+        `#include <worldpos_vertex>\n\nvWorldPos = worldPosition.xyz;\nvWorldNormal = normalize(mat3(modelMatrix) * normal);\n`
+      );
 
-  return { tileGroup, mesh, material, glow, glowMaterial };
+    const swapXZCode = swapXZ ? 'projectedUV = projectedUV.yx;' : '';
+    const flipUCode = flipU ? 'projectedUV.x = 1.0 - projectedUV.x;' : '';
+    const flipVCode = flipV ? 'projectedUV.y = 1.0 - projectedUV.y;' : '';
+
+    const debugUvBlock = DEBUG_UV
+      ? `\nif (topMask > 0.5) {\n  diffuseColor.rgb = vec3(projectedUV, 0.0);\n}\n`
+      : '';
+
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        '#include <common>',
+        `#include <common>\n\nuniform sampler2D projectedAtlasMap;\nuniform vec2 uBoardMin;\nuniform vec2 uBoardSize;\n\nvarying vec3 vWorldPos;\nvarying vec3 vWorldNormal;\n`
+      )
+      .replace(
+        'vec4 diffuseColor = vec4( diffuse, opacity );',
+        `vec4 diffuseColor = vec4( diffuse, opacity );\n\nvec2 projectedUV = vec2(\n  (vWorldPos.x - uBoardMin.x) / uBoardSize.x,\n  (vWorldPos.z - uBoardMin.y) / uBoardSize.y\n);\n\n// Default flip to match prior orientation\nprojectedUV.y = 1.0 - projectedUV.y;\n\n${swapXZCode}\n${flipUCode}\n${flipVCode}\n\nprojectedUV = clamp(projectedUV, 0.0, 1.0);\n\nvec3 atlasColor = texture2D(projectedAtlasMap, projectedUV).rgb;\nfloat topMask = step(${normalYThreshold.toFixed(3)}, vWorldNormal.y);\ndiffuseColor.rgb = mix(diffuseColor.rgb, atlasColor, topMask);\n${debugUvBlock}`
+      );
+  };
+
+  material.customProgramCacheKey = () =>
+    [
+      'projectedAtlas-v1',
+      `t:${normalYThreshold.toFixed(3)}`,
+      `sxz:${swapXZ ? 1 : 0}`,
+      `fu:${flipU ? 1 : 0}`,
+      `fv:${flipV ? 1 : 0}`
+    ].join('|');
+
+  return material;
 };
 
-export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner }: TacticalBoardOptions): TacticalBoard => {
-  const boardGroup = new THREE.Group();
-  boardGroup.name = 'TacticalBoard';
+export const createTacticalBoard = ({
+  boardRows,
+  boardCols,
+  cellSize,
+  forceOwner
+}: TacticalBoardOptions): TacticalBoard => {
+  const group = new THREE.Group();
+  group.name = 'TacticalBoard';
 
-  const boardExtentRows = boardRows * cellSize;
-  const boardExtentCols = boardCols * cellSize;
-  const platformHeight = 0.8;
-  const lipHeight = 0.18;
-  const tileThickness = 0.16;
-  const tileSize = cellSize * 0.86;
-  // Change 1: Reduced platform overhang for thinner border
-  const platformGeometry = new THREE.BoxGeometry(boardExtentCols * 1.04, platformHeight, boardExtentRows * 1.04);
-  const platformMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0a0d11, // Darkest void
-    metalness: 0.85, // Polished obsidian
-    roughness: 0.2
-  });
-  const platform = new THREE.Mesh(platformGeometry, platformMaterial);
-  platform.position.y = -platformHeight / 2;
-  platform.castShadow = true;
-  platform.receiveShadow = true;
-  boardGroup.add(platform);
+  const boardW = boardCols * cellSize;
+  const boardH = boardRows * cellSize;
 
-  // Change 1: Reduced lip overhang for thinner border
-  const lipGeometry = new THREE.BoxGeometry(boardExtentCols * 1.06, lipHeight, boardExtentRows * 1.06);
-  const lipMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1a1e24, // Basalt
-    emissive: new THREE.Color(0x5b9fd9), // Plasma blue edge
-    emissiveIntensity: 0.5,
-    metalness: 0.8,
-    roughness: 0.3
-  });
-  const lip = new THREE.Mesh(lipGeometry, lipMaterial);
-  lip.position.y = -platformHeight + lipHeight / 2;
-  lip.receiveShadow = true;
-  boardGroup.add(lip);
+  const BASE_THICKNESS = 0.14 * cellSize;
+  const BASE_BEVEL = 0.04 * cellSize;
 
-  const edgeDetailGeometry = new THREE.BoxGeometry(cellSize * 0.6, lipHeight * 2, cellSize * 0.6);
-  const edgeDetailMaterial = new THREE.MeshStandardMaterial({
-    color: 0x1a1e24, // Basalt
-    emissive: new THREE.Color(0x8a6e45), // Tarnished brass
-    emissiveIntensity: 0.35,
-    metalness: 0.7,
-    roughness: 0.4
-  });
-  const detailOffsetRows = boardExtentRows * 0.55;
-  const detailOffsetCols = boardExtentCols * 0.55;
-  techDetailPositions.forEach((pos) => {
-    const detail = new THREE.Mesh(edgeDetailGeometry, edgeDetailMaterial);
-    detail.position.set(pos.x * detailOffsetCols, -platformHeight + lipHeight, pos.z * detailOffsetRows);
-    detail.castShadow = true;
-    detail.receiveShadow = true;
-    boardGroup.add(detail);
-  });
+  const TILE_GAP = 0.06 * cellSize;
+  const TILE_THICKNESS = 0.12 * cellSize;
+  const TILE_BEVEL = 0.04 * cellSize;
+  const TILE_CLEARANCE = 0.02 * cellSize;
 
-  const tiles = new Map<string, SciFiTile>();
-  const tileY = tileThickness / 2;
+  const atlas = getAtlasTexture();
+  const projectedMat = makeProjectedAtlasMaterial({ atlas, flipU: true });
+
+  // Base slab: top surface at y = 0.
+  const baseShape = new THREE.Shape();
+  baseShape.moveTo(-boardW / 2, -boardH / 2);
+  baseShape.lineTo(boardW / 2, -boardH / 2);
+  baseShape.lineTo(boardW / 2, boardH / 2);
+  baseShape.lineTo(-boardW / 2, boardH / 2);
+  baseShape.closePath();
+
+  const baseGeometry = new THREE.ExtrudeGeometry(baseShape, {
+    depth: BASE_THICKNESS,
+    bevelEnabled: true,
+    bevelSize: BASE_BEVEL * 0.5,
+    bevelThickness: BASE_BEVEL * 0.5,
+    bevelSegments: 2
+  });
+  baseGeometry.rotateX(-Math.PI / 2);
+  baseGeometry.translate(0, -BASE_THICKNESS, 0);
+
+  const baseMesh = new THREE.Mesh(baseGeometry, projectedMat);
+  baseMesh.name = 'boardBase';
+  baseMesh.castShadow = true;
+  baseMesh.receiveShadow = true;
+  group.add(baseMesh);
+
+  // Keep projected bounds correct even if the board group is repositioned/rotated later.
+  let boundsLogged = false;
+  let lastUpdatedFrame = -1;
+  const updateProjectedBounds = (renderer: THREE.WebGLRenderer) => {
+    const uniforms = (projectedMat.userData.projectedAtlasUniforms ?? {}) as {
+      uBoardMin?: { value: THREE.Vector2 };
+      uBoardSize?: { value: THREE.Vector2 };
+    };
+    if (!uniforms.uBoardMin || !uniforms.uBoardSize) return;
+
+    const frame = renderer.info.render.frame;
+    if (frame === lastUpdatedFrame) return;
+    lastUpdatedFrame = frame;
+
+    group.updateMatrixWorld(true);
+    const pMin = new THREE.Vector3(-boardW / 2, 0, -boardH / 2).applyMatrix4(group.matrixWorld);
+    const pMax = new THREE.Vector3(+boardW / 2, 0, +boardH / 2).applyMatrix4(group.matrixWorld);
+    const minX = Math.min(pMin.x, pMax.x);
+    const maxX = Math.max(pMin.x, pMax.x);
+    const minZ = Math.min(pMin.z, pMax.z);
+    const maxZ = Math.max(pMin.z, pMax.z);
+    const boardWWorld = Math.max(0.00001, maxX - minX);
+    const boardHWorld = Math.max(0.00001, maxZ - minZ);
+
+    uniforms.uBoardMin.value.set(minX, minZ);
+    uniforms.uBoardSize.value.set(boardWWorld, boardHWorld);
+
+    if (!boundsLogged) {
+      boundsLogged = true;
+      console.log('Board projected bounds', { minX, maxX, minZ, maxZ, boardWWorld, boardHWorld });
+    }
+  };
+
+  baseMesh.onBeforeRender = (renderer) => {
+    updateProjectedBounds(renderer);
+  };
+
+  const tiles = new Map<string, Tile>();
+  const tileSize = cellSize - TILE_GAP;
+
+  const tileShape = new THREE.Shape();
+  tileShape.moveTo(-tileSize / 2, -tileSize / 2);
+  tileShape.lineTo(tileSize / 2, -tileSize / 2);
+  tileShape.lineTo(tileSize / 2, tileSize / 2);
+  tileShape.lineTo(-tileSize / 2, tileSize / 2);
+  tileShape.closePath();
+
+  const tileGeometry = new THREE.ExtrudeGeometry(tileShape, {
+    depth: TILE_THICKNESS,
+    bevelEnabled: true,
+    bevelSize: TILE_BEVEL * 0.35,
+    bevelThickness: TILE_BEVEL * 0.35,
+    bevelSegments: 2
+  });
+  tileGeometry.rotateX(-Math.PI / 2);
 
   for (let row = 0; row < boardRows; row += 1) {
     for (let col = 0; col < boardCols; col += 1) {
-      const owner: TileOwner = forceOwner ?? (row >= boardRows / 2 ? 'blue' : 'red');
-      const { tileGroup, mesh, material, glow, glowMaterial } = createTileMesh(owner, tileSize, tileThickness);
-      const { x, z } = cellToWorld(row, col, boardRows, boardCols);
-      tileGroup.position.set(x, tileY, z);
+      const tileWorldX = -boardW / 2 + cellSize / 2 + col * cellSize;
+      const tileWorldZ = -boardH / 2 + cellSize / 2 + row * cellSize;
+
+      const mesh = new THREE.Mesh(tileGeometry, projectedMat);
+      mesh.name = `tile-${row}-${col}`;
+      mesh.position.set(tileWorldX, TILE_CLEARANCE, tileWorldZ);
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
+      mesh.onBeforeRender = (renderer) => {
+        updateProjectedBounds(renderer);
+      };
 
       const key = boardKey(row, col);
-      mesh.userData = { key, row, col };
-      const sciFiTile: SciFiTile = {
+      mesh.userData = { row, col, key };
+      group.add(mesh);
+
+      const tile: Tile = {
         mesh,
-        glow,
-        material,
-        glowMaterial,
-        owner,
+        owner: forceOwner ?? 'blue',
         occupant: null,
         effect: null,
         hoverState: 'none',
         disabled: false
       };
-
-      tiles.set(key, sciFiTile);
-      boardGroup.add(tileGroup);
+      tiles.set(key, tile);
     }
   }
 
@@ -297,67 +280,62 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
     const tile = tiles.get(boardKey(row, col));
     if (!tile) return;
     tile.owner = owner;
-    refreshTileAppearance(tile);
   };
 
   const setTileOccupiedBy = (row: number, col: number, occupant: TileOccupant) => {
     const tile = tiles.get(boardKey(row, col));
     if (!tile) return;
     tile.occupant = occupant;
-    refreshTileAppearance(tile);
   };
 
   const setTileEffect = (row: number, col: number, effect: TileEffect) => {
     const tile = tiles.get(boardKey(row, col));
     if (!tile) return;
     tile.effect = effect;
-    refreshTileAppearance(tile);
   };
 
   const setTileDisabled = (row: number, col: number, disabled: boolean) => {
     const tile = tiles.get(boardKey(row, col));
     if (!tile) return;
     tile.disabled = disabled;
-    refreshTileAppearance(tile);
   };
 
   const setTileHoverState = (row: number, col: number, state: TileHoverState) => {
     const tile = tiles.get(boardKey(row, col));
     if (!tile) return;
     tile.hoverState = state;
-    refreshTileAppearance(tile);
   };
 
   const clearEffects = () => {
     tiles.forEach((tile) => {
       tile.effect = null;
-      refreshTileAppearance(tile);
     });
   };
 
   const clearDisabled = () => {
     tiles.forEach((tile) => {
       tile.disabled = false;
-      refreshTileAppearance(tile);
     });
   };
 
   const clearHoverStates = () => {
     tiles.forEach((tile) => {
       tile.hoverState = 'none';
-      refreshTileAppearance(tile);
     });
   };
 
   const clearOccupants = () => {
     tiles.forEach((tile) => {
       tile.occupant = null;
-      refreshTileAppearance(tile);
     });
   };
 
+  // Proof logs (required)
+  console.log('[TacticalBoard] tiles.size =', tiles.size);
+  console.log('[TacticalBoard] projected atlas active');
+
   return {
-    group: boardGroup,
+    group,
     tiles,
     setTileOwner,
     setTileOccupiedBy,
@@ -370,3 +348,4 @@ export const createTacticalBoard = ({ boardRows, boardCols, cellSize, forceOwner
     clearHoverStates
   };
 };
+
