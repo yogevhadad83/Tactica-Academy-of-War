@@ -169,18 +169,18 @@ const ThreeBattleStage = ({
     const boardCenterZ = -15; // from tacticalBoard.group.position.z
 
     if (interactionMode === 'planning') {
-      const topDownHeight = Math.max(12, boardSpan * 0.42);
-      const topDownDistance = Math.max(6, boardSpan * 0.14);
+      const topDownHeight = Math.max(9, boardSpan * 0.32);
+      const topDownDistance = Math.max(3.2, boardSpan * 0.09);
       lockedCameraTargetRef.current.set(0, 0, boardCenterZ);
       planningCameraPositionRef.current.set(0, topDownHeight, boardCenterZ + topDownDistance);
       lockedCameraBasePositionRef.current.copy(planningCameraPositionRef.current);
       lockedCameraClosePositionRef.current.set(0, topDownHeight * 0.88, boardCenterZ + topDownDistance * 0.65);
       zoomCameraPositionRef.current.set(1.8, topDownHeight * 0.68, boardCenterZ + topDownDistance * 0.42);
     } else {
-      const sideOffset = Math.max(boardSpan * 0.5, 12); // Right side view (Blue Left, Red Right)
-      const battleDistance = Math.max(10, boardSpan * 0.22); // Much closer to the board
-      const battleHeight = Math.max(16, boardSpan * 0.3); // Slightly lower to fill viewport
-      lockedCameraTargetRef.current.set(0, -6, boardCenterZ); // Centered target
+      const sideOffset = Math.max(boardSpan * 0.32, 8.5); // Closer, board fills view
+      const battleDistance = Math.max(6.2, boardSpan * 0.14);
+      const battleHeight = Math.max(10.5, boardSpan * 0.22);
+      lockedCameraTargetRef.current.set(0, -3.5, boardCenterZ);
       planningCameraPositionRef.current.set(sideOffset * 0.72, battleHeight * 0.88, boardCenterZ + battleDistance * 0.75);
       const baseSideOffset = sideOffset * 1.1; // Slightly right, keep board centered
       lockedCameraBasePositionRef.current.set(baseSideOffset, battleHeight, boardCenterZ + battleDistance);
@@ -227,6 +227,12 @@ const ThreeBattleStage = ({
     const mount = mountRef.current;
     if (!mount) return;
 
+    const rows = boardSize;
+    const cols = boardCols ?? boardSize;
+    const extentX = cols * CELL_SIZE;
+    const extentZ = rows * CELL_SIZE;
+    const boardExtent = Math.max(extentX, extentZ);
+
     const scene = new THREE.Scene();
     const voidHex = 0x01060f;
     scene.background = new THREE.Color(voidHex);
@@ -234,15 +240,8 @@ const ThreeBattleStage = ({
 
     const cameraFov = interactionMode === 'planning' ? PLANNING_CAMERA_FOV : BATTLE_CAMERA_FOV;
     const camera = new THREE.PerspectiveCamera(cameraFov, mount.clientWidth / mount.clientHeight, 0.2, 1200);
-    // Start the camera extremely far and high so the board feels tiny, then let it fall into place
-    const rows = boardSize;
-    const cols = boardCols ?? boardSize;
-    const extentX = cols * CELL_SIZE;
-    const extentZ = rows * CELL_SIZE;
-    const boardExtent = Math.max(extentX, extentZ);
-    const distantHeight = Math.max(BASE_CAMERA_HEIGHT * 4.5, boardExtent * 4.2);
-    const distantDistance = Math.max(ORBIT_RADIUS * 4.8, boardExtent * 4.5);
-    camera.position.set(-distantDistance, distantHeight, distantDistance * 1.15);
+    // Start close so the board fills the viewport.
+    camera.position.copy(lockedCameraBasePositionRef.current);
     camera.lookAt(lockedCameraTargetRef.current);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -290,8 +289,9 @@ const ThreeBattleStage = ({
 
     const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE, forceOwner });
     tacticalBoardRef.current = tacticalBoard;
-    tileMeshesRef.current = Array.from(tacticalBoard.tiles.values()).map((tile) => tile.mesh);
-    tacticalBoard.group.position.set(0, 0.04, -15);
+    tileMeshesRef.current = tacticalBoard.raycastMesh ? [tacticalBoard.raycastMesh] : [];
+    const tileHeight = 0.12 * CELL_SIZE;
+    tacticalBoard.group.position.set(0, 0.04 - tileHeight, -15);
     tacticalBoard.group.rotation.x = 0;
     tacticalBoard.group.rotation.z = 0;
     scene.add(tacticalBoard.group);
@@ -453,6 +453,14 @@ const ThreeBattleStage = ({
       }
     };
 
+    const resolveTileFromIntersection = (intersection?: THREE.Intersection) => {
+      const board = tacticalBoardRef.current;
+      if (!board || !intersection || intersection.instanceId === undefined) {
+        return null;
+      }
+      return board.getTileFromInstanceId(intersection.instanceId) ?? null;
+    };
+
     const updatePointer = (event: PointerEvent) => {
       const mount = mountRef.current;
       if (!mount) return false;
@@ -511,11 +519,12 @@ const ThreeBattleStage = ({
         clearHover();
         return;
       }
-      const { key, row, col } = intersections[0].object.userData as { key?: string; row?: number; col?: number };
-      if (!key || row === undefined || col === undefined) {
+      const tileTarget = resolveTileFromIntersection(intersections[0]);
+      if (!tileTarget) {
         clearHover();
         return;
       }
+      const { key, row, col } = tileTarget;
       const tile = board.tiles.get(key);
       const occupant = tile?.occupant ?? null;
       const dropAllowed = canDropOnTileRef.current ? canDropOnTileRef.current(row, col) : true;
@@ -550,8 +559,9 @@ const ThreeBattleStage = ({
           raycasterRef.current.setFromCamera(pointerRef.current, camera);
           const intersections = raycasterRef.current.intersectObjects(tileMeshesRef.current, false);
           if (intersections.length > 0) {
-            const { key, row, col } = intersections[0].object.userData as { key?: string; row?: number; col?: number };
-            if (key && row !== undefined && col !== undefined) {
+            const tileTarget = resolveTileFromIntersection(intersections[0]);
+            if (tileTarget) {
+              const { key, row, col } = tileTarget;
               const dropAllowed = canDropOnTileRef.current ? canDropOnTileRef.current(row, col) : true;
               if (!dropAllowed) {
                 // Signal cancellation (blocked by rules)
@@ -581,9 +591,9 @@ const ThreeBattleStage = ({
         raycasterRef.current.setFromCamera(pointerRef.current, camera);
         const intersections = raycasterRef.current.intersectObjects(tileMeshesRef.current, false);
         if (intersections.length > 0) {
-          const { key, row, col } = intersections[0].object.userData as { key?: string; row?: number; col?: number };
-          if (key && row !== undefined && col !== undefined) {
-            hoveredTileKeyRef.current = key;
+          const tileTarget = resolveTileFromIntersection(intersections[0]);
+          if (tileTarget) {
+            hoveredTileKeyRef.current = tileTarget.key;
           }
         }
       }

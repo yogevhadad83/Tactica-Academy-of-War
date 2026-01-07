@@ -60,7 +60,7 @@ const getAtlasTexture = () => {
 
   const loader = new THREE.TextureLoader();
   const texture = loader.load(
-    '/texture/board.jpg',
+    '/texture/board.png',
     () => {
       // Keep logs minimal per spec.
     },
