@@ -22,7 +22,6 @@ export interface AttackIntent {
   attackerPosition: Position;
   targetPosition: Position;
   targetId?: string;
-  targetTeam?: Team;
   attackType: AttackType;
   didKill: boolean;
 }
@@ -41,18 +40,23 @@ interface DangerIndicator {
   phaseOffset: number;
 }
 
-// Keep team accents aligned with existing unit palette (see useUnitLayer.ts)
-// Player: blue, Enemy: red (no yellow/orange indicators).
 const TEAM_ACCENT_HEX: Record<Team, number> = {
-  player: 0x3b82f6,
-  enemy: 0xef4444
+  player: 0x8fc7ff,
+  enemy: 0xffa372
 };
 
-// Yellow reserved strictly for "being hit" feedback.
-const HIT_YELLOW_HEX = 0xfcd34d;
+const TEAM_PATH_HEX: Record<Team, number> = {
+  player: 0x4f83c6,
+  enemy: 0xb05532
+};
+
+const DANGER_HEX = 0xf59e0b;
+const TARGET_HEX = 0xfcd34d;
+const TARGET_FINISH_HEX = 0xffedd5;
 
 const ACTIVE_DURATION = 1400;
 const MOVE_PATH_DURATION = 1000;
+const ATTACK_DURATION = 850;
 const TARGET_FLASH_DURATION = 520;
 
 const SURFACE_Y = 0.08;
@@ -177,7 +181,7 @@ class BattleIntentVisualizer {
       transparent: true,
       opacity: 0.85,
       depthWrite: false,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide
     });
 
@@ -216,7 +220,7 @@ class BattleIntentVisualizer {
       transparent: true,
       opacity: 0.6,
       depthWrite: false,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide
     });
     const originMesh = new THREE.Mesh(this.pulseGeometry, originMaterial);
@@ -243,7 +247,7 @@ class BattleIntentVisualizer {
       transparent: true,
       opacity: 0.7,
       depthWrite: false,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide
     });
     const destMesh = new THREE.Mesh(this.pulseGeometry, destMaterial);
@@ -273,8 +277,9 @@ class BattleIntentVisualizer {
   private spawnTargetPulse(intent: AttackIntent, fallbackPosition: THREE.Vector3, now: number) {
     const world = intent.targetId ? this.sampleUnitPosition(intent.targetId) ?? fallbackPosition : fallbackPosition;
     const baseOpacity = intent.didKill ? 0.85 : 0.7;
+    const color = intent.didKill ? TARGET_FINISH_HEX : TARGET_HEX;
     const material = new THREE.MeshBasicMaterial({
-      color: HIT_YELLOW_HEX,
+      color,
       transparent: true,
       opacity: baseOpacity,
       depthWrite: false,
@@ -311,12 +316,11 @@ class BattleIntentVisualizer {
         existing.mesh.position.set(world.x, SURFACE_Y + 0.01, world.z);
       } else {
         const material = new THREE.MeshBasicMaterial({
-          // Keep ring consistent with unit team color (enemy stays red, player stays blue).
-          color: TEAM_ACCENT_HEX[unit.team],
+          color: DANGER_HEX,
           transparent: true,
           opacity: 0.25,
           depthWrite: false,
-          blending: THREE.NormalBlending,
+          blending: THREE.AdditiveBlending,
           side: THREE.DoubleSide
         });
         const mesh = new THREE.Mesh(this.ringGeometry, material);
