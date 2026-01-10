@@ -954,6 +954,7 @@ export const useUnitLayer = (
   const arrowProjectilesRef = useRef<ArrowProjectile[]>([]);
   const processedHitIdsRef = useRef<Set<string>>(new Set());
   const processedHitQueueRef = useRef<string[]>([]);
+  const lastProcessedTurnRef = useRef<number | null>(null);
   const [modelRevision, setModelRevision] = useState(0);
 
   const rememberHitId = useCallback((id: string) => {
@@ -992,6 +993,7 @@ export const useUnitLayer = (
     arrowProjectilesRef.current = [];
     processedHitIdsRef.current.clear();
     processedHitQueueRef.current = [];
+    lastProcessedTurnRef.current = null;
   }, []);
 
   const ensureModelAsset = useCallback(
@@ -1196,6 +1198,12 @@ export const useUnitLayer = (
         visual.group.position.copy(visual.targetPosition);
         visual.moveStartPosition.copy(visual.targetPosition);
         visual.moveStartTime = undefined;
+
+        // Smoothly transition movement animation back to idle on arrival.
+        // Use setVisualAnimation for proper crossfade, not abrupt stop/reset.
+        if (visual.isCustomMesh && (visual.currentAnimation === 'walk' || visual.currentAnimation === 'step')) {
+          setVisualAnimation(visual, 'idle');
+        }
       }
     });
   }, []);
@@ -1394,7 +1402,7 @@ export const useUnitLayer = (
     ({
       hitCells,
       hitEvents = [],
-      moveCells,
+      moveCells: _moveCells,
       marchCells,
       units,
       demoState,
@@ -1411,7 +1419,6 @@ export const useUnitLayer = (
       boardCols?: number;
     }) => {
       const hitSet = new Set(hitCells);
-      const moveSet = new Set(moveCells);
       const marchSet = new Set(marchCells);
       const unitById = new Map(units.map((unit) => [unit.instanceId, unit]));
 
@@ -1428,9 +1435,14 @@ export const useUnitLayer = (
         let targetOpacity = 0.6;
         let targetAnimation: AnimationState = 'idle';
 
+        // Treat a unit as "moving" only while its movement interpolation is active.
+        // `moveCells` contains both origin + destination keys, so using it directly causes
+        // destination units to be forced into `walk` and appear to walk in place.
+        const isMoving = visual.moveStartTime !== undefined;
+
         if (hitSet.has(cell)) {
           targetOpacity = 1;
-        } else if (moveSet.has(cell) || marchSet.has(cell)) {
+        } else if (isMoving || marchSet.has(cell)) {
           targetOpacity = 0.85;
           // For recruit units, check if it's a sidestep and use step animation
           if (unit.id === 'recruit' && visual.lastPosition) {
@@ -1497,6 +1509,15 @@ export const useUnitLayer = (
       }
 
       hitEvents.forEach((event) => {
+        const turnMatch = /^turn(\d+)-/.exec(event.id);
+        if (turnMatch) {
+          const turnNumber = Number(turnMatch[1]);
+          const lastTurn = lastProcessedTurnRef.current;
+          if (lastTurn !== null && turnNumber < lastTurn) {
+            clearProjectiles();
+          }
+          lastProcessedTurnRef.current = turnNumber;
+        }
         if (processedHitIdsRef.current.has(event.id)) {
           return;
         }
@@ -1578,7 +1599,7 @@ export const useUnitLayer = (
         });
       });
     },
-    [rememberHitId]
+    [rememberHitId, clearProjectiles]
   );
 
   const disposeAll = useCallback(() => {

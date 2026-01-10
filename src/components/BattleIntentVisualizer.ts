@@ -36,27 +36,20 @@ interface TimedIndicator {
 
 interface DangerIndicator {
   mesh: THREE.Mesh;
-  material: THREE.MeshBasicMaterial;
+  material: THREE.MeshBasicMaterial | THREE.MeshStandardMaterial;
   phaseOffset: number;
 }
 
 const TEAM_ACCENT_HEX: Record<Team, number> = {
-  player: 0x8fc7ff,
-  enemy: 0xffa372
+  player: 0x1e7fff,
+  enemy: 0xff3a21
 };
 
-const TEAM_PATH_HEX: Record<Team, number> = {
-  player: 0x4f83c6,
-  enemy: 0xb05532
-};
-
-const DANGER_HEX = 0xf59e0b;
 const TARGET_HEX = 0xfcd34d;
 const TARGET_FINISH_HEX = 0xffedd5;
 
 const ACTIVE_DURATION = 1400;
 const MOVE_PATH_DURATION = 1000;
-const ATTACK_DURATION = 850;
 const TARGET_FLASH_DURATION = 520;
 
 const SURFACE_Y = 0.08;
@@ -67,10 +60,10 @@ class BattleIntentVisualizer {
   private readonly group: THREE.Group;
   private readonly ringGeometry: THREE.RingGeometry;
   private readonly pulseGeometry: THREE.CircleGeometry;
+  private gradientTextureCache = new Map<number, THREE.Texture>();
 
   private activeIndicators = new Map<string, TimedIndicator>();
   private movementIndicators: TimedIndicator[] = [];
-  private attackIndicators: TimedIndicator[] = [];
   private targetIndicators: TimedIndicator[] = [];
   private dangerIndicators = new Map<string, DangerIndicator>();
 
@@ -85,8 +78,37 @@ class BattleIntentVisualizer {
     this.group.name = 'BattleIntentVisualizer';
     this.unitRoot.add(this.group);
 
-    this.ringGeometry = new THREE.RingGeometry(0.35, 0.55, 48);
+    this.ringGeometry = new THREE.RingGeometry(0.22, 0.35, 48);
     this.pulseGeometry = new THREE.CircleGeometry(0.45, 48);
+  }
+
+  private createGradientTexture(color: number): THREE.Texture {
+    // Check cache first
+    if (this.gradientTextureCache.has(color)) {
+      return this.gradientTextureCache.get(color)!;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d')!;
+
+    // Create radial gradient: bright at edges, transparent at center
+    const gradient = ctx.createRadialGradient(128, 128, 0, 128, 128, 180);
+    const c = new THREE.Color(color);
+    const r = Math.round(c.r * 255);
+    const g = Math.round(c.g * 255);
+    const b = Math.round(c.b * 255);
+    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+    gradient.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, 0.25)`);
+    gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0.8)`);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 256, 256);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    this.gradientTextureCache.set(color, texture);
+    return texture;
   }
 
   applyFrame(args: {
@@ -119,6 +141,16 @@ class BattleIntentVisualizer {
     });
 
     this.updateDangerMarkers(args.units);
+    
+    // Clean up danger indicators for units that no longer exist in the units array
+    const existingUnitIds = new Set(args.units.map(u => u.instanceId));
+    this.dangerIndicators.forEach((indicator, id) => {
+      if (!existingUnitIds.has(id)) {
+        this.group.remove(indicator.mesh);
+        indicator.material.dispose();
+        this.dangerIndicators.delete(id);
+      }
+    });
   }
 
   update(nowInput?: number) {
@@ -126,7 +158,6 @@ class BattleIntentVisualizer {
     const now = nowInput ?? (typeof performance !== 'undefined' ? performance.now() : Date.now());
     this.updateActiveIndicators(now);
     this.movementIndicators = this.advanceTimedIndicators(this.movementIndicators, now);
-    this.attackIndicators = this.advanceTimedIndicators(this.attackIndicators, now);
     this.targetIndicators = this.advanceTimedIndicators(this.targetIndicators, now);
     this.updateDangerPulses(now);
   }
@@ -153,10 +184,8 @@ class BattleIntentVisualizer {
     disposeList(Array.from(this.activeIndicators.values()));
     this.activeIndicators.clear();
     disposeList(this.movementIndicators);
-    disposeList(this.attackIndicators);
     disposeList(this.targetIndicators);
     this.movementIndicators = [];
-    this.attackIndicators = [];
     this.targetIndicators = [];
 
     this.dangerIndicators.forEach((indicator) => {
@@ -308,20 +337,25 @@ class BattleIntentVisualizer {
   private updateDangerMarkers(units: PlacedUnit[]) {
     const required = new Set<string>();
     units.forEach((unit) => {
-      if (!this.isCrossTerritory(unit)) return;
+      const remainingHp = typeof unit.currentHp === 'number' ? unit.currentHp : unit.hp;
+      if (!this.isCrossTerritory(unit) || remainingHp <= 0) return;
       required.add(unit.instanceId);
       const world = this.positionFromCell(unit.position);
       const existing = this.dangerIndicators.get(unit.instanceId);
       if (existing) {
         existing.mesh.position.set(world.x, SURFACE_Y + 0.01, world.z);
       } else {
-        const material = new THREE.MeshBasicMaterial({
-          color: DANGER_HEX,
+        const gradientTexture = this.createGradientTexture(TEAM_ACCENT_HEX[unit.team]);
+        const material = new THREE.MeshStandardMaterial({
+          map: gradientTexture,
+          emissive: TEAM_ACCENT_HEX[unit.team],
+          emissiveIntensity: 0.7,
           transparent: true,
-          opacity: 0.25,
+          opacity: 0.5,
           depthWrite: false,
-          blending: THREE.AdditiveBlending,
-          side: THREE.DoubleSide
+          side: THREE.DoubleSide,
+          metalness: 0.2,
+          roughness: 0.5
         });
         const mesh = new THREE.Mesh(this.ringGeometry, material);
         mesh.rotation.x = -Math.PI / 2;
@@ -345,9 +379,9 @@ class BattleIntentVisualizer {
 
   private updateDangerPulses(now: number) {
     this.dangerIndicators.forEach((indicator) => {
-      const pulse = (Math.sin(now * 0.002 + indicator.phaseOffset) + 1) / 2;
-      indicator.material.opacity = 0.18 + pulse * 0.22;
-      const scale = 1 + pulse * 0.12;
+      const pulse = (Math.sin(now * 0.0035 + indicator.phaseOffset) + 1) / 2;
+      indicator.material.opacity = 0.45 + pulse * 0.15;
+      const scale = 1.0 + pulse * 0.12;
       indicator.mesh.scale.setScalar(scale);
     });
   }

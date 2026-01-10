@@ -66,6 +66,52 @@
   font-weight: 500;
 }
 
+.academy-toast {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  background: var(--stamp-bg);
+  color: var(--stamp-text);
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  z-index: 1000;
+  font-size: 0.95rem;
+  animation: academyToastSlideIn 0.3s ease-out;
+  box-shadow: 0 10px 24px var(--shadow-strong);
+}
+
+@keyframes academyToastSlideIn {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.academy-toast-close {
+  background: none;
+  border: none;
+  color: currentColor;
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.academy-toast-close:hover {
+  opacity: 1;
+}
+
 /* Sections */
 .academy-section {
   margin-bottom: 3rem;

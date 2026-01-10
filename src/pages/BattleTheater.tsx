@@ -40,6 +40,11 @@ const mapWinnerSideToViewer = (side: WinnerSide | null, viewerSide: MatchSide | 
   return side === viewerSide ? 'player' : 'enemy';
 };
 
+const isMatchNotFoundMessage = (message: string | null) => {
+  if (!message) return false;
+  return /match\s+.*not\s+found/i.test(message) || /match\s+not\s+found/i.test(message);
+};
+
 const formatParticipant = (bundle: MatchBundle | null, side: MatchSide) =>
   bundle?.participants.find((p) => p.side === side)?.display_name ?? `Side ${side}`;
 
@@ -67,6 +72,7 @@ const BattleTheater = () => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [controlMessage, setControlMessage] = useState<string | null>(null);
   const completingRef = useRef(false);
+  const redirectedRef = useRef(false);
 
   const {
     timelineA: fetchedTimelineA,
@@ -112,6 +118,34 @@ const BattleTheater = () => {
       cancelled = true;
     };
   }, [isDemo, isTraining, matchId]);
+
+  useEffect(() => {
+    if (redirectedRef.current) return;
+    if (isDemo || isTraining) return;
+
+    if (!matchId) {
+      redirectedRef.current = true;
+      navigate('/academy', {
+        replace: true,
+        state: { toastMessage: 'Match id not found. Returned to Academy.' },
+      });
+      return;
+    }
+
+    const message = isMatchNotFoundMessage(bundleError)
+      ? bundleError
+      : isMatchNotFoundMessage(timelineError)
+        ? timelineError
+        : null;
+
+    if (!message) return;
+
+    redirectedRef.current = true;
+    navigate('/academy', {
+      replace: true,
+      state: { toastMessage: message },
+    });
+  }, [bundleError, isDemo, isTraining, matchId, navigate, timelineError]);
 
   const viewerSide = useMemo<MatchSide | null>(() => {
     if (isDemo || isTraining) return 'A';

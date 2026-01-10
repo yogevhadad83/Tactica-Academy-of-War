@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useMemo, useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { usePlayerContext } from '../context/PlayerContext';
@@ -14,7 +14,31 @@ const Academy = () => {
   const { user } = useAuth();
   const { player } = usePlayerContext();
   const navigate = useNavigate();
+  const location = useLocation();
   const userIdOrNull = user?.id ?? null;
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    const message = (location.state as { toastMessage?: string } | null | undefined)?.toastMessage;
+    if (!message) return;
+    setToastMessage(message);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    if (!toastMessage) return;
+    const timeout = window.setTimeout(() => setToastMessage(null), 4000);
+    return () => window.clearTimeout(timeout);
+  }, [toastMessage]);
+
+  const toast = toastMessage ? (
+    <div className="academy-toast" role="status" aria-live="polite">
+      <span>{toastMessage}</span>
+      <button type="button" className="academy-toast-close" aria-label="Dismiss" onClick={() => setToastMessage(null)}>
+        ×
+      </button>
+    </div>
+  ) : null;
 
   // Get training state
   const trainingState = useMemo(() => getTrainingState(userIdOrNull), [userIdOrNull]);
@@ -83,6 +107,7 @@ const Academy = () => {
 
   return (
     <div className="academy-container">
+      {toast}
       {/* Unauthenticated banner */}
       {!user && (
         <div className="academy-banner">

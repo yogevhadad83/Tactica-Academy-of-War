@@ -303,7 +303,8 @@ const ThreeBattleStage = ({
 
     const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE, forceOwner });
     tacticalBoardRef.current = tacticalBoard;
-    tileMeshesRef.current = tacticalBoard.raycastMesh ? [tacticalBoard.raycastMesh] : [];
+    // Raycast against the board meshes directly (tiles carry row/col/key in userData).
+    tileMeshesRef.current = tacticalBoard.group.children;
     const tileHeight = 0.12 * CELL_SIZE;
     tacticalBoard.group.position.set(0, 0.04 - tileHeight, -15);
     tacticalBoard.group.rotation.x = 0;
@@ -312,7 +313,7 @@ const ThreeBattleStage = ({
 
     const castleGroup = new THREE.Group();
     castleGroup.name = 'CastleEnvironment';
-    castleGroup.position.set(-3, 0, -15); // Nudge stage further back
+    castleGroup.position.set(-3, -5.6, -15.1); // Nudge stage further back and slightly lower
     castleGroupRef.current = castleGroup;
     scene.add(castleGroup);
 
@@ -350,7 +351,7 @@ const ThreeBattleStage = ({
           const horizontalSize = Math.max(originalSize.x, originalSize.z);
           const targetSpan = boardExtent * 2.88; // 20% larger than base 2.4
           const castleScale = horizontalSize > 0 ? targetSpan / horizontalSize : 1;
-          castleScene.scale.setScalar(castleScale * 0.8); // Slightly shrink stage to sit tighter to board
+          castleScene.scale.setScalar(castleScale); // Slightly larger stage to sit tighter to board
 
           boundingBox.setFromObject(castleScene);
           const center = boundingBox.getCenter(new THREE.Vector3());
@@ -482,10 +483,20 @@ const ThreeBattleStage = ({
 
     const resolveTileFromIntersection = (intersection?: THREE.Intersection) => {
       const board = tacticalBoardRef.current;
-      if (!board || !intersection || intersection.instanceId === undefined) {
+      if (!board || !intersection) {
         return null;
       }
-      return board.getTileFromInstanceId(intersection.instanceId) ?? null;
+
+      const userData = (intersection.object as THREE.Object3D).userData as
+        | { row?: number; col?: number; key?: string }
+        | undefined;
+      const row = userData?.row;
+      const col = userData?.col;
+      const key = userData?.key;
+      if (typeof row !== 'number' || typeof col !== 'number' || typeof key !== 'string') {
+        return null;
+      }
+      return { key, row, col };
     };
 
     const updatePointer = (event: PointerEvent) => {
