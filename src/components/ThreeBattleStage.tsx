@@ -62,6 +62,8 @@ interface ThreeBattleStageProps {
   planningCameraHeightMultiplier?: number;
   planningCameraMinHeight?: number;
   planningAtlasPath?: string;
+  dragSourceTile?: { row: number; col: number } | null;
+  dragHoverTile?: { row: number; col: number } | null;
 }
 
 const ThreeBattleStage = ({
@@ -87,7 +89,9 @@ const ThreeBattleStage = ({
   planningCameraDistanceMultiplier,
   planningCameraHeightMultiplier,
   planningCameraMinHeight,
-  planningAtlasPath
+  planningAtlasPath,
+  dragSourceTile,
+  dragHoverTile
 }: ThreeBattleStageProps) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -386,10 +390,12 @@ const ThreeBattleStage = ({
     scene.add(unitRoot);
 
     intentVisualizerRef.current?.dispose();
-    intentVisualizerRef.current = new BattleIntentVisualizer({
-      unitRoot,
-      unitVisualsRef
-    });
+    intentVisualizerRef.current = interactionMode === 'planning'
+      ? null
+      : new BattleIntentVisualizer({
+        unitRoot,
+        unitVisualsRef
+      });
 
     sceneRef.current = scene;
     cameraRef.current = camera;
@@ -487,7 +493,9 @@ const ThreeBattleStage = ({
 
     const clearHover = () => {
       const board = tacticalBoardRef.current;
-      board?.clearHoverStates();
+      if (board?.clearHoverStates) {
+        board.clearHoverStates();
+      }
       hoveredTileKeyRef.current = null;
       if (onTileHoverRef.current) {
         onTileHoverRef.current({ row: -1, col: -1, occupied: null });
@@ -578,20 +586,7 @@ const ThreeBattleStage = ({
       const { key, row, col } = tileTarget;
       const tile = board.tiles.get(key);
       const occupant = tile?.occupant ?? null;
-      const dropAllowed = canDropOnTileRef.current ? canDropOnTileRef.current(row, col) : true;
-      const hoverState = dragActiveRef.current
-        ? occupant
-          ? 'blocked'
-          : dropAllowed
-            ? 'valid'
-            : 'blocked'
-        : occupant
-          ? 'inspect'
-          : 'none';
-      board.clearHoverStates();
-      if (hoverState !== 'none') {
-        board.setTileHoverState(row, col, hoverState);
-      }
+      board.clearHoverStates?.();
       hoveredTileKeyRef.current = key;
       if (onTileHoverRef.current) {
         onTileHoverRef.current({ row, col, occupied: occupant });
@@ -731,10 +726,31 @@ const ThreeBattleStage = ({
 
   useEffect(() => {
     if (!dragActive) {
-      tacticalBoardRef.current?.clearHoverStates();
+      const board = tacticalBoardRef.current;
+      if (board?.clearHoverStates) {
+        board.clearHoverStates();
+      }
       hoveredTileKeyRef.current = null;
     }
   }, [dragActive]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const board = tacticalBoardRef.current;
+    if (!board) return;
+
+    // Update drag indicators
+    if (dragSourceTile || dragHoverTile) {
+      board.setDragIndicators(
+        dragSourceTile?.row ?? null,
+        dragSourceTile?.col ?? null,
+        dragHoverTile?.row ?? null,
+        dragHoverTile?.col ?? null
+      );
+    } else {
+      board.clearDragIndicators();
+    }
+  }, [dragSourceTile, dragHoverTile]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

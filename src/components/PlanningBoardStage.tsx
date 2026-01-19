@@ -17,6 +17,8 @@ export type PlanningBoardStageProps = {
   onTileDrop?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
   onTileClick?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
   onReady?: (ready: boolean) => void;
+  dragSourceTile?: { row: number; col: number } | null;
+  dragHoverTile?: { row: number; col: number } | null;
 };
 
 const PLANNING_CAMERA_PRESET = {
@@ -36,7 +38,9 @@ const PlanningBoardStage = ({
   onTileHover,
   onTileDrop,
   onTileClick,
-  onReady
+  onReady,
+  dragSourceTile,
+  dragHoverTile
 }: PlanningBoardStageProps) => {
   const atlasPath = owner === 'player' ? '/texture/blueboard.png' : '/texture/redboard.png';
   const forceOwner: TileOwner = owner === 'player' ? 'blue' : 'red';
@@ -73,6 +77,8 @@ const PlanningBoardStage = ({
       planningCameraHeightMultiplier={PLANNING_CAMERA_PRESET.heightMultiplier}
       planningCameraMinHeight={PLANNING_CAMERA_PRESET.minHeight}
       onReady={onReady}
+      dragSourceTile={dragSourceTile}
+      dragHoverTile={dragHoverTile}
     />
   );
 };

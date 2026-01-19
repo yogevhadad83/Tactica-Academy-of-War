@@ -8,12 +8,9 @@ export type TileEffect =
   | 'hit'
   | 'move'
   | 'march'
-  | 'hover-valid'
-  | 'hover-blocked'
-  | 'hover-inspect'
   | 'disabled'
   | null;
-export type TileHoverState = 'none' | 'valid' | 'blocked' | 'inspect';
+export type TileHoverState = 'none';
 
 interface TacticalBoardOptions {
   boardRows: number;
@@ -44,8 +41,10 @@ export interface TacticalBoard {
   clearDisabled: () => void;
   clearEffects: () => void;
   clearOccupants: () => void;
-  setTileHoverState: (row: number, col: number, state: TileHoverState) => void;
-  clearHoverStates: () => void;
+  setTileHoverState?: (row: number, col: number, state: TileHoverState) => void;
+  clearHoverStates?: () => void;
+  setDragIndicators: (sourceRow: number | null, sourceCol: number | null, targetRow: number | null, targetCol: number | null) => void;
+  clearDragIndicators: () => void;
 }
 
 type ProjectedAtlasParams = {
@@ -115,6 +114,19 @@ const getDisabledHatchTexture = () => {
   texture.colorSpace = THREE.SRGBColorSpace;
   cachedOverlayTextures.hatch = texture;
   return texture;
+};
+
+const makeDragIndicatorMaterial = (color: number) => {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.3,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2.5,
+    polygonOffsetUnits: -2.5,
+    side: THREE.DoubleSide
+  });
 };
 
 const makeProjectedAtlasMaterial = ({
@@ -323,6 +335,30 @@ export const createTacticalBoard = ({
 
   const hiddenOverlayMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 
+  // Drag indicator meshes: source and target (subtle glow rings)
+  // Use a ring/torus geometry for subtle glow effect
+  const dragIndicatorGeometry = new THREE.TorusGeometry(tileSize * 0.3, tileSize * 0.05, 8, 32);
+  dragIndicatorGeometry.rotateX(Math.PI / 2);
+  
+  const sourceMaterial = makeDragIndicatorMaterial(0xffd84d); // Subtle yellow
+  const targetMaterial = makeDragIndicatorMaterial(0x66ffaa); // Subtle teal
+  
+  const sourceIndicator = new THREE.InstancedMesh(dragIndicatorGeometry, sourceMaterial, 1);
+  sourceIndicator.name = 'dragSourceIndicator';
+  sourceIndicator.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  sourceIndicator.renderOrder = 3;
+  sourceIndicator.raycast = () => null;
+  sourceIndicator.visible = false;
+  group.add(sourceIndicator);
+  
+  const targetIndicator = new THREE.InstancedMesh(dragIndicatorGeometry, targetMaterial, 1);
+  targetIndicator.name = 'dragTargetIndicator';
+  targetIndicator.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  targetIndicator.renderOrder = 3;
+  targetIndicator.raycast = () => null;
+  targetIndicator.visible = false;
+  group.add(targetIndicator);
+
   for (let row = 0; row < boardRows; row += 1) {
     for (let col = 0; col < boardCols; col += 1) {
       const tileWorldX = -boardW / 2 + cellSize / 2 + col * cellSize;
@@ -423,6 +459,56 @@ export const createTacticalBoard = ({
     });
   };
 
+  const setDragIndicators = (
+    sourceRow: number | null,
+    sourceCol: number | null,
+    targetRow: number | null,
+    targetCol: number | null
+  ) => {
+    // Show/hide source indicator
+    if (sourceRow !== null && sourceCol !== null) {
+      const sourceTile = tiles.get(boardKey(sourceRow, sourceCol));
+      if (sourceTile) {
+        const tileWorldX = -boardW / 2 + cellSize / 2 + sourceCol * cellSize;
+        const tileWorldZ = -boardH / 2 + cellSize / 2 + sourceRow * cellSize;
+        const matrix = new THREE.Matrix4().makeTranslation(
+          tileWorldX,
+          TILE_CLEARANCE + TILE_THICKNESS + 0.01 * cellSize,
+          tileWorldZ
+        );
+        sourceIndicator.setMatrixAt(0, matrix);
+        sourceIndicator.instanceMatrix.needsUpdate = true;
+        sourceIndicator.visible = true;
+      }
+    } else {
+      sourceIndicator.visible = false;
+    }
+
+    // Show/hide target indicator
+    if (targetRow !== null && targetCol !== null) {
+      const targetTile = tiles.get(boardKey(targetRow, targetCol));
+      if (targetTile) {
+        const tileWorldX = -boardW / 2 + cellSize / 2 + targetCol * cellSize;
+        const tileWorldZ = -boardH / 2 + cellSize / 2 + targetRow * cellSize;
+        const matrix = new THREE.Matrix4().makeTranslation(
+          tileWorldX,
+          TILE_CLEARANCE + TILE_THICKNESS + 0.01 * cellSize,
+          tileWorldZ
+        );
+        targetIndicator.setMatrixAt(0, matrix);
+        targetIndicator.instanceMatrix.needsUpdate = true;
+        targetIndicator.visible = true;
+      }
+    } else {
+      targetIndicator.visible = false;
+    }
+  };
+
+  const clearDragIndicators = () => {
+    sourceIndicator.visible = false;
+    targetIndicator.visible = false;
+  };
+
   // Proof logs (required)
   console.log('[TacticalBoard] tiles.size =', tiles.size);
   console.log('[TacticalBoard] projected atlas active');
@@ -438,7 +524,9 @@ export const createTacticalBoard = ({
     clearEffects,
     clearOccupants,
     setTileHoverState,
-    clearHoverStates
+    clearHoverStates,
+    setDragIndicators,
+    clearDragIndicators
   };
 };
 

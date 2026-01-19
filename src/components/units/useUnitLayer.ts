@@ -995,8 +995,8 @@ export const useUnitLayer = (
           const yOffset = -bounds.min.y * scale;
           gltf.scene.traverse((child) => {
             if (child instanceof THREE.Mesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
+              child.castShadow = false; // Disable unit shadow ring on planning boards
+              child.receiveShadow = false;
               child.frustumCulled = false;
               const materials = Array.isArray(child.material) ? child.material : [child.material];
               materials.forEach((mat) => {

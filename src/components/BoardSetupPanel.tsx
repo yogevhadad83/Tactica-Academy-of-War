@@ -126,6 +126,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
 
   const [draggingStackUnit, setDraggingStackUnit] = useState<{ unit: ArmyUnitInstance } | null>(null);
   const [draggingPlacedUnit, setDraggingPlacedUnit] = useState<{ unit: PlacedUnit; original: { row: number; col: number } } | null>(null);
+  const [dragSourceOverride, setDragSourceOverride] = useState<{ row: number; col: number } | null>(null);
   const [hiddenDraggedUnitId, setHiddenDraggedUnitId] = useState<string | null>(null);
   const [stageReady, setStageReady] = useState(false);
 
@@ -255,6 +256,27 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
     return null;
   }, [draggingPlacedUnit, draggingStackUnit]);
 
+  // Compute drag source tile for indicators (planning coords)
+  const dragSourceTile = useMemo(() => {
+    if (dragSourceOverride) return dragSourceOverride;
+    if (!draggingPlacedUnit) return null;
+    const { unit } = draggingPlacedUnit;
+    if (mode === 'pvp') {
+      return { row: unit.position.row - PLANNING_ROW_OFFSET, col: unit.position.col };
+    }
+    if (trainingBoard === 'player') {
+      return { row: unit.position.row - trainingPlayerRowOffset, col: unit.position.col };
+    }
+    // opponent preview in training
+    return null;
+  }, [dragSourceOverride, draggingPlacedUnit, mode, trainingBoard, trainingPlayerRowOffset]);
+
+  // Compute drag hover tile for indicators (planning coords)
+  const dragHoverTile = useMemo(() => {
+    if (!hoveredTile) return null;
+    return { row: hoveredTile.row, col: hoveredTile.col };
+  }, [hoveredTile]);
+
   const hoveredUnit = useMemo(() => {
     if (!hoveredTile) return null;
 
@@ -274,6 +296,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
   const endDrag = useCallback(() => {
     setDraggingStackUnit(null);
     setDraggingPlacedUnit(null);
+    setDragSourceOverride(null);
     setHiddenDraggedUnitId(null);
     setDragPosition(null);
     setHoveredTile(null);
@@ -374,6 +397,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
       if (mode !== 'pvp') return;
       if (!allowReposition) return;
       event.preventDefault();
+      setDragSourceOverride(null);
       draggingStackRef.current = { unit };
       setDraggingStackUnit({ unit });
       setDragPosition({ x: event.clientX, y: event.clientY });
@@ -385,10 +409,12 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
   const beginMoveFromTile = useCallback(
     (unit: PlacedUnit) => {
       setTileMenu(null);
+      setDragSourceOverride(null);
 
       if (mode === 'pvp') {
         const instance = pvpUnitByInstanceId[unit.instanceId];
         if (!instance) return;
+        setDragSourceOverride({ row: unit.position.row - PLANNING_ROW_OFFSET, col: unit.position.col });
         props.setPlacements((prev) => {
           const next = { ...prev };
           delete next[unit.instanceId];
@@ -857,6 +883,8 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
             onTileDrop={handleTileDrop}
             onTileClick={handleTileClick}
             onReady={setStageReady}
+            dragSourceTile={dragSourceTile}
+            dragHoverTile={dragHoverTile}
           />
         </Suspense>
       </div>

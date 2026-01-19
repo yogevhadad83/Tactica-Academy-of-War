@@ -208,7 +208,7 @@ class BattleIntentVisualizer {
     const material = new THREE.MeshBasicMaterial({
       color: TEAM_ACCENT_HEX[team],
       transparent: true,
-      opacity: 0.85,
+      opacity: 0, // Disabled: glow rings removed from all planning boards and war room
       depthWrite: false,
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide
@@ -225,8 +225,7 @@ class BattleIntentVisualizer {
       createdAt: now,
       duration: ACTIVE_DURATION,
       update: (progress) => {
-        const fade = Math.pow(1 - progress, 1.2);
-        material.opacity = 0.85 * fade;
+        material.opacity = 0; // Disabled: glow rings removed
         const pulse = 1 + 0.18 * Math.sin(progress * Math.PI * 2);
         mesh.scale.setScalar(pulse);
       }
