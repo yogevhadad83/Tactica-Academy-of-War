@@ -32,6 +32,7 @@ const WarRoom = () => {
   const { 
     status: multiplayerStatus,
     lastResult: multiplayerResult,
+    lastError: multiplayerError,
     startDemoBattle,
   } = useMultiplayer();
   
@@ -256,6 +257,13 @@ const WarRoom = () => {
       cancelled = true;
     };
   }, [activeArmyId, placements, reloadPlan, unitLogic, unitTypeIdByPlayerUnitId, userIdOrNull]);
+
+  // Reset testingPlan if an error occurs
+  useEffect(() => {
+    if (testingPlan && multiplayerError) {
+      setTestingPlan(false);
+    }
+  }, [testingPlan, multiplayerError]);
 
   // Monitor demo battle result and navigate to Battle Theater when it arrives
   useEffect(() => {

@@ -71,6 +71,8 @@ const BattleTheater = () => {
   const playbackTimerRef = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [controlMessage, setControlMessage] = useState<string | null>(null);
+  const [stageReady, setStageReady] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const completingRef = useRef(false);
   const redirectedRef = useRef(false);
 
@@ -203,11 +205,28 @@ const BattleTheater = () => {
   useEffect(() => {
     if (!viewerTimeline || viewerTimeline.length === 0) return;
     setCurrentIndex(0);
-    setPlaybackState('playing');
     setShowResult(false);
     setWinner(null);
     applyTick(viewerTimeline[0]);
+    // Start as idle, will switch to playing when stage is ready
+    setPlaybackState('idle');
   }, [applyTick, viewerTimeline]);
+
+  // Start playback once visuals are shown and the camera has finished its approach
+  useEffect(() => {
+    if (!stageReady || !cameraReady) return;
+    if (!viewerTimeline || viewerTimeline.length === 0) return;
+    if (playbackState === 'idle') {
+      setPlaybackState('playing');
+    }
+  }, [cameraReady, stageReady, playbackState, viewerTimeline]);
+
+  // Reset camera readiness when we hide the stage
+  useEffect(() => {
+    if (!stageReady) {
+      setCameraReady(false);
+    }
+  }, [stageReady]);
 
   // Advance playback
   useEffect(() => {
@@ -416,6 +435,11 @@ const BattleTheater = () => {
             {timelineError && <div className="fullscreen-error">{timelineError}</div>}
             {bundleError && <div className="fullscreen-error">{bundleError}</div>}
             {controlMessage && <div className="fullscreen-error">{controlMessage}</div>}
+            {!stageReady && timelineReady && (
+              <div className="stage-loading" role="status" aria-live="polite">
+                Loading battlefield...
+              </div>
+            )}
             <Suspense fallback={<div className="stage-loading">Preparing battlefield...</div>}>
               {timelineReady ? (
                 <ThreeBattleStage
@@ -429,6 +453,8 @@ const BattleTheater = () => {
                   disabledCells={disabledCells}
                   demoState={playbackState === 'playing' ? 'running' : playbackState === 'finished' ? 'finished' : 'idle'}
                   interactionMode="battle"
+                  onReady={setStageReady}
+                  onCameraReady={setCameraReady}
                 />
               ) : (
                 <div className="stage-loading" role="status" aria-live="polite">

@@ -46,6 +46,7 @@ const UnitPreviewCanvas = ({ unit }: UnitPreviewCanvasProps) => {
 
   const {
     modelRevision,
+    unitsReady,
     ensureAssetsForUnits,
     syncUnits,
     updateHpFacing,
@@ -178,7 +179,26 @@ const UnitPreviewCanvas = ({ unit }: UnitPreviewCanvasProps) => {
     syncUnits(previewUnits, PREVIEW_BOARD_SIZE, PREVIEW_BOARD_SIZE);
   }, [ensureAssetsForUnits, previewUnits, sceneReady, syncUnits, modelRevision]);
 
-  return <div className="unit-preview-canvas" ref={mountRef} aria-hidden={!unit}></div>;
+  return (
+    <div className="unit-preview-canvas" ref={mountRef} aria-hidden={!unit} style={{ visibility: unitsReady || !unit ? 'visible' : 'hidden' }}>
+      {!unitsReady && unit && (
+        <div style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: '#94a3b8',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          textAlign: 'center',
+          pointerEvents: 'none',
+          visibility: 'visible'
+        }}>
+          Loading...
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default UnitPreviewCanvas;

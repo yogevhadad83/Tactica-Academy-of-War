@@ -638,17 +638,25 @@ wss.on('connection', (socket: WebSocket) => {
           });
 
           // Run the battle - player is A, fake enemy is B
-          const { winner, timeline } = runServerBattle(playerArmy, fakeEnemyArmy);
-          console.log(`Demo battle ${matchId}: winner ${winner}`);
+          try {
+            const { winner, timeline } = runServerBattle(playerArmy, fakeEnemyArmy);
+            console.log(`Demo battle ${matchId}: winner ${winner}`);
 
-          // Send result to the player (as player A, they get canonical timeline)
-          send(socket, {
-            type: 'battle_result',
-            matchId,
-            winner,
-            battleType: 'demo',
-            timeline,
-          });
+            // Send result to the player (as player A, they get canonical timeline)
+            send(socket, {
+              type: 'battle_result',
+              matchId,
+              winner,
+              battleType: 'demo',
+              timeline,
+            });
+          } catch (battleError) {
+            console.error(`Demo battle ${matchId} failed:`, battleError);
+            send(socket, {
+              type: 'error',
+              message: `Battle failed: ${battleError instanceof Error ? battleError.message : 'Unknown error'}`,
+            });
+          }
           break;
         }
 

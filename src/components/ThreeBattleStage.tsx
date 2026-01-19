@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -56,6 +56,12 @@ interface ThreeBattleStageProps {
   onTileClick?: (info: { row: number; col: number; occupied: TileOccupant | null }) => void;
   forceOwner?: TileOwner;
   actingTeam?: Team;
+  onReady?: (ready: boolean) => void;
+  onCameraReady?: (ready: boolean) => void;
+  planningCameraDistanceMultiplier?: number;
+  planningCameraHeightMultiplier?: number;
+  planningCameraMinHeight?: number;
+  planningAtlasPath?: string;
 }
 
 const ThreeBattleStage = ({
@@ -75,7 +81,13 @@ const ThreeBattleStage = ({
   onTileDrop,
   onTileClick,
   forceOwner,
-  actingTeam = 'player'
+  actingTeam = 'player',
+  onReady,
+  onCameraReady,
+  planningCameraDistanceMultiplier,
+  planningCameraHeightMultiplier,
+  planningCameraMinHeight,
+  planningAtlasPath
 }: ThreeBattleStageProps) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -89,6 +101,9 @@ const ThreeBattleStage = ({
   const pmremRef = useRef<THREE.PMREMGenerator | null>(null);
   const envTargetRef = useRef<THREE.WebGLRenderTarget | null>(null);
   const castleGroupRef = useRef<THREE.Group | null>(null);
+  const [castleLoaded, setCastleLoaded] = useState(false);
+  const [boardReady, setBoardReady] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
   const flightModeRef = useRef(false);
   const cameraModeRef = useRef<'idle' | 'locked'>('idle');
   const lockedCameraBasePositionRef = useRef(
@@ -106,7 +121,7 @@ const ThreeBattleStage = ({
   );
   const cameraApproachStartRef = useRef(new THREE.Vector3()); // Starting position for cinematic approach
   const cameraApproachRef = useRef({ active: false, start: 0, progress: 0 });
-  const pendingApproachRef = useRef(false);
+  const assetsReadyRef = useRef(false);
   const cameraRotationStartRef = useRef(0); // Initial tilt up angle (radians)
   const cameraRotationEndRef = useRef(0); // Final rotation angle
   const planningCameraPositionRef = useRef(
@@ -116,6 +131,7 @@ const ThreeBattleStage = ({
   const {
     unitVisualsRef,
     modelRevision,
+    unitsReady,
     ensureAssetsForUnits,
     syncUnits,
     applyBattleState,
@@ -126,19 +142,22 @@ const ThreeBattleStage = ({
     updateHpAnimations,
     updateRandomIdles,
     updateProjectiles,
-    clearProjectiles,
     disposeAll
   } = useUnitLayer(unitRootRef, unitRootRef);
 
   const beginCameraApproach = () => {
     if (typeof window === 'undefined') return;
+    if (!assetsReadyRef.current) return;
+    if (cameraApproachRef.current.active) return;
     lockedCameraPositionRef.current.copy(lockedCameraBasePositionRef.current);
     cameraApproachRef.current = {
       active: true,
       start: performance.now(),
       progress: 0
     };
-    pendingApproachRef.current = false;
+    flightModeRef.current = true;
+    cameraModeRef.current = 'locked';
+    setCameraReady(false);
   };
   const lockedCameraTargetRef = useRef(new THREE.Vector3(0, 0, -CELL_SIZE * 2));
   const zoomPressedRef = useRef(false);
@@ -178,8 +197,11 @@ const ThreeBattleStage = ({
     const boardCenterZ = -15; // from tacticalBoard.group.position.z
 
     if (interactionMode === 'planning') {
-      const topDownHeight = Math.max(9, boardSpan * 0.32);
-      const topDownDistance = Math.max(3.2, boardSpan * 0.09);
+      const heightMultiplier = planningCameraHeightMultiplier ?? 0.32;
+      const minHeight = planningCameraMinHeight ?? 9;
+      const topDownHeight = Math.max(minHeight, boardSpan * heightMultiplier);
+      const multiplier = planningCameraDistanceMultiplier ?? 0.18;
+      const topDownDistance = Math.max(3.2, boardSpan * multiplier);
       lockedCameraTargetRef.current.set(0, 0, boardCenterZ);
       planningCameraPositionRef.current.set(0, topDownHeight, boardCenterZ + topDownDistance);
       lockedCameraBasePositionRef.current.copy(planningCameraPositionRef.current);
@@ -209,11 +231,6 @@ const ThreeBattleStage = ({
       // Start tilted up 25 degrees, end level at 0
       cameraRotationStartRef.current = Math.PI / 7.2; // ~25 degrees up
       cameraRotationEndRef.current = 0; // level
-      
-      // Automatically begin camera approach when in battle mode
-      if (typeof window !== 'undefined') {
-        pendingApproachRef.current = true;
-      }
     }
 
     cameraApproachRef.current = { active: false, start: 0, progress: 0 };
@@ -222,19 +239,6 @@ const ThreeBattleStage = ({
   useEffect(() => {
     ensureAssetsForUnits(units);
   }, [ensureAssetsForUnits, units]);
-
-  // Trigger camera approach when entering battle mode
-  useEffect(() => {
-    if (interactionMode === 'battle' && pendingApproachRef.current && cameraRef.current) {
-      // Delay approach slightly to allow scene to load
-      const timeout = setTimeout(() => {
-        if (pendingApproachRef.current) {
-          beginCameraApproach();
-        }
-      }, 500);
-      return () => clearTimeout(timeout);
-    }
-  }, [interactionMode]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -301,7 +305,9 @@ const ThreeBattleStage = ({
     fillLight.position.set(28, 18, -26);
     scene.add(fillLight);
 
-    const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE, forceOwner });
+    // If a planning atlas override was provided by the parent, only use it for planning interactionMode
+    const atlasPath = interactionMode === 'planning' && planningAtlasPath ? planningAtlasPath : undefined;
+    const tacticalBoard = createTacticalBoard({ boardRows: rows, boardCols: cols, cellSize: CELL_SIZE, forceOwner, atlasPath });
     tacticalBoardRef.current = tacticalBoard;
     // Raycast against the board meshes directly (tiles carry row/col/key in userData).
     tileMeshesRef.current = tacticalBoard.group.children;
@@ -360,12 +366,18 @@ const ThreeBattleStage = ({
           castleScene.position.y += -boundingBox.min.y - 23; // Lower stage a bit more to sit under the board
 
           castleGroup.add(castleScene);
+          setCastleLoaded(true);
         },
         undefined,
         (error) => {
           console.error('Failed to load stage.glb', error);
+          // Still mark as loaded so UI isn't stuck
+          setCastleLoaded(true);
         }
       );
+    } else {
+      // Not in battle mode, no castle needed
+      setCastleLoaded(true);
     }
 
     const unitRoot = new THREE.Group();
@@ -414,6 +426,7 @@ const ThreeBattleStage = ({
           cameraApproachRef.current.progress = progress;
           if (progress >= 1) {
             cameraApproachRef.current.active = false;
+            setCameraReady(true);
           }
         }
         const approachAmount = easeInOutCubic(cameraApproachRef.current.progress);
@@ -816,34 +829,75 @@ const ThreeBattleStage = ({
     });
   }, [actingTeam, applyBattleState, boardSize, boardCols, demoState, hitCells, hitEvents, marchCells, moveCells, units]);
 
+  const unitsOk = units.length === 0 || unitsReady;
+  const assetsReady = unitsOk && castleLoaded && boardReady;
+
+  // Keep an up-to-date ref for gating approach triggers
+  useEffect(() => {
+    assetsReadyRef.current = assetsReady;
+    if (!assetsReady) {
+      cameraApproachRef.current = { active: false, start: 0, progress: 0 };
+      setCameraReady(false);
+    }
+  }, [assetsReady]);
+
+  // Start the cinematic approach only after assets are visible (loader off)
+  useEffect(() => {
+    if (!assetsReady) return;
+    if (interactionMode !== 'battle') return;
+
+    // Reset approach state and kick off the motion
+    cameraApproachRef.current = { active: false, start: 0, progress: 0 };
+    lockedCameraPositionRef.current.copy(cameraApproachStartRef.current);
+    beginCameraApproach();
+  }, [assetsReady, interactionMode]);
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const flightActive = demoState === 'countdown' || demoState === 'running';
+    const flightActive = demoState === 'countdown' || demoState === 'running' || cameraApproachRef.current.active;
     flightModeRef.current = flightActive;
 
-    if (demoState === 'countdown') {
-      // Clear processed hit IDs when starting a new battle so animations play fresh
-      clearProjectiles();
-      pendingApproachRef.current = false;
-      cameraApproachRef.current = { active: false, start: 0, progress: 0 };
-      lockedCameraPositionRef.current.copy(lockedCameraBasePositionRef.current);
-      // During countdown, smoothly glide from the distant intro position toward the locked position
-      cameraModeRef.current = 'locked';
-      beginCameraApproach();
-    } else if (demoState === 'running') {
-      cameraModeRef.current = 'locked';
-      // If for some reason the approach hasn't started yet, ensure it runs
-      if (!cameraApproachRef.current.active && cameraApproachRef.current.progress < 1) {
-        beginCameraApproach();
+    if (demoState === 'finished' || demoState === 'idle') {
+      cameraModeRef.current = interactionMode === 'battle' ? 'locked' : 'idle';
+      if (!cameraApproachRef.current.active) {
+        setCameraReady(true);
       }
-    } else {
-      cameraModeRef.current = 'idle';
-      pendingApproachRef.current = false;
-      cameraApproachRef.current = { active: false, start: 0, progress: 0 };
+      return;
     }
-  }, [demoState, clearProjectiles]);
 
-  return <div className="three-stage-canvas" ref={mountRef}></div>;
+    // During countdown/running, stay locked to the cinematic track
+    cameraModeRef.current = 'locked';
+  }, [demoState, interactionMode]);
+
+  // Mark board as ready after initial render
+  useEffect(() => {
+    // Board is ready once the tactical board has been created
+    if (tacticalBoardRef.current) {
+      setBoardReady(true);
+    }
+  });
+
+  // Notify parent when stage assets are ready to be shown (loader control)
+  useEffect(() => {
+    onReady?.(assetsReady);
+  }, [assetsReady, onReady]);
+
+  // Report camera lock status separately so playback can wait for the cinematic to finish
+  useEffect(() => {
+    if (!assetsReady) return;
+    onCameraReady?.(cameraReady);
+  }, [assetsReady, cameraReady, onCameraReady]);
+
+  // Hide canvas content until visuals are ready; the camera motion plays while visible
+  const isReady = assetsReady;
+
+  return (
+    <div 
+      className="three-stage-canvas" 
+      ref={mountRef}
+      style={{ visibility: isReady ? 'visible' : 'hidden' }}
+    />
+  );
 };
 
 export default ThreeBattleStage;

@@ -817,32 +817,8 @@ const createVisual = (
         fightActions!.push(action);
       }
     });
-  } else {
-    const columnGeometry = new THREE.CapsuleGeometry(0.35, 0.6, 8, 16);
-    const columnMaterial = new THREE.MeshStandardMaterial({
-      color: unit.team === 'player' ? playerColor : enemyColor,
-      emissive:
-        unit.team === 'player' ? playerColor.clone().multiplyScalar(0.35) : enemyColor.clone().multiplyScalar(0.35),
-      metalness: 0.55,
-      roughness: 0.25
-    });
-    const body = new THREE.Mesh(columnGeometry, columnMaterial);
-    body.castShadow = true;
-    body.position.y = 1.2;
-    group.add(body);
-    registerFadableMaterial(columnMaterial);
-
-    const crestMaterial = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: columnMaterial.color.clone(),
-      emissiveIntensity: 0.8
-    });
-    const crest = new THREE.Mesh(new THREE.SphereGeometry(0.28, 18, 18), crestMaterial);
-    crest.position.y = 2;
-    group.add(crest);
-    registerFadableMaterial(crestMaterial);
-    glowColor = columnMaterial.color;
   }
+  // Note: No fallback geometry - models must be loaded before creating visuals
 
   // Change 2: Removed glowing circles under units
   // Create a dummy material for glowMaterial reference (required by interface)
@@ -951,6 +927,10 @@ export const useUnitLayer = (
     {} as Record<ModelKey, LoadedModelAsset | undefined>
   );
   const pendingModelLoadsRef = useRef<Set<ModelKey>>(new Set());
+  const [modelsLoaded, setModelsLoaded] = useState(false);
+  const [unitsReady, setUnitsReady] = useState(false);
+  const requiredModelsRef = useRef<Set<ModelKey>>(new Set());
+  const expectedUnitCountRef = useRef(0);
   const arrowProjectilesRef = useRef<ArrowProjectile[]>([]);
   const processedHitIdsRef = useRef<Set<string>>(new Set());
   const processedHitQueueRef = useRef<string[]>([]);
@@ -1037,6 +1017,14 @@ export const useUnitLayer = (
           };
           pendingModelLoadsRef.current.delete(modelKey);
           setModelRevision((value) => value + 1);
+          
+          // Check if all required models are now loaded
+          const allLoaded = Array.from(requiredModelsRef.current).every(
+            (key) => modelAssetsRef.current[key] !== undefined
+          );
+          if (allLoaded && pendingModelLoadsRef.current.size === 0) {
+            setModelsLoaded(true);
+          }
         },
         undefined,
         (error) => {
@@ -1053,7 +1041,20 @@ export const useUnitLayer = (
       const keys = new Set<ModelKey>();
       keys.add(DEFAULT_MODEL_KEY);
       units.forEach((unit) => keys.add(getModelKeyForUnit(unit.id)));
-      keys.forEach((key) => ensureModelAsset(key));
+      requiredModelsRef.current = keys;
+      expectedUnitCountRef.current = units.length;
+      
+      // Check if models are already loaded
+      const allLoaded = Array.from(keys).every(
+        (key) => modelAssetsRef.current[key] !== undefined
+      );
+      if (allLoaded) {
+        setModelsLoaded(true);
+      } else {
+        setModelsLoaded(false);
+        setUnitsReady(false);
+        keys.forEach((key) => ensureModelAsset(key));
+      }
     },
     [ensureModelAsset]
   );
@@ -1089,6 +1090,11 @@ export const useUnitLayer = (
         }
 
         if (!visual) {
+          // Don't create visual if model hasn't loaded yet
+          if (!modelAsset) {
+            return;
+          }
+          
           const hpRoot = hpRootRef.current;
           visual = createVisual(
             unit,
@@ -1104,6 +1110,11 @@ export const useUnitLayer = (
           if (visual.isCustomMesh) {
             setVisualAnimation(visual, 'idle');
           }
+        }
+
+        // Skip if visual still doesn't exist (model not loaded yet)
+        if (!visual) {
+          return;
         }
 
         if (!visual.positionInitialized) {
@@ -1174,8 +1185,23 @@ export const useUnitLayer = (
           exitDeathState(visual);
         }
       });
+      
+      // Check if all expected units now have visuals (models loaded and units created)
+      const expectedCount = expectedUnitCountRef.current;
+      const actualCount = units.filter(unit => {
+        const modelKey = getModelKeyForUnit(unit.id);
+        const modelAsset = modelAssetsRef.current[modelKey];
+        return modelAsset !== undefined;
+      }).length;
+      const visualCount = unitVisualsRef.current.size;
+      
+      if (modelsLoaded && expectedCount > 0 && visualCount >= actualCount) {
+        setUnitsReady(true);
+      } else {
+        setUnitsReady(false);
+      }
     },
-    [unitRootRef]
+    [unitRootRef, modelsLoaded]
   );
 
   const updateHpFacing = useCallback((camera: THREE.PerspectiveCamera | null) => {
@@ -1613,6 +1639,8 @@ export const useUnitLayer = (
   return {
     unitVisualsRef,
     modelRevision,
+    modelsLoaded,
+    unitsReady,
     ensureAssetsForUnits,
     syncUnits,
     applyBattleState,

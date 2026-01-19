@@ -158,6 +158,8 @@
 }
 
 .stage-loading {
+  position: absolute;
+  inset: 0;
   width: 100%;
   min-height: 520px;
   display: flex;
@@ -166,6 +168,8 @@
   font-weight: 600;
   color: rgba(226, 232, 240, 0.85);
   letter-spacing: 0.04em;
+  z-index: 10;
+  background: radial-gradient(circle at top, rgba(14, 116, 144, 0.25), rgba(15, 23, 42, 0.92));
 }
 
 .three-stage-canvas canvas {

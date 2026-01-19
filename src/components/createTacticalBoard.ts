@@ -20,6 +20,7 @@ interface TacticalBoardOptions {
   boardCols: number;
   cellSize: number;
   forceOwner?: TileOwner;
+  atlasPath?: string;
 }
 
 interface Tile {
@@ -29,6 +30,8 @@ interface Tile {
   effect: TileEffect;
   hoverState: TileHoverState;
   disabled: boolean;
+  disabledOverlayIndex: number;
+  disabledOverlayMatrix: THREE.Matrix4;
 }
 
 export interface TacticalBoard {
@@ -53,14 +56,15 @@ type ProjectedAtlasParams = {
   flipV?: boolean;
 };
 
-let cachedAtlasTexture: THREE.Texture | null = null;
+const cachedAtlasTextures: Record<string, THREE.Texture> = {};
+const cachedOverlayTextures: Record<string, THREE.Texture> = {};
 
-const getAtlasTexture = () => {
-  if (cachedAtlasTexture) return cachedAtlasTexture;
+const getAtlasTexture = (path = '/texture/board.png') => {
+  if (cachedAtlasTextures[path]) return cachedAtlasTextures[path];
 
   const loader = new THREE.TextureLoader();
   const texture = loader.load(
-    '/texture/board.png',
+    path,
     () => {
       // Keep logs minimal per spec.
     },
@@ -73,7 +77,43 @@ const getAtlasTexture = () => {
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 16;
-  cachedAtlasTexture = texture;
+  cachedAtlasTextures[path] = texture;
+  return texture;
+};
+
+const getDisabledHatchTexture = () => {
+  if (cachedOverlayTextures.hatch) return cachedOverlayTextures.hatch;
+  if (typeof document === 'undefined') return null;
+
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // Almost black base
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, size, size);
+  
+  // Very dark gray stripes for subtle pattern
+  ctx.strokeStyle = '#2a2a2a';
+  ctx.lineWidth = 4;
+
+  const step = 8;
+  for (let x = -size; x < size * 2; x += step) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x + size, size);
+    ctx.stroke();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(5, 5);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  cachedOverlayTextures.hatch = texture;
   return texture;
 };
 
@@ -146,7 +186,8 @@ export const createTacticalBoard = ({
   boardRows,
   boardCols,
   cellSize,
-  forceOwner
+  forceOwner,
+  atlasPath
 }: TacticalBoardOptions): TacticalBoard => {
   const group = new THREE.Group();
   group.name = 'TacticalBoard';
@@ -161,8 +202,11 @@ export const createTacticalBoard = ({
   const TILE_THICKNESS = 0.12 * cellSize;
   const TILE_BEVEL = 0.04 * cellSize;
   const TILE_CLEARANCE = 0.02 * cellSize;
+  const DISABLED_OVERLAY_OPACITY = 0.88;
+  const DISABLED_OVERLAY_Y_OFFSET = 0.012 * cellSize;
+  const DISABLED_OVERLAY_ENABLE_HATCH = true;
 
-  const atlas = getAtlasTexture();
+  const atlas = getAtlasTexture(atlasPath ?? '/texture/board.png');
   const projectedMat = makeProjectedAtlasMaterial({ atlas, flipU: true });
 
   // Base slab: top surface at y = 0.
@@ -245,6 +289,40 @@ export const createTacticalBoard = ({
   });
   tileGeometry.rotateX(-Math.PI / 2);
 
+  const disabledOverlayGeometry = new THREE.PlaneGeometry(tileSize, tileSize);
+  disabledOverlayGeometry.rotateX(-Math.PI / 2);
+
+  const disabledOverlayMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: DISABLED_OVERLAY_OPACITY,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2
+  });
+
+  if (DISABLED_OVERLAY_ENABLE_HATCH) {
+    const hatchTexture = getDisabledHatchTexture();
+    if (hatchTexture) {
+      disabledOverlayMaterial.map = hatchTexture;
+      disabledOverlayMaterial.needsUpdate = true;
+    }
+  }
+
+  const disabledOverlay = new THREE.InstancedMesh(
+    disabledOverlayGeometry,
+    disabledOverlayMaterial,
+    boardRows * boardCols
+  );
+  disabledOverlay.name = 'disabledOverlay';
+  disabledOverlay.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  disabledOverlay.renderOrder = 2;
+  disabledOverlay.raycast = () => null;
+  group.add(disabledOverlay);
+
+  const hiddenOverlayMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+
   for (let row = 0; row < boardRows; row += 1) {
     for (let col = 0; col < boardCols; col += 1) {
       const tileWorldX = -boardW / 2 + cellSize / 2 + col * cellSize;
@@ -270,11 +348,19 @@ export const createTacticalBoard = ({
         occupant: null,
         effect: null,
         hoverState: 'none',
-        disabled: false
+        disabled: false,
+        disabledOverlayIndex: row * boardCols + col,
+        disabledOverlayMatrix: new THREE.Matrix4().makeTranslation(
+          tileWorldX,
+          TILE_CLEARANCE + TILE_THICKNESS + DISABLED_OVERLAY_Y_OFFSET,
+          tileWorldZ
+        )
       };
+      disabledOverlay.setMatrixAt(tile.disabledOverlayIndex, hiddenOverlayMatrix);
       tiles.set(key, tile);
     }
   }
+  disabledOverlay.instanceMatrix.needsUpdate = true;
 
   const setTileOwner = (row: number, col: number, owner: TileOwner) => {
     const tile = tiles.get(boardKey(row, col));
@@ -298,6 +384,11 @@ export const createTacticalBoard = ({
     const tile = tiles.get(boardKey(row, col));
     if (!tile) return;
     tile.disabled = disabled;
+    disabledOverlay.setMatrixAt(
+      tile.disabledOverlayIndex,
+      disabled ? tile.disabledOverlayMatrix : hiddenOverlayMatrix
+    );
+    disabledOverlay.instanceMatrix.needsUpdate = true;
   };
 
   const setTileHoverState = (row: number, col: number, state: TileHoverState) => {
@@ -315,7 +406,9 @@ export const createTacticalBoard = ({
   const clearDisabled = () => {
     tiles.forEach((tile) => {
       tile.disabled = false;
+      disabledOverlay.setMatrixAt(tile.disabledOverlayIndex, hiddenOverlayMatrix);
     });
+    disabledOverlay.instanceMatrix.needsUpdate = true;
   };
 
   const clearHoverStates = () => {

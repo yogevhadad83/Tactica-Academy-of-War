@@ -92,6 +92,7 @@ export function useGameServer(username: string | null) {
   const [users, setUsers] = useState<string[]>([]);
   const [incomingChallenge, setIncomingChallenge] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<BattleResult | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [currentMatchId, setCurrentMatchId] = useState<string | null>(null);
   const [currentRole, setCurrentRole] = useState<MatchRole | null>(null);
@@ -157,10 +158,12 @@ export function useGameServer(username: string | null) {
   const startDemoBattle = useCallback(
     (armyConfig: ArmyConfig) => {
       console.log('[useGameServer] Starting demo battle with army:', armyConfig);
+      setLastError(null); // Clear any previous error
       try {
         sendMessage({ type: 'demo_battle', army: armyConfig });
       } catch (error) {
         console.error('[useGameServer] Error sending demo_battle message:', error);
+        setLastError(error instanceof Error ? error.message : 'Failed to start demo battle');
       }
     },
     [sendMessage]
@@ -242,6 +245,7 @@ export function useGameServer(username: string | null) {
 
             case 'error':
               console.error('Server error:', message.message);
+              setLastError(message.message);
               alert(`Server error: ${message.message}`);
               break;
 
@@ -373,6 +377,7 @@ export function useGameServer(username: string | null) {
       users,
       incomingChallenge,
       lastResult,
+      lastError,
       userId,
       setArmy,
       challenge,
@@ -394,6 +399,7 @@ export function useGameServer(username: string | null) {
       users,
       incomingChallenge,
       lastResult,
+      lastError,
       userId,
       setArmy,
       challenge,

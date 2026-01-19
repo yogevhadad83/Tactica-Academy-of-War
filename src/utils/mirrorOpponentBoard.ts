@@ -6,6 +6,7 @@ export type MirrorBoardOptions = {
   boardCols?: number;
   rowOffset?: number;
   forceTeam?: PlacedUnit['team'];
+  mirror?: boolean;
 };
 
 /**
@@ -19,16 +20,18 @@ export const mirrorOpponentBoardForDisplay = (
   const boardRows = options.boardRows ?? BOARD_SIZE;
   const boardCols = options.boardCols ?? BOARD_COLS;
   const rowOffset = options.rowOffset ?? 0;
+  const shouldMirror = options.mirror ?? true;
 
   return units
     .map((unit) => {
       const adjustedRow = unit.position.row - rowOffset;
+      const mappedRow = shouldMirror ? boardRows - 1 - adjustedRow : adjustedRow;
       return {
         ...unit,
         ...(options.forceTeam ? { team: options.forceTeam } : {}),
         position: {
           ...unit.position,
-          row: boardRows - 1 - adjustedRow,
+          row: mappedRow,
         },
       } as PlacedUnit;
     })

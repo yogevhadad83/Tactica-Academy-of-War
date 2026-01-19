@@ -7,7 +7,7 @@ import type { TileOccupant } from './createTacticalBoard';
 import { mirrorOpponentBoardForDisplay } from '../utils/mirrorOpponentBoard';
 import '../pages/BoardView.css';
 
-const ThreeBattleStage = lazy(() => import('./ThreeBattleStage'));
+const PlanningBoardStage = lazy(() => import('./PlanningBoardStage'));
 const UnitLogicPanel = lazy(() => import('./UnitLogicPanel'));
 
 const PLANNING_ROWS = 6;
@@ -127,6 +127,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
   const [draggingStackUnit, setDraggingStackUnit] = useState<{ unit: ArmyUnitInstance } | null>(null);
   const [draggingPlacedUnit, setDraggingPlacedUnit] = useState<{ unit: PlacedUnit; original: { row: number; col: number } } | null>(null);
   const [hiddenDraggedUnitId, setHiddenDraggedUnitId] = useState<string | null>(null);
+  const [stageReady, setStageReady] = useState(false);
 
   // Synchronous mirrors of drag state so drop/hover logic never depends on React timing.
   const draggingStackRef = useRef<{ unit: ArmyUnitInstance } | null>(null);
@@ -585,7 +586,7 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
       }
     }
     return result;
-  }, [canPlaceOnTile, mode, trainingBoard]);
+  }, [activeArea, canPlaceOnTile, mode, trainingBoard]);
 
   const handleTileClick = useCallback(
     ({ row, col }: { row: number; col: number; occupied: TileOccupant | null }) => {
@@ -814,24 +815,29 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
 
   const enemyPreviewUnits = useMemo(() => {
     if (mode !== 'training') return [] as PlacedUnit[];
-    // Enemy units in the full board occupy rows 0-5 (enemy zone).
-    // For the 6-row opponent-only preview, we mirror them vertically
-    // so the front row (row 5) appears at the bottom closest to the camera.
+    // Enemy units live in rows 0-5 (enemy zone). For the opponent preview we keep
+    // the same orientation so row 5 stays closest to the camera (no mirroring).
     const enemyUsesPlanningCoords =
       props.enemyUnits.length > 0 && props.enemyUnits.every((unit) => unit.position.row >= 0 && unit.position.row < PLANNING_ROWS);
-    const enemyRowOffset = enemyUsesPlanningCoords ? 0 : PLANNING_ROW_OFFSET; // Shift from enemy zone (rows 6-11) to planning coords (rows 0-5)
+    const enemyRowOffset = enemyUsesPlanningCoords ? 0 : PLANNING_ROW_OFFSET;
 
     return mirrorOpponentBoardForDisplay(props.enemyUnits, {
       boardRows: PLANNING_ROWS,
       boardCols: PLANNING_COLS,
       rowOffset: enemyRowOffset,
-      forceTeam: 'enemy'
+      forceTeam: 'enemy',
+      mirror: false
     });
   }, [mode, props]);
 
   return (
     <div className="planning-stage-layout">
       <div className="immersive-stage-card">
+        {!stageReady && (
+          <div className="stage-loading" role="status" aria-live="polite">
+            Loading battlefield...
+          </div>
+        )}
         <Suspense
           fallback={
             <div className="stage-loading" role="status" aria-live="polite">
@@ -839,23 +845,18 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
             </div>
           }
         >
-          <ThreeBattleStage
+          <PlanningBoardStage
+            owner="player"
             boardSize={stageBoardRows}
             boardCols={stageBoardCols}
             units={stageUnits}
-            hitCells={[]}
-            hitEvents={[]}
-            moveCells={[]}
-            marchCells={[]}
-            demoState="idle"
             disabledCells={disabledCells}
-            interactionMode="planning"
             dragActive={Boolean(draggingStackUnit || draggingPlacedUnit)}
             canDropOnTile={canDropOnPlanningTile}
             onTileHover={handleTileHover}
             onTileDrop={handleTileDrop}
             onTileClick={handleTileClick}
-            forceOwner="blue"
+            onReady={setStageReady}
           />
         </Suspense>
       </div>
@@ -921,19 +922,13 @@ const BoardSetupPanel = (props: BoardSetupPanelProps) => {
                 </div>
               }
             >
-              <ThreeBattleStage
+              <PlanningBoardStage
+                owner="opponent"
                 boardSize={PLANNING_ROWS}
                 boardCols={PLANNING_COLS}
                 units={enemyPreviewUnits}
-                hitCells={[]}
-                hitEvents={[]}
-                moveCells={[]}
-                marchCells={[]}
-                demoState="idle"
                 disabledCells={enemyPreviewDisabledCells}
-                interactionMode="planning"
                 dragActive={false}
-                forceOwner="red"
               />
             </Suspense>
             <p className="panel-footer-note">Preview only. Enemy deployment is locked.</p>
