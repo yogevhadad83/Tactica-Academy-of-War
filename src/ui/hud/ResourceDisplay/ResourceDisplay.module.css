@@ -1,0 +1,65 @@
+.resource {
+  position: relative;
+  display: flex;
+  align-items: center;
+  /* Unified icon height for all resource types */
+  --resource-icon-height: 80px;
+  height: var(--resource-icon-height);
+  pointer-events: auto;
+}
+
+.icon {
+  width: var(--resource-icon-height);
+  height: var(--resource-icon-height);
+  display: block;
+  object-fit: contain;
+  user-select: none;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
+}
+
+.value {
+  position: absolute;
+  top: 50%;
+  left: 52%;
+  transform: translate(-50%, -52%);
+  min-width: 36px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  color: rgba(230, 225, 210, 0.95);
+  text-shadow:
+    1px 1px 2px rgba(0, 0, 0, 0.9),
+    0 0 10px rgba(0, 0, 0, 0.55);
+}
+
+.credits .value {
+  left: 56%;
+}
+
+.supply .value {
+  left: 52%;
+}
+
+@media (max-width: 900px) {
+  .resource {
+    --resource-icon-height: 58px;
+    height: var(--resource-icon-height);
+  }
+  
+  .icon {
+    height: var(--resource-icon-height);
+  }
+  
+  .value {
+    font-size: 15px;
+    min-width: 24px;
+    left: 53%;
+    transform: translate(-50%, -50%);
+  }
+
+  .credits .value {
+    left: 55%;
+  }
+}

@@ -1,0 +1,1 @@
+export { AcademyBackground } from './AcademyBackground';

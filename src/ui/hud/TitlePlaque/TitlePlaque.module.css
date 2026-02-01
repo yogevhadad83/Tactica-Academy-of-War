@@ -1,0 +1,14 @@
+.plaque {
+  position: relative;
+  height: auto;
+  width: auto;
+  pointer-events: none;
+}
+
+.headerImage {
+  width: auto;
+  height: clamp(80px, 12vh, 140px);
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
