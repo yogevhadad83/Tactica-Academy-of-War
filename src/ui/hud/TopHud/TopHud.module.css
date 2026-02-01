@@ -1,0 +1,40 @@
+.hud {
+  --hud-h: 72px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--hud-h);
+  z-index: 2000;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: clamp(12px, 2vw, 24px);
+  padding: 0 clamp(16px, 3vw, 40px);
+  pointer-events: none;
+}
+
+.left {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .hud {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+}

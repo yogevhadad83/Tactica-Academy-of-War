@@ -1,0 +1,18 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 5000;
+  width: 100%;
+  background: transparent; /* critical */
+  padding: 8px 0;         /* small breathing room */
+}
+
+.img {
+  display: block;
+  width: min(75vw, 1100px); /* 75% of viewport, with a sensible max */
+  height: auto;
+  margin: 0 auto;           /* center */
+  background: transparent;
+  user-select: none;
+  pointer-events: none;
+}

@@ -1,0 +1,1 @@
+export { AcademyLayout } from './AcademyLayout';

@@ -1,0 +1,24 @@
+.cluster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: auto;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: 8px;
+}
+
+@media (max-width: 900px) {
+  .cluster {
+    gap: 8px;
+  }
+  
+  .actions {
+    gap: 4px;
+    margin-left: 4px;
+  }
+}

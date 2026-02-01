@@ -5,6 +5,7 @@ import { usePlayerContext } from '../context/PlayerContext';
 import { getTrainingState } from '../utils/trainingProgress';
 import { trainingDrills } from '../data/trainingDrills';
 import { hasBattlePlan } from '../game/battlePlanStorage';
+import { AcademyLayout } from '../ui/layouts/AcademyLayout';
 import ArchiveCard from '../components/ui/ArchiveCard';
 import RuleDivider from '../components/ui/RuleDivider';
 import StampButton from '../components/ui/StampButton';
@@ -106,24 +107,25 @@ const Academy = () => {
   const rank = getRank(credits);
 
   return (
-    <div className="academy-container">
-      {toast}
-      {/* Unauthenticated banner */}
-      {!user && (
-        <div className="academy-banner">
-          <span>⚠️ Login to save your progress and unlock full features</span>
-          <div className="academy-banner-actions">
-            <Link to="/login" className="academy-banner-link">Login</Link>
-            <Link to="/signup" className="academy-banner-link primary">Sign Up</Link>
+    <AcademyLayout>
+      <div className="academy-container">
+        {toast}
+        {/* Unauthenticated banner */}
+        {!user && (
+          <div className="academy-banner">
+            <span>⚠️ Login to save your progress and unlock full features</span>
+            <div className="academy-banner-actions">
+              <Link to="/login" className="academy-banner-link">Login</Link>
+              <Link to="/signup" className="academy-banner-link primary">Sign Up</Link>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Header */}
-      <header className="academy-header">
-        <h1 className="academy-title">Academy Archives</h1>
-        <p className="academy-subtitle">Cadet Training & Operations Command</p>
-      </header>
+        {/* Header */}
+        <header className="academy-header">
+          <h1 className="academy-title">Academy Archives</h1>
+          <p className="academy-subtitle">Cadet Training & Operations Command</p>
+        </header>
 
       {/* Next Orders - Primary CTA */}
       <section className="academy-section">
@@ -220,7 +222,8 @@ const Academy = () => {
           </div>
         </ArchiveCard>
       </section>
-    </div>
+      </div>
+    </AcademyLayout>
   );
 };
 
